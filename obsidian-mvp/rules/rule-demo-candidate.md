@@ -11,8 +11,8 @@ audiences:
 source_materials: []
 confidence: 0.78
 created_at: 2026-03-14T00:00:00.000Z
-updated_at: '2026-03-14T11:27:33.894Z'
-confirmed_at: '2026-03-14T11:27:33.894Z'
+updated_at: '2026-03-14T11:28:40.914Z'
+confirmed_at: '2026-03-14T11:28:40.914Z'
 ---
 # 规则内容
 

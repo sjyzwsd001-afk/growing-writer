@@ -107,6 +107,21 @@ export class VaultRepository {
     }));
   }
 
+  async loadTasks(): Promise<Task[]> {
+    const docs = await this.readCollection("tasks");
+    return docs.map((doc) => ({
+      ...doc,
+      id: normalizeString(doc.frontmatter.id, doc.path),
+      title: normalizeString(doc.frontmatter.title, "Untitled Task"),
+      docType: normalizeString(doc.frontmatter.doc_type),
+      audience: normalizeString(doc.frontmatter.audience),
+      scenario: normalizeString(doc.frontmatter.scenario),
+      status: normalizeString(doc.frontmatter.status, "draft"),
+      sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
+      matchedRules: normalizeStringArray(doc.frontmatter.matched_rules),
+    }));
+  }
+
   async loadRule(ruleFile: string): Promise<Rule> {
     const doc = await readMarkdownDocument(ruleFile);
     return {

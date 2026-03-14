@@ -9,7 +9,8 @@ priority: medium
 target_length: 1200
 deadline: null
 source_materials: []
-matched_rules: []
+matched_rules:
+  - rule-demo-candidate
 created_at: 2026-03-14T00:00:00.000Z
 updated_at: 2026-03-14T00:00:00.000Z
 ---
