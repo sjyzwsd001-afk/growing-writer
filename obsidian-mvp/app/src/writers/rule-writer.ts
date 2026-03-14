@@ -17,7 +17,7 @@ export async function writeCandidateRule(input: {
   vaultRoot: string;
   feedback: Feedback;
   analysis: FeedbackAnalysis;
-}): Promise<string | null> {
+}): Promise<{ path: string; ruleId: string } | null> {
   if (!input.analysis.is_reusable_rule || !input.analysis.candidate_rule) {
     return null;
   }
@@ -86,5 +86,5 @@ ${input.analysis.candidate_rule.content}
 
   await mkdir(dirname(path), { recursive: true });
   await writeMarkdownDocument(path, frontmatter, content);
-  return path;
+  return { path, ruleId };
 }

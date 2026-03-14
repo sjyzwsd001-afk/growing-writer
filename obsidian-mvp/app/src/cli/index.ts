@@ -20,7 +20,9 @@ import {
   parseTaskWithLlm,
 } from "../workflows/stubs.js";
 import { writeCandidateRule } from "../writers/rule-writer.js";
+import { writeFeedbackResult } from "../writers/feedback-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
+import { attachRuleToTask } from "../writers/task-link-writer.js";
 
 const program = new Command();
 
@@ -186,16 +188,29 @@ program
     const analysis = client.isEnabled()
       ? await learnFeedbackWithLlm(client, { feedback, task, taskAnalysis })
       : learnFeedback(feedback);
-    const candidateRulePath = await writeCandidateRule({
+    const candidateRule = await writeCandidateRule({
       vaultRoot,
       feedback,
       analysis,
     });
+    await writeFeedbackResult({
+      feedback,
+      analysis,
+      ruleId: candidateRule?.ruleId ?? null,
+    });
+    if (task) {
+      await attachRuleToTask({
+        task,
+        ruleId: candidateRule?.ruleId ?? null,
+        feedbackId: feedback.id,
+      });
+    }
     console.log(
       JSON.stringify(
         {
           analysis,
-          candidate_rule_path: candidateRulePath,
+          candidate_rule_path: candidateRule?.path ?? null,
+          candidate_rule_id: candidateRule?.ruleId ?? null,
         },
         null,
         2,
