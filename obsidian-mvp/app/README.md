@@ -20,6 +20,9 @@
 - `draft`
 - `learn-feedback`
 
+当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
+配置模型后会走真实分析，不配置时仍返回占位结果。
+
 ## 安装
 
 ```bash
@@ -34,6 +37,7 @@ npm install
 - `diagnose`
 - `outline`
 - `draft`
+- `learn-feedback`
 
 可用环境变量：
 
@@ -69,10 +73,11 @@ npm run dev -- diagnose ../tasks/your-task.md
 
 ```bash
 npx tsx src/cli/index.ts draft ../tasks/your-task.md
+npx tsx src/cli/index.ts learn-feedback ../feedback/feedback-demo.md
 ```
 
 ## 下一步建议
 
-1. 接入 `learn-feedback`
-2. 生成并落盘候选规则文件
-3. 继续优化 section 回写与规则确认流程
+1. 优化反馈抽取，缩小给模型的反馈上下文
+2. 把候选规则自动关联回反馈记录和任务记录
+3. 继续优化规则确认流程

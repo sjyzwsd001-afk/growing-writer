@@ -11,11 +11,13 @@ import { buildOutlinePrompt } from "../prompts/build-outline.js";
 import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
 import { buildDiagnoseTaskPrompt } from "../prompts/diagnose-task.js";
 import { buildGenerateDraftPrompt } from "../prompts/generate-draft.js";
+import { buildLearnFeedbackPrompt } from "../prompts/learn-feedback.js";
 import { buildParseTaskPrompt } from "../prompts/parse-task.js";
 import { summarizeMaterial } from "../retrieve/summaries.js";
 import {
   diagnosisResultSchema,
   draftResultSchema,
+  feedbackAnalysisSchema,
   outlineResultSchema,
   taskAnalysisSchema,
 } from "../types/schemas.js";
@@ -203,4 +205,19 @@ export function learnFeedback(feedback: Feedback): FeedbackAnalysis {
     reasoning: "当前为占位实现，待接入反馈学习 prompt。",
     suggested_update: "补充 LLM 分析后生成候选规则。",
   };
+}
+
+export async function learnFeedbackWithLlm(
+  client: OpenAiCompatibleClient,
+  input: {
+    feedback: Feedback;
+    task: Task | null;
+    taskAnalysis: TaskAnalysis | null;
+  },
+): Promise<FeedbackAnalysis> {
+  return client.generateJson({
+    system: BASE_SYSTEM_PROMPT,
+    user: buildLearnFeedbackPrompt(input),
+    schema: feedbackAnalysisSchema,
+  });
 }

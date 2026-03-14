@@ -73,6 +73,30 @@ export class VaultRepository {
     };
   }
 
+  async findTaskById(taskId: string): Promise<Task | null> {
+    if (!taskId) {
+      return null;
+    }
+
+    const tasks = await this.readCollection("tasks");
+    const matched = tasks.find((doc) => normalizeString(doc.frontmatter.id) === taskId);
+    if (!matched) {
+      return null;
+    }
+
+    return {
+      ...matched,
+      id: normalizeString(matched.frontmatter.id, matched.path),
+      title: normalizeString(matched.frontmatter.title, "Untitled Task"),
+      docType: normalizeString(matched.frontmatter.doc_type),
+      audience: normalizeString(matched.frontmatter.audience),
+      scenario: normalizeString(matched.frontmatter.scenario),
+      status: normalizeString(matched.frontmatter.status, "draft"),
+      sourceMaterials: normalizeStringArray(matched.frontmatter.source_materials),
+      matchedRules: normalizeStringArray(matched.frontmatter.matched_rules),
+    };
+  }
+
   async loadProfiles(): Promise<Profile[]> {
     const docs = await this.readCollection("profiles");
     return docs.map((doc) => ({

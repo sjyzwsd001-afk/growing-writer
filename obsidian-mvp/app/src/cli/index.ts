@@ -15,9 +15,11 @@ import {
   generateDraft,
   generateDraftWithLlm,
   learnFeedback,
+  learnFeedbackWithLlm,
   parseTask,
   parseTaskWithLlm,
 } from "../workflows/stubs.js";
+import { writeCandidateRule } from "../writers/rule-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 
 const program = new Command();
@@ -173,9 +175,32 @@ program
   .action(async (feedbackFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
+    const client = createLlmClient();
     const feedback = await repo.loadFeedback(resolve(feedbackFile));
-    const analysis = learnFeedback(feedback);
-    console.log(JSON.stringify(analysis, null, 2));
+    const task = await repo.findTaskById(feedback.taskId);
+    const taskAnalysis = task
+      ? client.isEnabled()
+        ? await parseTaskWithLlm(client, task)
+        : parseTask(task)
+      : null;
+    const analysis = client.isEnabled()
+      ? await learnFeedbackWithLlm(client, { feedback, task, taskAnalysis })
+      : learnFeedback(feedback);
+    const candidateRulePath = await writeCandidateRule({
+      vaultRoot,
+      feedback,
+      analysis,
+    });
+    console.log(
+      JSON.stringify(
+        {
+          analysis,
+          candidate_rule_path: candidateRulePath,
+        },
+        null,
+        2,
+      ),
+    );
   });
 
 await program.parseAsync(process.argv);
