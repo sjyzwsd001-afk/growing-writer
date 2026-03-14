@@ -25,6 +25,7 @@
 - `list-rules`
 - `list-tasks`
 - `list-feedback`
+- `list-materials`
 - `refresh-tasks`
 
 当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
@@ -52,6 +53,7 @@ npm install
 `list-rules` 用于快速查看当前规则库，也支持 `--json` 输出。
 `list-tasks` 用于快速查看当前任务列表，也支持 `--json` 输出。
 `list-feedback` 用于快速查看反馈记录，也支持 `--json` 输出。
+`list-materials` 用于快速查看材料库，也支持 `--json` 输出。
 `refresh-tasks` 用于按当前规则和材料状态批量刷新任务的参考依据与 matched_rules。
 规则状态命令支持 `--reason`，用于记录确认、拒绝或停用原因。
 
@@ -96,6 +98,7 @@ npx tsx src/cli/index.ts disable-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts list-rules --status confirmed
 npx tsx src/cli/index.ts list-tasks --status draft
 npx tsx src/cli/index.ts list-feedback --type logic
+npx tsx src/cli/index.ts list-materials --doc-type 风险汇报
 npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md --reason "已在两次任务中验证有效"
 npx tsx src/cli/index.ts refresh-tasks
 ```
@@ -104,4 +107,4 @@ npx tsx src/cli/index.ts refresh-tasks
 
 1. 增加规则批量操作命令
 2. 增加 profile 摘要自动整理
-3. 增加材料列表命令
+3. 增加材料导入辅助命令

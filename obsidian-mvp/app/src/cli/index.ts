@@ -437,6 +437,47 @@ program
   });
 
 program
+  .command("list-materials")
+  .option("--doc-type <docType>", "filter by document type")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const materials = await repo.loadMaterials();
+    const filtered = options.docType
+      ? materials.filter((material) => material.docType === options.docType)
+      : materials;
+
+    const items = filtered
+      .map((material) => ({
+        id: material.id,
+        title: material.title,
+        doc_type: material.docType,
+        audience: material.audience,
+        scenario: material.scenario,
+        quality: material.quality,
+        path: material.path,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+
+    if (options.json) {
+      console.log(JSON.stringify(items, null, 2));
+      return;
+    }
+
+    if (!items.length) {
+      console.log("No materials found.");
+      return;
+    }
+
+    const lines = items.map(
+      (material) =>
+        `- ${material.title} (${material.id}) | type=${material.doc_type || "n/a"} | audience=${material.audience || "n/a"} | quality=${material.quality}`,
+    );
+    console.log(lines.join("\n"));
+  });
+
+program
   .command("refresh-tasks")
   .option("--json", "output JSON")
   .action(async (options, command) => {
