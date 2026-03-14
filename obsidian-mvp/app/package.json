@@ -1,0 +1,30 @@
+{
+  "name": "obsidian-writing-assistant-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "writer": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx src/cli/index.ts",
+    "parse-task": "tsx src/cli/index.ts parse-task",
+    "diagnose": "tsx src/cli/index.ts diagnose",
+    "outline": "tsx src/cli/index.ts outline",
+    "draft": "tsx src/cli/index.ts draft",
+    "learn-feedback": "tsx src/cli/index.ts learn-feedback"
+  },
+  "dependencies": {
+    "commander": "^14.0.1",
+    "fast-glob": "^3.3.3",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
