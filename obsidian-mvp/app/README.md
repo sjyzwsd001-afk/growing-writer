@@ -22,6 +22,7 @@
 - `confirm-rule`
 - `reject-rule`
 - `disable-rule`
+- `batch-rules`
 - `list-rules`
 - `list-tasks`
 - `list-feedback`
@@ -53,6 +54,7 @@ npm install
 - `learn-feedback`
 
 `confirm-rule` / `reject-rule` / `disable-rule` 不依赖模型，它们负责管理规则状态，并同步更新默认画像。
+`batch-rules` 用于按状态或规则 id 批量执行确认/停用/拒绝。
 `list-rules` 用于快速查看当前规则库，也支持 `--json` 输出。
 `list-tasks` 用于快速查看当前任务列表，也支持 `--json` 输出。
 `list-feedback` 用于快速查看反馈记录，也支持 `--json` 输出。
@@ -101,6 +103,7 @@ npx tsx src/cli/index.ts learn-feedback ../feedback/feedback-demo.md
 npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts reject-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts disable-rule ../rules/rule-demo-candidate.md
+npx tsx src/cli/index.ts batch-rules --action disable --status candidate --reason "批量清理待确认规则"
 npx tsx src/cli/index.ts list-rules --status confirmed
 npx tsx src/cli/index.ts list-tasks --status draft
 npx tsx src/cli/index.ts list-feedback --type logic
@@ -115,6 +118,6 @@ npx tsx src/cli/index.ts refresh-tasks
 
 ## 下一步建议
 
-1. 增加规则批量操作命令
-2. 增加 profile 摘要自动整理
-3. 用模型替换材料分析的启发式逻辑
+1. 增加 profile 摘要自动整理
+2. 增加 task/profile 的批量诊断命令
+3. 进一步优化材料分析的模型提示词

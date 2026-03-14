@@ -50,6 +50,54 @@ function createLlmClient(): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig());
 }
 
+async function applyRuleAction(input: {
+  action: "confirm" | "disable" | "reject";
+  rule: Awaited<ReturnType<VaultRepository["loadRule"]>>;
+  reason?: string;
+  vaultRoot: string;
+  profiles: Awaited<ReturnType<VaultRepository["loadProfiles"]>>;
+  tasks: Awaited<ReturnType<VaultRepository["loadTasks"]>>;
+}) {
+  if (input.action === "confirm") {
+    const updatedRule = await confirmRule(input.rule, input.reason);
+    const profilePath = await updateDefaultProfileWithRule({
+      vaultRoot: input.vaultRoot,
+      rule: updatedRule,
+      profiles: input.profiles,
+    });
+    const updatedTasks = await syncRuleInTasks({
+      tasks: input.tasks,
+      ruleId: updatedRule.id,
+      enabled: true,
+    });
+    return {
+      rule: updatedRule,
+      profilePath,
+      updatedTasks,
+    };
+  }
+
+  const updatedRule =
+    input.action === "disable"
+      ? await disableRule(input.rule, input.reason)
+      : await rejectRule(input.rule, input.reason);
+  const profilePath = await removeRuleFromDefaultProfile({
+    vaultRoot: input.vaultRoot,
+    rule: updatedRule,
+    profiles: input.profiles,
+  });
+  const updatedTasks = await syncRuleInTasks({
+    tasks: input.tasks,
+    ruleId: updatedRule.id,
+    enabled: false,
+  });
+  return {
+    rule: updatedRule,
+    profilePath,
+    updatedTasks,
+  };
+}
+
 program
   .command("parse-task")
   .argument("<task-file>", "path to task markdown file")
@@ -318,6 +366,74 @@ program
         null,
         2,
       ),
+    );
+  });
+
+program
+  .command("batch-rules")
+  .requiredOption("--action <action>", "confirm | disable | reject")
+  .option("--status <status>", "filter by current rule status")
+  .option("--ids <ids>", "comma-separated rule ids")
+  .option("--reason <reason>", "reason applied to all selected rules")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const action = options.action as "confirm" | "disable" | "reject";
+    if (!["confirm", "disable", "reject"].includes(action)) {
+      throw new Error("Invalid action. Use confirm, disable, or reject.");
+    }
+
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const [rules, profiles, tasks] = await Promise.all([
+      repo.loadRules(),
+      repo.loadProfiles(),
+      repo.loadTasks(),
+    ]);
+
+    const ids = typeof options.ids === "string"
+      ? options.ids.split(",").map((item: string) => item.trim()).filter(Boolean)
+      : [];
+
+    let selected = rules;
+    if (options.status) {
+      selected = selected.filter((rule) => rule.status === options.status);
+    }
+    if (ids.length) {
+      selected = selected.filter((rule) => ids.includes(rule.id));
+    }
+
+    if (!selected.length) {
+      console.log(options.json ? "[]" : "No matching rules found.");
+      return;
+    }
+
+    const results = [];
+    for (const rule of selected) {
+      const result = await applyRuleAction({
+        action,
+        rule,
+        reason: options.reason,
+        vaultRoot,
+        profiles,
+        tasks,
+      });
+      results.push({
+        rule_id: result.rule.id,
+        status: result.rule.status,
+        profile_path: result.profilePath,
+        updated_tasks: result.updatedTasks,
+      });
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify(results, null, 2));
+      return;
+    }
+
+    console.log(
+      results
+        .map((item) => `- ${item.rule_id} -> ${item.status} | updated_tasks=${item.updated_tasks.length}`)
+        .join("\n"),
     );
   });
 

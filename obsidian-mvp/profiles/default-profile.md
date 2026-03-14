@@ -2,7 +2,7 @@
 id: profile-default
 name: default
 version: 1
-updated_at: '2026-03-14T11:34:59.791Z'
+updated_at: '2026-03-14T11:59:40.564Z'
 ---
 # 写作画像
 
@@ -44,6 +44,10 @@ updated_at: '2026-03-14T11:34:59.791Z'
 ## 当前稳定规则摘要
 
 - 风险材料必须写具体影响和明确动作 (rule-demo-candidate)
+
+
+
+
 
 
 
