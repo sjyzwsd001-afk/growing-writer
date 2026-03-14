@@ -11,8 +11,9 @@ audiences:
 source_materials: []
 confidence: 0.78
 created_at: 2026-03-14T00:00:00.000Z
-updated_at: '2026-03-14T11:28:40.914Z'
-confirmed_at: '2026-03-14T11:28:40.914Z'
+updated_at: '2026-03-14T11:34:59.789Z'
+confirmed_at: '2026-03-14T11:34:59.789Z'
+status_reason: 已在两次任务中验证有效
 ---
 # 规则内容
 
@@ -54,3 +55,4 @@ confirmed_at: '2026-03-14T11:28:40.914Z'
 # 备注
 
 -
+- 状态变更原因：已在两次任务中验证有效

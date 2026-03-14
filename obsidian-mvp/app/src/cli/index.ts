@@ -200,6 +200,7 @@ program
 program
   .command("confirm-rule")
   .argument("<rule-file>", "path to rule markdown file")
+  .option("--reason <reason>", "reason for confirming this rule")
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
@@ -208,7 +209,7 @@ program
       repo.loadProfiles(),
       repo.loadTasks(),
     ]);
-    const confirmedRule = await confirmRule(rule);
+    const confirmedRule = await confirmRule(rule, options.reason);
     const profilePath = await updateDefaultProfileWithRule({
       vaultRoot,
       rule: confirmedRule,
@@ -238,6 +239,7 @@ program
 program
   .command("reject-rule")
   .argument("<rule-file>", "path to rule markdown file")
+  .option("--reason <reason>", "reason for rejecting this rule")
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
@@ -246,7 +248,7 @@ program
       repo.loadProfiles(),
       repo.loadTasks(),
     ]);
-    const rejectedRule = await rejectRule(rule);
+    const rejectedRule = await rejectRule(rule, options.reason);
     const profilePath = await removeRuleFromDefaultProfile({
       vaultRoot,
       rule: rejectedRule,
@@ -276,6 +278,7 @@ program
 program
   .command("disable-rule")
   .argument("<rule-file>", "path to rule markdown file")
+  .option("--reason <reason>", "reason for disabling this rule")
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
@@ -284,7 +287,7 @@ program
       repo.loadProfiles(),
       repo.loadTasks(),
     ]);
-    const disabledRule = await disableRule(rule);
+    const disabledRule = await disableRule(rule, options.reason);
     const profilePath = await removeRuleFromDefaultProfile({
       vaultRoot,
       rule: disabledRule,

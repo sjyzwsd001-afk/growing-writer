@@ -58,18 +58,27 @@ function removeBulletFromSection(content: string, sectionHeading: string, bullet
   });
 }
 
-export async function confirmRule(rule: Rule): Promise<Rule> {
+function applyStatusReason(content: string, reason?: string): string {
+  if (!reason) {
+    return content;
+  }
+  return replaceLine(content, "状态变更原因：", reason);
+}
+
+export async function confirmRule(rule: Rule, reason?: string): Promise<Rule> {
   const now = new Date().toISOString();
   const nextFrontmatter = {
     ...rule.frontmatter,
     status: "confirmed",
     updated_at: now,
     confirmed_at: now,
+    status_reason: reason ?? rule.frontmatter.status_reason,
   };
 
   let nextContent = rule.content;
   nextContent = replaceLine(nextContent, "是否已被人工确认：", "是");
   nextContent = replaceLine(nextContent, "最近一次命中效果：", "已确认，待后续任务验证");
+  nextContent = applyStatusReason(nextContent, reason);
 
   await writeMarkdownDocument(rule.path, nextFrontmatter, nextContent);
 
@@ -81,17 +90,24 @@ export async function confirmRule(rule: Rule): Promise<Rule> {
   };
 }
 
-async function updateRuleStatus(rule: Rule, status: Rule["status"], effect: string): Promise<Rule> {
+async function updateRuleStatus(
+  rule: Rule,
+  status: Rule["status"],
+  effect: string,
+  reason?: string,
+): Promise<Rule> {
   const now = new Date().toISOString();
   const nextFrontmatter = {
     ...rule.frontmatter,
     status,
     updated_at: now,
+    status_reason: reason ?? rule.frontmatter.status_reason,
   };
 
   let nextContent = rule.content;
   nextContent = replaceLine(nextContent, "是否已被人工确认：", status === "confirmed" ? "是" : "否");
   nextContent = replaceLine(nextContent, "最近一次命中效果：", effect);
+  nextContent = applyStatusReason(nextContent, reason);
 
   await writeMarkdownDocument(rule.path, nextFrontmatter, nextContent);
 
@@ -103,12 +119,12 @@ async function updateRuleStatus(rule: Rule, status: Rule["status"], effect: stri
   };
 }
 
-export async function rejectRule(rule: Rule): Promise<Rule> {
-  return updateRuleStatus(rule, "disabled", "已拒绝，不纳入稳定规则");
+export async function rejectRule(rule: Rule, reason?: string): Promise<Rule> {
+  return updateRuleStatus(rule, "disabled", "已拒绝，不纳入稳定规则", reason);
 }
 
-export async function disableRule(rule: Rule): Promise<Rule> {
-  return updateRuleStatus(rule, "disabled", "已停用，待后续重新评估");
+export async function disableRule(rule: Rule, reason?: string): Promise<Rule> {
+  return updateRuleStatus(rule, "disabled", "已停用，待后续重新评估", reason);
 }
 
 export async function updateDefaultProfileWithRule(input: {

@@ -51,6 +51,7 @@ npm install
 `list-rules` 用于快速查看当前规则库，也支持 `--json` 输出。
 `list-tasks` 用于快速查看当前任务列表，也支持 `--json` 输出。
 `list-feedback` 用于快速查看反馈记录，也支持 `--json` 输出。
+规则状态命令支持 `--reason`，用于记录确认、拒绝或停用原因。
 
 可用环境变量：
 
@@ -93,10 +94,11 @@ npx tsx src/cli/index.ts disable-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts list-rules --status confirmed
 npx tsx src/cli/index.ts list-tasks --status draft
 npx tsx src/cli/index.ts list-feedback --type logic
+npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md --reason "已在两次任务中验证有效"
 ```
 
 ## 下一步建议
 
-1. 为规则增加“确认原因 / 拒绝原因 / 停用原因”
-2. 增加规则批量操作命令
-3. 增加任务批量刷新命令
+1. 增加规则批量操作命令
+2. 增加任务批量刷新命令
+3. 增加 profile 摘要自动整理
