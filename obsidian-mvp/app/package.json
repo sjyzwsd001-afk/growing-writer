@@ -24,6 +24,7 @@
     "list-materials": "tsx src/cli/index.ts list-materials",
     "import-material": "tsx src/cli/index.ts import-material",
     "import-materials-dir": "tsx src/cli/index.ts import-materials-dir",
+    "analyze-material": "tsx src/cli/index.ts analyze-material",
     "refresh-tasks": "tsx src/cli/index.ts refresh-tasks"
   },
   "dependencies": {

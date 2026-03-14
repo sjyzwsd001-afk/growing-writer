@@ -32,7 +32,11 @@ import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 import { syncRuleInTasks } from "../writers/task-rule-sync-writer.js";
 import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
-import { importMaterial, importMaterialsFromDirectory } from "../writers/material-writer.js";
+import {
+  analyzeImportedMaterial,
+  importMaterial,
+  importMaterialsFromDirectory,
+} from "../writers/material-writer.js";
 
 const program = new Command();
 
@@ -537,6 +541,23 @@ program
     }
 
     console.log(results.map((item) => `- ${item.materialId} <- ${item.sourceFile}`).join("\n"));
+  });
+
+program
+  .command("analyze-material")
+  .argument("<material-file>", "path to imported material markdown file")
+  .action(async (materialFile) => {
+    await analyzeImportedMaterial(resolve(materialFile));
+    console.log(
+      JSON.stringify(
+        {
+          material_path: resolve(materialFile),
+          status: "analyzed",
+        },
+        null,
+        2,
+      ),
+    );
   });
 
 program

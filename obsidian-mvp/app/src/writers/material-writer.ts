@@ -4,7 +4,18 @@ import fg from "fast-glob";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 
-import { writeMarkdownDocument } from "../vault/markdown.js";
+import { replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
+import { readMarkdownDocument } from "../vault/markdown.js";
+
+type MaterialHeuristics = {
+  opening: string;
+  bodyParts: string[];
+  ending: string;
+  tone: string;
+  sentenceStyle: string;
+  logicOrder: string;
+  taboo: string;
+};
 
 function slugify(value: string): string {
   return value
@@ -12,6 +23,98 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+function analyzeMaterialText(text: string, docType: string): MaterialHeuristics {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const first = paragraphs[0] ?? "";
+  const last = paragraphs[paragraphs.length - 1] ?? "";
+  const bodyParts = paragraphs.slice(0, 3).map((item, index) => {
+    const shortened = item.replace(/\n/g, " ").slice(0, 36);
+    return `第${index + 1}部分可围绕“${shortened}”展开`;
+  });
+
+  const isFormal = /项目|工作|推进|完成|风险|措施|情况|阶段/.test(normalized);
+  const hasConclusion = /总体|整体|下一步|后续|建议|措施|计划/.test(last);
+
+  return {
+    opening:
+      first.length > 0
+        ? `开头大概率在交代${docType || "该材料"}的背景或总体情况，可参考首段“${first.slice(0, 28)}”。`
+        : "开头大概率在交代背景、目标或当前总体情况。",
+    bodyParts:
+      bodyParts.length > 0
+        ? bodyParts
+        : ["第一部分可写背景", "第二部分可写主体信息", "第三部分可写结尾安排"],
+    ending: hasConclusion
+      ? `结尾倾向于落在总结、措施或下一步安排，可参考末段“${last.slice(0, 28)}”。`
+      : "结尾建议补充总结判断、态度表述或下一步安排。",
+    tone: isFormal ? "正式、客观、偏工作汇报语气" : "偏说明性语气，建议进一步统一正式表达",
+    sentenceStyle: normalized.length > 120 ? "以完整陈述句为主，适合做正式材料" : "篇幅较短，后续可补充更完整的陈述句",
+    logicOrder: "通常可按背景/现状 -> 重点事项 -> 结论或安排的顺序组织",
+    taboo: "避免口语化、空泛表述，避免只有结论没有事实支撑",
+  };
+}
+
+function buildMaterialContent(input: {
+  title: string;
+  docType: string;
+  source?: string;
+  scenario?: string;
+  audience?: string;
+  quality?: string;
+  rawBody: string;
+}): string {
+  const analysis = analyzeMaterialText(input.rawBody, input.docType);
+
+  return `# 文档信息
+
+- 标题：${input.title}
+- 类型：${input.docType}
+- 来源：${input.source ?? ""}
+- 使用场景：${input.scenario ?? ""}
+- 面向对象：${input.audience ?? ""}
+- 质量判断：${input.quality ?? "high"}
+
+# 原文内容
+
+${input.rawBody || "在这里粘贴或整理历史材料正文。"}
+
+# 结构拆解
+
+## 开头功能
+
+- ${analysis.opening}
+
+## 主体结构
+
+- ${analysis.bodyParts[0] ?? "第一部分待补充"}
+- ${analysis.bodyParts[1] ?? "第二部分待补充"}
+- ${analysis.bodyParts[2] ?? "第三部分待补充"}
+
+## 结尾功能
+
+- ${analysis.ending}
+
+# 风格观察
+
+- 常用语气：${analysis.tone}
+- 常用句式：${analysis.sentenceStyle}
+- 常见逻辑顺序：${analysis.logicOrder}
+- 明显禁忌：${analysis.taboo}
+
+# 可提炼规则
+
+- 候选规则 1：待人工确认
+- 候选规则 2：待人工确认
+
+# 备注
+
+- `;
 }
 
 export async function importMaterial(input: {
@@ -48,50 +151,15 @@ export async function importMaterial(input: {
     updated_at: now,
   };
 
-  const content = `# 文档信息
-
-- 标题：${input.title}
-- 类型：${input.docType}
-- 来源：${input.source ?? input.sourceFile ?? ""}
-- 使用场景：${input.scenario ?? ""}
-- 面向对象：${input.audience ?? ""}
-- 质量判断：${input.quality ?? "high"}
-
-# 原文内容
-
-${rawBody || "在这里粘贴或整理历史材料正文。"}
-
-# 结构拆解
-
-## 开头功能
-
-- 这篇材料开头在做什么：
-
-## 主体结构
-
-- 第一部分：
-- 第二部分：
-- 第三部分：
-
-## 结尾功能
-
-- 结尾如何收束：
-
-# 风格观察
-
-- 常用语气：
-- 常用句式：
-- 常见逻辑顺序：
-- 明显禁忌：
-
-# 可提炼规则
-
-- 候选规则 1：
-- 候选规则 2：
-
-# 备注
-
-- `;
+  const content = buildMaterialContent({
+    title: input.title,
+    docType: input.docType,
+    source: input.source ?? input.sourceFile ?? "",
+    scenario: input.scenario,
+    audience: input.audience,
+    quality: input.quality ?? "high",
+    rawBody,
+  });
 
   await mkdir(dirname(path), { recursive: true });
   await writeMarkdownDocument(path, frontmatter, content);
@@ -164,4 +232,28 @@ async function extractTextFromFile(path: string): Promise<string> {
   }
 
   throw new Error(`Unsupported material file type: ${extension}`);
+}
+
+export async function analyzeImportedMaterial(materialPath: string): Promise<void> {
+  const doc = await readMarkdownDocument(materialPath);
+  const title = typeof doc.frontmatter.title === "string" ? doc.frontmatter.title : "";
+  const docType = typeof doc.frontmatter.doc_type === "string" ? doc.frontmatter.doc_type : "";
+  const source = typeof doc.frontmatter.source === "string" ? doc.frontmatter.source : "";
+  const scenario = typeof doc.frontmatter.scenario === "string" ? doc.frontmatter.scenario : "";
+  const audience = typeof doc.frontmatter.audience === "string" ? doc.frontmatter.audience : "";
+  const quality = typeof doc.frontmatter.quality === "string" ? doc.frontmatter.quality : "high";
+
+  const rawBodyMatch = doc.content.match(/# 原文内容\n\n([\s\S]*?)(?=\n# )/);
+  const rawBody = rawBodyMatch?.[1]?.trim() ?? "";
+  const rebuilt = buildMaterialContent({
+    title,
+    docType,
+    source,
+    scenario,
+    audience,
+    quality,
+    rawBody,
+  });
+
+  await writeMarkdownDocument(materialPath, doc.frontmatter, rebuilt);
 }
