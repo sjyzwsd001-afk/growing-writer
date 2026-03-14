@@ -394,6 +394,45 @@ program
   });
 
 program
+  .command("list-feedback")
+  .option("--type <feedbackType>", "filter by feedback type")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const feedbackEntries = await repo.loadFeedbackEntries();
+    const filtered = options.type
+      ? feedbackEntries.filter((entry) => entry.feedbackType === options.type)
+      : feedbackEntries;
+
+    const items = filtered
+      .map((entry) => ({
+        id: entry.id,
+        task_id: entry.taskId,
+        feedback_type: entry.feedbackType || "unclassified",
+        related_rule_ids: entry.relatedRuleIds,
+        path: entry.path,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id, "zh-CN"));
+
+    if (options.json) {
+      console.log(JSON.stringify(items, null, 2));
+      return;
+    }
+
+    if (!items.length) {
+      console.log("No feedback found.");
+      return;
+    }
+
+    const lines = items.map(
+      (entry) =>
+        `- [${entry.feedback_type}] ${entry.id} | task=${entry.task_id || "n/a"} | related_rules=${entry.related_rule_ids.length}`,
+    );
+    console.log(lines.join("\n"));
+  });
+
+program
   .command("learn-feedback")
   .argument("<feedback-file>", "path to feedback markdown file")
   .action(async (feedbackFile, options, command) => {

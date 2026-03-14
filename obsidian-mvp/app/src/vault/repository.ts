@@ -73,6 +73,17 @@ export class VaultRepository {
     };
   }
 
+  async loadFeedbackEntries(): Promise<Feedback[]> {
+    const docs = await this.readCollection("feedback");
+    return docs.map((doc) => ({
+      ...doc,
+      id: normalizeString(doc.frontmatter.id, doc.path),
+      taskId: normalizeString(doc.frontmatter.task_id),
+      relatedRuleIds: normalizeStringArray(doc.frontmatter.related_rule_ids),
+      feedbackType: normalizeString(doc.frontmatter.feedback_type),
+    }));
+  }
+
   async findTaskById(taskId: string): Promise<Task | null> {
     if (!taskId) {
       return null;
