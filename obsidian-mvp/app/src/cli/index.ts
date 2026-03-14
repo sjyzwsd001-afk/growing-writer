@@ -21,7 +21,13 @@ import {
 } from "../workflows/stubs.js";
 import { writeCandidateRule } from "../writers/rule-writer.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
-import { confirmRule, updateDefaultProfileWithRule } from "../writers/rule-confirm-writer.js";
+import {
+  confirmRule,
+  disableRule,
+  rejectRule,
+  removeRuleFromDefaultProfile,
+  updateDefaultProfileWithRule,
+} from "../writers/rule-confirm-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 
@@ -213,6 +219,68 @@ program
           rule_id: confirmedRule.id,
           rule_path: confirmedRule.path,
           status: confirmedRule.status,
+          profile_path: profilePath,
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+program
+  .command("reject-rule")
+  .argument("<rule-file>", "path to rule markdown file")
+  .action(async (ruleFile, options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const [rule, profiles] = await Promise.all([
+      repo.loadRule(resolve(ruleFile)),
+      repo.loadProfiles(),
+    ]);
+    const rejectedRule = await rejectRule(rule);
+    const profilePath = await removeRuleFromDefaultProfile({
+      vaultRoot,
+      rule: rejectedRule,
+      profiles,
+    });
+
+    console.log(
+      JSON.stringify(
+        {
+          rule_id: rejectedRule.id,
+          rule_path: rejectedRule.path,
+          status: rejectedRule.status,
+          profile_path: profilePath,
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+program
+  .command("disable-rule")
+  .argument("<rule-file>", "path to rule markdown file")
+  .action(async (ruleFile, options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const [rule, profiles] = await Promise.all([
+      repo.loadRule(resolve(ruleFile)),
+      repo.loadProfiles(),
+    ]);
+    const disabledRule = await disableRule(rule);
+    const profilePath = await removeRuleFromDefaultProfile({
+      vaultRoot,
+      rule: disabledRule,
+      profiles,
+    });
+
+    console.log(
+      JSON.stringify(
+        {
+          rule_id: disabledRule.id,
+          rule_path: disabledRule.path,
+          status: disabledRule.status,
           profile_path: profilePath,
         },
         null,

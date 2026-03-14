@@ -20,6 +20,8 @@
 - `draft`
 - `learn-feedback`
 - `confirm-rule`
+- `reject-rule`
+- `disable-rule`
 
 当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
 配置模型后会走真实分析，不配置时仍返回占位结果。
@@ -42,7 +44,7 @@ npm install
 - `draft`
 - `learn-feedback`
 
-`confirm-rule` 不依赖模型，它负责把候选规则确认为已生效规则，并同步更新默认画像。
+`confirm-rule` / `reject-rule` / `disable-rule` 不依赖模型，它们负责管理规则状态，并同步更新默认画像。
 
 可用环境变量：
 
@@ -80,10 +82,12 @@ npm run dev -- diagnose ../tasks/your-task.md
 npx tsx src/cli/index.ts draft ../tasks/your-task.md
 npx tsx src/cli/index.ts learn-feedback ../feedback/feedback-demo.md
 npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md
+npx tsx src/cli/index.ts reject-rule ../rules/rule-demo-candidate.md
+npx tsx src/cli/index.ts disable-rule ../rules/rule-demo-candidate.md
 ```
 
 ## 下一步建议
 
-1. 优化 task section 回写，彻底消除重复内容
-2. 在规则确认后自动回刷相关 task 的命中规则展示
-3. 增加“拒绝规则/归档规则”的命令
+1. 在规则状态变更后自动回刷相关 task 的 `matched_rules`
+2. 为规则增加“确认原因 / 拒绝原因 / 停用原因”
+3. 增加规则列表和批量操作命令

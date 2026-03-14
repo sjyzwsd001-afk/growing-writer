@@ -15,7 +15,9 @@
     "outline": "tsx src/cli/index.ts outline",
     "draft": "tsx src/cli/index.ts draft",
     "learn-feedback": "tsx src/cli/index.ts learn-feedback",
-    "confirm-rule": "tsx src/cli/index.ts confirm-rule"
+    "confirm-rule": "tsx src/cli/index.ts confirm-rule",
+    "reject-rule": "tsx src/cli/index.ts reject-rule",
+    "disable-rule": "tsx src/cli/index.ts disable-rule"
   },
   "dependencies": {
     "commander": "^14.0.1",

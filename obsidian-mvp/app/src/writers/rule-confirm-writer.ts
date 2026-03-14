@@ -39,6 +39,25 @@ function ensureBulletInSection(content: string, sectionHeading: string, bullet: 
   });
 }
 
+function removeBulletFromSection(content: string, sectionHeading: string, bullet: string): string {
+  const escaped = sectionHeading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const sectionPattern = new RegExp(`(^## ${escaped}\\n\\n)([\\s\\S]*?)(?=\\n## |$)`, "m");
+
+  if (!sectionPattern.test(content)) {
+    return content;
+  }
+
+  return content.replace(sectionPattern, (match, header: string, body: string) => {
+    const lines = body
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0 && line !== `- ${bullet}`);
+
+    const normalized = lines.length ? lines.join("\n") : "-";
+    return `${header}${normalized}\n\n`;
+  });
+}
+
 export async function confirmRule(rule: Rule): Promise<Rule> {
   const now = new Date().toISOString();
   const nextFrontmatter = {
@@ -60,6 +79,36 @@ export async function confirmRule(rule: Rule): Promise<Rule> {
     content: nextContent,
     status: "confirmed",
   };
+}
+
+async function updateRuleStatus(rule: Rule, status: Rule["status"], effect: string): Promise<Rule> {
+  const now = new Date().toISOString();
+  const nextFrontmatter = {
+    ...rule.frontmatter,
+    status,
+    updated_at: now,
+  };
+
+  let nextContent = rule.content;
+  nextContent = replaceLine(nextContent, "是否已被人工确认：", status === "confirmed" ? "是" : "否");
+  nextContent = replaceLine(nextContent, "最近一次命中效果：", effect);
+
+  await writeMarkdownDocument(rule.path, nextFrontmatter, nextContent);
+
+  return {
+    ...rule,
+    frontmatter: nextFrontmatter,
+    content: nextContent,
+    status,
+  };
+}
+
+export async function rejectRule(rule: Rule): Promise<Rule> {
+  return updateRuleStatus(rule, "disabled", "已拒绝，不纳入稳定规则");
+}
+
+export async function disableRule(rule: Rule): Promise<Rule> {
+  return updateRuleStatus(rule, "disabled", "已停用，待后续重新评估");
 }
 
 export async function updateDefaultProfileWithRule(input: {
@@ -133,6 +182,26 @@ export async function updateDefaultProfileWithRule(input: {
     updated_at: now,
   };
   const nextContent = ensureBulletInSection(profile.content, "当前稳定规则摘要", bullet);
+  await writeMarkdownDocument(profile.path, nextFrontmatter, nextContent);
+  return profile.path;
+}
+
+export async function removeRuleFromDefaultProfile(input: {
+  vaultRoot: string;
+  rule: Rule;
+  profiles: Profile[];
+}): Promise<string | null> {
+  const profile = input.profiles[0];
+  if (!profile) {
+    return null;
+  }
+
+  const bullet = `${input.rule.title} (${input.rule.id})`;
+  const nextFrontmatter = {
+    ...profile.frontmatter,
+    updated_at: new Date().toISOString(),
+  };
+  const nextContent = removeBulletFromSection(profile.content, "当前稳定规则摘要", bullet);
   await writeMarkdownDocument(profile.path, nextFrontmatter, nextContent);
   return profile.path;
 }
