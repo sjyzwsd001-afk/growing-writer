@@ -27,6 +27,7 @@
     "import-materials-dir": "tsx src/cli/index.ts import-materials-dir",
     "analyze-material": "tsx src/cli/index.ts analyze-material",
     "refresh-tasks": "tsx src/cli/index.ts refresh-tasks"
+    ,"refresh-profile": "tsx src/cli/index.ts refresh-profile"
   },
   "dependencies": {
     "commander": "^14.0.1",

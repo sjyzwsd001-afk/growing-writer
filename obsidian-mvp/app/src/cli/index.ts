@@ -25,8 +25,6 @@ import {
   confirmRule,
   disableRule,
   rejectRule,
-  removeRuleFromDefaultProfile,
-  updateDefaultProfileWithRule,
 } from "../writers/rule-confirm-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
@@ -38,6 +36,7 @@ import {
   importMaterial,
   importMaterialsFromDirectory,
 } from "../writers/material-writer.js";
+import { refreshDefaultProfile } from "../writers/profile-writer.js";
 
 const program = new Command();
 
@@ -55,20 +54,21 @@ async function applyRuleAction(input: {
   rule: Awaited<ReturnType<VaultRepository["loadRule"]>>;
   reason?: string;
   vaultRoot: string;
+  rules: Awaited<ReturnType<VaultRepository["loadRules"]>>;
   profiles: Awaited<ReturnType<VaultRepository["loadProfiles"]>>;
   tasks: Awaited<ReturnType<VaultRepository["loadTasks"]>>;
 }) {
   if (input.action === "confirm") {
     const updatedRule = await confirmRule(input.rule, input.reason);
-    const profilePath = await updateDefaultProfileWithRule({
-      vaultRoot: input.vaultRoot,
-      rule: updatedRule,
-      profiles: input.profiles,
-    });
     const updatedTasks = await syncRuleInTasks({
       tasks: input.tasks,
       ruleId: updatedRule.id,
       enabled: true,
+    });
+    const profilePath = await refreshDefaultProfile({
+      vaultRoot: input.vaultRoot,
+      profiles: input.profiles,
+      rules: input.rules.map((rule) => (rule.id === updatedRule.id ? updatedRule : rule)),
     });
     return {
       rule: updatedRule,
@@ -81,15 +81,15 @@ async function applyRuleAction(input: {
     input.action === "disable"
       ? await disableRule(input.rule, input.reason)
       : await rejectRule(input.rule, input.reason);
-  const profilePath = await removeRuleFromDefaultProfile({
-    vaultRoot: input.vaultRoot,
-    rule: updatedRule,
-    profiles: input.profiles,
-  });
   const updatedTasks = await syncRuleInTasks({
     tasks: input.tasks,
     ruleId: updatedRule.id,
     enabled: false,
+  });
+  const profilePath = await refreshDefaultProfile({
+    vaultRoot: input.vaultRoot,
+    profiles: input.profiles,
+    rules: input.rules.map((rule) => (rule.id === updatedRule.id ? updatedRule : rule)),
   });
   return {
     rule: updatedRule,
@@ -259,31 +259,30 @@ program
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rule, profiles, tasks] = await Promise.all([
+    const [rule, rules, profiles, tasks] = await Promise.all([
       repo.loadRule(resolve(ruleFile)),
+      repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
     ]);
-    const confirmedRule = await confirmRule(rule, options.reason);
-    const profilePath = await updateDefaultProfileWithRule({
+    const result = await applyRuleAction({
+      action: "confirm",
+      rule,
+      reason: options.reason,
       vaultRoot,
-      rule: confirmedRule,
+      rules,
       profiles,
-    });
-    const updatedTasks = await syncRuleInTasks({
       tasks,
-      ruleId: confirmedRule.id,
-      enabled: true,
     });
 
     console.log(
       JSON.stringify(
         {
-          rule_id: confirmedRule.id,
-          rule_path: confirmedRule.path,
-          status: confirmedRule.status,
-          profile_path: profilePath,
-          updated_tasks: updatedTasks,
+          rule_id: result.rule.id,
+          rule_path: result.rule.path,
+          status: result.rule.status,
+          profile_path: result.profilePath,
+          updated_tasks: result.updatedTasks,
         },
         null,
         2,
@@ -298,31 +297,30 @@ program
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rule, profiles, tasks] = await Promise.all([
+    const [rule, rules, profiles, tasks] = await Promise.all([
       repo.loadRule(resolve(ruleFile)),
+      repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
     ]);
-    const rejectedRule = await rejectRule(rule, options.reason);
-    const profilePath = await removeRuleFromDefaultProfile({
+    const result = await applyRuleAction({
+      action: "reject",
+      rule,
+      reason: options.reason,
       vaultRoot,
-      rule: rejectedRule,
+      rules,
       profiles,
-    });
-    const updatedTasks = await syncRuleInTasks({
       tasks,
-      ruleId: rejectedRule.id,
-      enabled: false,
     });
 
     console.log(
       JSON.stringify(
         {
-          rule_id: rejectedRule.id,
-          rule_path: rejectedRule.path,
-          status: rejectedRule.status,
-          profile_path: profilePath,
-          updated_tasks: updatedTasks,
+          rule_id: result.rule.id,
+          rule_path: result.rule.path,
+          status: result.rule.status,
+          profile_path: result.profilePath,
+          updated_tasks: result.updatedTasks,
         },
         null,
         2,
@@ -337,31 +335,30 @@ program
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rule, profiles, tasks] = await Promise.all([
+    const [rule, rules, profiles, tasks] = await Promise.all([
       repo.loadRule(resolve(ruleFile)),
+      repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
     ]);
-    const disabledRule = await disableRule(rule, options.reason);
-    const profilePath = await removeRuleFromDefaultProfile({
+    const result = await applyRuleAction({
+      action: "disable",
+      rule,
+      reason: options.reason,
       vaultRoot,
-      rule: disabledRule,
+      rules,
       profiles,
-    });
-    const updatedTasks = await syncRuleInTasks({
       tasks,
-      ruleId: disabledRule.id,
-      enabled: false,
     });
 
     console.log(
       JSON.stringify(
         {
-          rule_id: disabledRule.id,
-          rule_path: disabledRule.path,
-          status: disabledRule.status,
-          profile_path: profilePath,
-          updated_tasks: updatedTasks,
+          rule_id: result.rule.id,
+          rule_path: result.rule.path,
+          status: result.rule.status,
+          profile_path: result.profilePath,
+          updated_tasks: result.updatedTasks,
         },
         null,
         2,
@@ -414,6 +411,7 @@ program
         rule,
         reason: options.reason,
         vaultRoot,
+        rules,
         profiles,
         tasks,
       });
@@ -746,6 +744,29 @@ program
             `- ${result.task_id} | matched_rules=${result.matched_rules.length} | matched_materials=${result.matched_materials.length}`,
         )
         .join("\n"),
+    );
+  });
+
+program
+  .command("refresh-profile")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const [profiles, rules] = await Promise.all([repo.loadProfiles(), repo.loadRules()]);
+    const profilePath = await refreshDefaultProfile({
+      vaultRoot,
+      profiles,
+      rules,
+    });
+    console.log(
+      JSON.stringify(
+        {
+          profile_path: profilePath,
+          confirmed_rules: rules.filter((rule) => rule.status === "confirmed").length,
+        },
+        null,
+        2,
+      ),
     );
   });
 

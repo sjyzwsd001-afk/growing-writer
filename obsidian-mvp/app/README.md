@@ -31,6 +31,7 @@
 - `import-materials-dir`
 - `analyze-material`
 - `refresh-tasks`
+- `refresh-profile`
 
 当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
 配置模型后会走真实分析，不配置时仍返回占位结果。
@@ -63,6 +64,7 @@ npm install
 `import-materials-dir` 用于把目录下的 `txt/md/docx/pdf` 批量导入为标准材料文件。
 `analyze-material` 用于对已导入材料重新生成一版初步结构分析。
 `refresh-tasks` 用于按当前规则和材料状态批量刷新任务的参考依据与 matched_rules。
+`refresh-profile` 用于根据已确认规则重建默认写作画像摘要。
 规则状态命令支持 `--reason`，用于记录确认、拒绝或停用原因。
 
 可用环境变量：
@@ -114,10 +116,11 @@ npx tsx src/cli/index.ts import-materials-dir --source-dir ./raw-materials --doc
 npx tsx src/cli/index.ts analyze-material ../materials/your-material.md
 npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md --reason "已在两次任务中验证有效"
 npx tsx src/cli/index.ts refresh-tasks
+npx tsx src/cli/index.ts refresh-profile
 ```
 
 ## 下一步建议
 
-1. 增加 profile 摘要自动整理
-2. 增加 task/profile 的批量诊断命令
-3. 进一步优化材料分析的模型提示词
+1. 增加 task/profile 的批量诊断命令
+2. 进一步优化材料分析的模型提示词
+3. 增加规则确认后的自动 profile 刷新
