@@ -34,6 +34,7 @@ import { syncRuleInTasks } from "../writers/task-rule-sync-writer.js";
 import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
 import {
   analyzeImportedMaterial,
+  createMaterialAnalyzer,
   importMaterial,
   importMaterialsFromDirectory,
 } from "../writers/material-writer.js";
@@ -494,6 +495,17 @@ program
   .option("--source-file <path>", "read material body from a local text or markdown file")
   .action(async (options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const client = createLlmClient();
+    const analyzer = createMaterialAnalyzer(client);
+    const analysis = options.body
+      ? await analyzer({
+          title: options.title,
+          rawBody: options.body,
+          docType: options.docType,
+          audience: options.audience,
+          scenario: options.scenario,
+        })
+      : undefined;
     const result = await importMaterial({
       vaultRoot,
       title: options.title,
@@ -504,6 +516,7 @@ program
       quality: options.quality,
       body: options.body,
       sourceFile: options.sourceFile ? resolve(options.sourceFile) : undefined,
+      analysis,
     });
 
     console.log(JSON.stringify(result, null, 2));
@@ -520,6 +533,7 @@ program
   .option("--json", "output JSON")
   .action(async (options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const client = createLlmClient();
     const results = await importMaterialsFromDirectory({
       vaultRoot,
       sourceDir: resolve(options.sourceDir),
@@ -528,6 +542,7 @@ program
       scenario: options.scenario,
       source: options.source,
       quality: options.quality,
+      analyze: createMaterialAnalyzer(client),
     });
 
     if (options.json) {
@@ -547,7 +562,10 @@ program
   .command("analyze-material")
   .argument("<material-file>", "path to imported material markdown file")
   .action(async (materialFile) => {
-    await analyzeImportedMaterial(resolve(materialFile));
+    const client = createLlmClient();
+    await analyzeImportedMaterial(resolve(materialFile), {
+      analyze: createMaterialAnalyzer(client),
+    });
     console.log(
       JSON.stringify(
         {

@@ -81,8 +81,20 @@ export const feedbackAnalysisSchema = z.object({
   suggested_update: z.string(),
 });
 
+export const materialAnalysisSchema = z.object({
+  opening: z.string(),
+  body_parts: z.array(z.string()).min(1).max(3),
+  ending: z.string(),
+  tone: z.string(),
+  sentence_style: z.string(),
+  logic_order: z.string(),
+  taboo: z.string(),
+  candidate_rules: z.array(z.string()).max(3),
+});
+
 export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;
 export type DiagnosisResult = z.infer<typeof diagnosisResultSchema>;
 export type OutlineResult = z.infer<typeof outlineResultSchema>;
 export type DraftResult = z.infer<typeof draftResultSchema>;
 export type FeedbackAnalysis = z.infer<typeof feedbackAnalysisSchema>;
+export type MaterialAnalysis = z.infer<typeof materialAnalysisSchema>;

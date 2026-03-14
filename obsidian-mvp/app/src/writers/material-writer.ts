@@ -4,18 +4,12 @@ import fg from "fast-glob";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 
+import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
+import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
+import { buildAnalyzeMaterialPrompt } from "../prompts/analyze-material.js";
+import { materialAnalysisSchema, type MaterialAnalysis } from "../types/schemas.js";
 import { replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 import { readMarkdownDocument } from "../vault/markdown.js";
-
-type MaterialHeuristics = {
-  opening: string;
-  bodyParts: string[];
-  ending: string;
-  tone: string;
-  sentenceStyle: string;
-  logicOrder: string;
-  taboo: string;
-};
 
 function slugify(value: string): string {
   return value
@@ -25,7 +19,7 @@ function slugify(value: string): string {
     .slice(0, 60);
 }
 
-function analyzeMaterialText(text: string, docType: string): MaterialHeuristics {
+export function analyzeMaterialHeuristically(text: string, docType: string): MaterialAnalysis {
   const normalized = text.replace(/\r\n/g, "\n").trim();
   const paragraphs = normalized
     .split(/\n{2,}/)
@@ -46,7 +40,7 @@ function analyzeMaterialText(text: string, docType: string): MaterialHeuristics 
       first.length > 0
         ? `开头大概率在交代${docType || "该材料"}的背景或总体情况，可参考首段“${first.slice(0, 28)}”。`
         : "开头大概率在交代背景、目标或当前总体情况。",
-    bodyParts:
+    body_parts:
       bodyParts.length > 0
         ? bodyParts
         : ["第一部分可写背景", "第二部分可写主体信息", "第三部分可写结尾安排"],
@@ -54,9 +48,11 @@ function analyzeMaterialText(text: string, docType: string): MaterialHeuristics 
       ? `结尾倾向于落在总结、措施或下一步安排，可参考末段“${last.slice(0, 28)}”。`
       : "结尾建议补充总结判断、态度表述或下一步安排。",
     tone: isFormal ? "正式、客观、偏工作汇报语气" : "偏说明性语气，建议进一步统一正式表达",
-    sentenceStyle: normalized.length > 120 ? "以完整陈述句为主，适合做正式材料" : "篇幅较短，后续可补充更完整的陈述句",
-    logicOrder: "通常可按背景/现状 -> 重点事项 -> 结论或安排的顺序组织",
+    sentence_style:
+      normalized.length > 120 ? "以完整陈述句为主，适合做正式材料" : "篇幅较短，后续可补充更完整的陈述句",
+    logic_order: "通常可按背景/现状 -> 重点事项 -> 结论或安排的顺序组织",
     taboo: "避免口语化、空泛表述，避免只有结论没有事实支撑",
+    candidate_rules: ["待人工确认"],
   };
 }
 
@@ -68,9 +64,8 @@ function buildMaterialContent(input: {
   audience?: string;
   quality?: string;
   rawBody: string;
+  analysis: MaterialAnalysis;
 }): string {
-  const analysis = analyzeMaterialText(input.rawBody, input.docType);
-
   return `# 文档信息
 
 - 标题：${input.title}
@@ -88,29 +83,30 @@ ${input.rawBody || "在这里粘贴或整理历史材料正文。"}
 
 ## 开头功能
 
-- ${analysis.opening}
+- ${input.analysis.opening}
 
 ## 主体结构
 
-- ${analysis.bodyParts[0] ?? "第一部分待补充"}
-- ${analysis.bodyParts[1] ?? "第二部分待补充"}
-- ${analysis.bodyParts[2] ?? "第三部分待补充"}
+- ${input.analysis.body_parts[0] ?? "第一部分待补充"}
+- ${input.analysis.body_parts[1] ?? "第二部分待补充"}
+- ${input.analysis.body_parts[2] ?? "第三部分待补充"}
 
 ## 结尾功能
 
-- ${analysis.ending}
+- ${input.analysis.ending}
 
 # 风格观察
 
-- 常用语气：${analysis.tone}
-- 常用句式：${analysis.sentenceStyle}
-- 常见逻辑顺序：${analysis.logicOrder}
-- 明显禁忌：${analysis.taboo}
+- 常用语气：${input.analysis.tone}
+- 常用句式：${input.analysis.sentence_style}
+- 常见逻辑顺序：${input.analysis.logic_order}
+- 明显禁忌：${input.analysis.taboo}
 
 # 可提炼规则
 
-- 候选规则 1：待人工确认
-- 候选规则 2：待人工确认
+- 候选规则 1：${input.analysis.candidate_rules[0] ?? "待人工确认"}
+- 候选规则 2：${input.analysis.candidate_rules[1] ?? "待人工确认"}
+- 候选规则 3：${input.analysis.candidate_rules[2] ?? "待人工确认"}
 
 # 备注
 
@@ -127,6 +123,7 @@ export async function importMaterial(input: {
   quality?: string;
   body?: string;
   sourceFile?: string;
+  analysis?: MaterialAnalysis;
 }): Promise<{ path: string; materialId: string }> {
   const now = new Date().toISOString();
   const timestamp = now.replace(/[:.]/g, "-");
@@ -159,6 +156,7 @@ export async function importMaterial(input: {
     audience: input.audience,
     quality: input.quality ?? "high",
     rawBody,
+    analysis: input.analysis ?? analyzeMaterialHeuristically(rawBody, input.docType),
   });
 
   await mkdir(dirname(path), { recursive: true });
@@ -175,6 +173,7 @@ export async function importMaterialsFromDirectory(input: {
   scenario?: string;
   source?: string;
   quality?: string;
+  analyze?: (payload: { title: string; rawBody: string; docType: string; audience?: string; scenario?: string }) => Promise<MaterialAnalysis>;
 }): Promise<Array<{ path: string; materialId: string; sourceFile: string }>> {
   const files = await fg(["**/*.md", "**/*.txt", "**/*.docx", "**/*.pdf"], {
     cwd: input.sourceDir,
@@ -191,6 +190,15 @@ export async function importMaterialsFromDirectory(input: {
     }
 
     const title = basename(file, extname(file));
+    const analysis = input.analyze
+      ? await input.analyze({
+          title,
+          rawBody: content,
+          docType: input.docType,
+          audience: input.audience,
+          scenario: input.scenario,
+        })
+      : analyzeMaterialHeuristically(content, input.docType);
     const imported = await importMaterial({
       vaultRoot: input.vaultRoot,
       title,
@@ -200,6 +208,7 @@ export async function importMaterialsFromDirectory(input: {
       source: input.source ?? file,
       quality: input.quality,
       body: content,
+      analysis,
     });
 
     results.push({
@@ -234,7 +243,10 @@ async function extractTextFromFile(path: string): Promise<string> {
   throw new Error(`Unsupported material file type: ${extension}`);
 }
 
-export async function analyzeImportedMaterial(materialPath: string): Promise<void> {
+export async function analyzeImportedMaterial(
+  materialPath: string,
+  options?: { analyze?: (payload: { title: string; rawBody: string; docType: string; audience?: string; scenario?: string }) => Promise<MaterialAnalysis> },
+): Promise<void> {
   const doc = await readMarkdownDocument(materialPath);
   const title = typeof doc.frontmatter.title === "string" ? doc.frontmatter.title : "";
   const docType = typeof doc.frontmatter.doc_type === "string" ? doc.frontmatter.doc_type : "";
@@ -245,6 +257,15 @@ export async function analyzeImportedMaterial(materialPath: string): Promise<voi
 
   const rawBodyMatch = doc.content.match(/# 原文内容\n\n([\s\S]*?)(?=\n# )/);
   const rawBody = rawBodyMatch?.[1]?.trim() ?? "";
+  const analysis = options?.analyze
+    ? await options.analyze({
+        title,
+        rawBody,
+        docType,
+        audience,
+        scenario,
+      })
+    : analyzeMaterialHeuristically(rawBody, docType);
   const rebuilt = buildMaterialContent({
     title,
     docType,
@@ -253,7 +274,51 @@ export async function analyzeImportedMaterial(materialPath: string): Promise<voi
     audience,
     quality,
     rawBody,
+    analysis,
   });
 
   await writeMarkdownDocument(materialPath, doc.frontmatter, rebuilt);
+}
+
+export async function analyzeMaterialWithLlm(
+  client: OpenAiCompatibleClient,
+  input: {
+    title: string;
+    docType: string;
+    audience?: string;
+    scenario?: string;
+    rawBody: string;
+  },
+): Promise<MaterialAnalysis> {
+  return client.generateJson({
+    system: BASE_SYSTEM_PROMPT,
+    user: buildAnalyzeMaterialPrompt(input),
+    schema: materialAnalysisSchema,
+  });
+}
+
+export function createMaterialAnalyzer(client: OpenAiCompatibleClient | null) {
+  return async (payload: {
+    title: string;
+    rawBody: string;
+    docType: string;
+    audience?: string;
+    scenario?: string;
+  }): Promise<MaterialAnalysis> => {
+    if (!client || !client.isEnabled()) {
+      return analyzeMaterialHeuristically(payload.rawBody, payload.docType);
+    }
+
+    try {
+      return await analyzeMaterialWithLlm(client, {
+        title: payload.title,
+        rawBody: payload.rawBody,
+        docType: payload.docType,
+        audience: payload.audience,
+        scenario: payload.scenario,
+      });
+    } catch {
+      return analyzeMaterialHeuristically(payload.rawBody, payload.docType);
+    }
+  };
 }
