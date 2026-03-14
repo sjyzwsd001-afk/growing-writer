@@ -17,7 +17,8 @@
     "learn-feedback": "tsx src/cli/index.ts learn-feedback",
     "confirm-rule": "tsx src/cli/index.ts confirm-rule",
     "reject-rule": "tsx src/cli/index.ts reject-rule",
-    "disable-rule": "tsx src/cli/index.ts disable-rule"
+    "disable-rule": "tsx src/cli/index.ts disable-rule",
+    "list-rules": "tsx src/cli/index.ts list-rules"
   },
   "dependencies": {
     "commander": "^14.0.1",

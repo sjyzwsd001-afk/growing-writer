@@ -312,6 +312,46 @@ program
   });
 
 program
+  .command("list-rules")
+  .option("--status <status>", "filter by status: candidate | confirmed | disabled")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const rules = await repo.loadRules();
+    const filtered = options.status
+      ? rules.filter((rule) => rule.status === options.status)
+      : rules;
+
+    const items = filtered
+      .map((rule) => ({
+        id: rule.id,
+        title: rule.title,
+        status: rule.status,
+        scope: rule.scope,
+        confidence: rule.confidence,
+        path: rule.path,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+
+    if (options.json) {
+      console.log(JSON.stringify(items, null, 2));
+      return;
+    }
+
+    if (!items.length) {
+      console.log("No rules found.");
+      return;
+    }
+
+    const lines = items.map(
+      (rule) =>
+        `- [${rule.status}] ${rule.title} (${rule.id}) | scope=${rule.scope || "n/a"} | confidence=${rule.confidence}`,
+    );
+    console.log(lines.join("\n"));
+  });
+
+program
   .command("learn-feedback")
   .argument("<feedback-file>", "path to feedback markdown file")
   .action(async (feedbackFile, options, command) => {
