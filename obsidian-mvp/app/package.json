@@ -22,6 +22,7 @@
     "list-tasks": "tsx src/cli/index.ts list-tasks",
     "list-feedback": "tsx src/cli/index.ts list-feedback",
     "list-materials": "tsx src/cli/index.ts list-materials",
+    "import-material": "tsx src/cli/index.ts import-material",
     "refresh-tasks": "tsx src/cli/index.ts refresh-tasks"
   },
   "dependencies": {

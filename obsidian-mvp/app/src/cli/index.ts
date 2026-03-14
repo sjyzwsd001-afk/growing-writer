@@ -32,6 +32,7 @@ import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 import { syncRuleInTasks } from "../writers/task-rule-sync-writer.js";
 import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
+import { importMaterial } from "../writers/material-writer.js";
 
 const program = new Command();
 
@@ -475,6 +476,33 @@ program
         `- ${material.title} (${material.id}) | type=${material.doc_type || "n/a"} | audience=${material.audience || "n/a"} | quality=${material.quality}`,
     );
     console.log(lines.join("\n"));
+  });
+
+program
+  .command("import-material")
+  .requiredOption("--title <title>", "material title")
+  .requiredOption("--doc-type <docType>", "material document type")
+  .option("--audience <audience>", "target audience")
+  .option("--scenario <scenario>", "usage scenario")
+  .option("--source <source>", "source description")
+  .option("--quality <quality>", "quality label", "high")
+  .option("--body <body>", "material body text")
+  .option("--source-file <path>", "read material body from a local text or markdown file")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const result = await importMaterial({
+      vaultRoot,
+      title: options.title,
+      docType: options.docType,
+      audience: options.audience,
+      scenario: options.scenario,
+      source: options.source,
+      quality: options.quality,
+      body: options.body,
+      sourceFile: options.sourceFile ? resolve(options.sourceFile) : undefined,
+    });
+
+    console.log(JSON.stringify(result, null, 2));
   });
 
 program
