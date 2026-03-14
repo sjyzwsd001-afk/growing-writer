@@ -32,7 +32,7 @@ import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 import { syncRuleInTasks } from "../writers/task-rule-sync-writer.js";
 import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
-import { importMaterial } from "../writers/material-writer.js";
+import { importMaterial, importMaterialsFromDirectory } from "../writers/material-writer.js";
 
 const program = new Command();
 
@@ -503,6 +503,40 @@ program
     });
 
     console.log(JSON.stringify(result, null, 2));
+  });
+
+program
+  .command("import-materials-dir")
+  .requiredOption("--source-dir <sourceDir>", "directory containing .txt/.md/.docx/.pdf materials")
+  .requiredOption("--doc-type <docType>", "material document type")
+  .option("--audience <audience>", "target audience")
+  .option("--scenario <scenario>", "usage scenario")
+  .option("--source <source>", "source description override")
+  .option("--quality <quality>", "quality label", "high")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const results = await importMaterialsFromDirectory({
+      vaultRoot,
+      sourceDir: resolve(options.sourceDir),
+      docType: options.docType,
+      audience: options.audience,
+      scenario: options.scenario,
+      source: options.source,
+      quality: options.quality,
+    });
+
+    if (options.json) {
+      console.log(JSON.stringify(results, null, 2));
+      return;
+    }
+
+    if (!results.length) {
+      console.log("No materials imported.");
+      return;
+    }
+
+    console.log(results.map((item) => `- ${item.materialId} <- ${item.sourceFile}`).join("\n"));
   });
 
 program

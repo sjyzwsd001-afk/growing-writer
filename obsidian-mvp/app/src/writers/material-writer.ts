@@ -1,5 +1,8 @@
 import { mkdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
+import fg from "fast-glob";
+import mammoth from "mammoth";
+import { PDFParse } from "pdf-parse";
 
 import { writeMarkdownDocument } from "../vault/markdown.js";
 
@@ -28,7 +31,7 @@ export async function importMaterial(input: {
   const fileName = `${materialId}-${slugify(input.title)}.md`;
   const path = join(input.vaultRoot, "materials", fileName);
 
-  const importedBody = input.sourceFile ? await readFile(input.sourceFile, "utf8") : "";
+  const importedBody = input.sourceFile ? await extractTextFromFile(input.sourceFile) : "";
   const rawBody = (input.body ?? importedBody).trim();
 
   const frontmatter = {
@@ -94,4 +97,71 @@ ${rawBody || "在这里粘贴或整理历史材料正文。"}
   await writeMarkdownDocument(path, frontmatter, content);
 
   return { path, materialId };
+}
+
+export async function importMaterialsFromDirectory(input: {
+  vaultRoot: string;
+  sourceDir: string;
+  docType: string;
+  audience?: string;
+  scenario?: string;
+  source?: string;
+  quality?: string;
+}): Promise<Array<{ path: string; materialId: string; sourceFile: string }>> {
+  const files = await fg(["**/*.md", "**/*.txt", "**/*.docx", "**/*.pdf"], {
+    cwd: input.sourceDir,
+    absolute: true,
+    onlyFiles: true,
+  });
+
+  const results: Array<{ path: string; materialId: string; sourceFile: string }> = [];
+
+  for (const file of files) {
+    const content = (await extractTextFromFile(file)).trim();
+    if (!content) {
+      continue;
+    }
+
+    const title = basename(file, extname(file));
+    const imported = await importMaterial({
+      vaultRoot: input.vaultRoot,
+      title,
+      docType: input.docType,
+      audience: input.audience,
+      scenario: input.scenario,
+      source: input.source ?? file,
+      quality: input.quality,
+      body: content,
+    });
+
+    results.push({
+      ...imported,
+      sourceFile: file,
+    });
+  }
+
+  return results;
+}
+
+async function extractTextFromFile(path: string): Promise<string> {
+  const extension = extname(path).toLowerCase();
+
+  if (extension === ".txt" || extension === ".md") {
+    return readFile(path, "utf8");
+  }
+
+  if (extension === ".docx") {
+    const result = await mammoth.extractRawText({ path });
+    return result.value;
+  }
+
+  if (extension === ".pdf") {
+    const buffer = await readFile(path);
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+    await parser.destroy();
+    return result.text;
+  }
+
+  throw new Error(`Unsupported material file type: ${extension}`);
 }

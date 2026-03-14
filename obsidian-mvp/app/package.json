@@ -23,12 +23,15 @@
     "list-feedback": "tsx src/cli/index.ts list-feedback",
     "list-materials": "tsx src/cli/index.ts list-materials",
     "import-material": "tsx src/cli/index.ts import-material",
+    "import-materials-dir": "tsx src/cli/index.ts import-materials-dir",
     "refresh-tasks": "tsx src/cli/index.ts refresh-tasks"
   },
   "dependencies": {
     "commander": "^14.0.1",
     "fast-glob": "^3.3.3",
     "gray-matter": "^4.0.3",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^4.1.5"
   },
   "devDependencies": {
