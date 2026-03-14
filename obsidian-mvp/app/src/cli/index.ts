@@ -73,7 +73,12 @@ program
       ? await diagnoseTaskWithLlm(client, diagnosisInput)
       : diagnoseTask(diagnosisInput);
 
-    await writeTaskSections({ task, diagnosis });
+    await writeTaskSections({
+      task,
+      diagnosis,
+      matchedRules: diagnosisInput.matchedRules,
+      matchedMaterials: diagnosisInput.matchedMaterials,
+    });
     console.log(JSON.stringify(diagnosis, null, 2));
   });
 
@@ -115,7 +120,13 @@ program
       ? await buildOutlineWithLlm(client, outlineInput)
       : buildOutline(outlineInput);
 
-    await writeTaskSections({ task, diagnosis, outline });
+    await writeTaskSections({
+      task,
+      diagnosis,
+      outline,
+      matchedRules,
+      matchedMaterials,
+    });
     console.log(JSON.stringify(outline, null, 2));
   });
 
@@ -168,7 +179,14 @@ program
         })
       : generateDraft({ task, analysis, diagnosis, outline });
 
-    await writeTaskSections({ task, diagnosis, outline, draft });
+    await writeTaskSections({
+      task,
+      diagnosis,
+      outline,
+      draft,
+      matchedRules,
+      matchedMaterials,
+    });
     console.log(JSON.stringify(draft, null, 2));
   });
 
