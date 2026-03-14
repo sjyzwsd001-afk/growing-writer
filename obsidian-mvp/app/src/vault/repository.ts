@@ -107,6 +107,20 @@ export class VaultRepository {
     }));
   }
 
+  async loadRule(ruleFile: string): Promise<Rule> {
+    const doc = await readMarkdownDocument(ruleFile);
+    return {
+      ...doc,
+      id: normalizeString(doc.frontmatter.id, ruleFile),
+      title: normalizeString(doc.frontmatter.title, "Untitled Rule"),
+      status: normalizeString(doc.frontmatter.status, "candidate") as Rule["status"],
+      scope: normalizeString(doc.frontmatter.scope),
+      docTypes: normalizeStringArray(doc.frontmatter.doc_types),
+      audiences: normalizeStringArray(doc.frontmatter.audiences),
+      confidence: normalizeNumber(doc.frontmatter.confidence, 0),
+    };
+  }
+
   private async readCollection(dirName: string) {
     const baseDir = join(this.vaultRoot, dirName);
     const entries = await fg("**/*.md", { cwd: baseDir, absolute: true });

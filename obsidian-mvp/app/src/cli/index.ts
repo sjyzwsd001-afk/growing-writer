@@ -21,6 +21,7 @@ import {
 } from "../workflows/stubs.js";
 import { writeCandidateRule } from "../writers/rule-writer.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
+import { confirmRule, updateDefaultProfileWithRule } from "../writers/rule-confirm-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 
@@ -169,6 +170,37 @@ program
 
     await writeTaskSections({ task, diagnosis, outline, draft });
     console.log(JSON.stringify(draft, null, 2));
+  });
+
+program
+  .command("confirm-rule")
+  .argument("<rule-file>", "path to rule markdown file")
+  .action(async (ruleFile, options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const [rule, profiles] = await Promise.all([
+      repo.loadRule(resolve(ruleFile)),
+      repo.loadProfiles(),
+    ]);
+    const confirmedRule = await confirmRule(rule);
+    const profilePath = await updateDefaultProfileWithRule({
+      vaultRoot,
+      rule: confirmedRule,
+      profiles,
+    });
+
+    console.log(
+      JSON.stringify(
+        {
+          rule_id: confirmedRule.id,
+          rule_path: confirmedRule.path,
+          status: confirmedRule.status,
+          profile_path: profilePath,
+        },
+        null,
+        2,
+      ),
+    );
   });
 
 program

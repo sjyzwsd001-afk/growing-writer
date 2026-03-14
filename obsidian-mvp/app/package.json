@@ -14,7 +14,8 @@
     "diagnose": "tsx src/cli/index.ts diagnose",
     "outline": "tsx src/cli/index.ts outline",
     "draft": "tsx src/cli/index.ts draft",
-    "learn-feedback": "tsx src/cli/index.ts learn-feedback"
+    "learn-feedback": "tsx src/cli/index.ts learn-feedback",
+    "confirm-rule": "tsx src/cli/index.ts confirm-rule"
   },
   "dependencies": {
     "commander": "^14.0.1",

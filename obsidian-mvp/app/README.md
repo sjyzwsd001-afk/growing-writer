@@ -19,6 +19,7 @@
 - `outline`
 - `draft`
 - `learn-feedback`
+- `confirm-rule`
 
 当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
 配置模型后会走真实分析，不配置时仍返回占位结果。
@@ -40,6 +41,8 @@ npm install
 - `outline`
 - `draft`
 - `learn-feedback`
+
+`confirm-rule` 不依赖模型，它负责把候选规则确认为已生效规则，并同步更新默认画像。
 
 可用环境变量：
 
@@ -76,10 +79,11 @@ npm run dev -- diagnose ../tasks/your-task.md
 ```bash
 npx tsx src/cli/index.ts draft ../tasks/your-task.md
 npx tsx src/cli/index.ts learn-feedback ../feedback/feedback-demo.md
+npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md
 ```
 
 ## 下一步建议
 
-1. 优化反馈抽取，缩小给模型的反馈上下文
-2. 把候选规则自动关联回反馈记录和任务记录
-3. 继续优化规则确认流程
+1. 优化 task section 回写，彻底消除重复内容
+2. 在规则确认后自动回刷相关 task 的命中规则展示
+3. 增加“拒绝规则/归档规则”的命令
