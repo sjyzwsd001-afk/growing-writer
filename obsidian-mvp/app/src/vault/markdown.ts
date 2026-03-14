@@ -24,12 +24,18 @@ export async function writeMarkdownDocument(
 }
 
 export function replaceSection(content: string, heading: string, nextBody: string): string {
-  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`(^# ${escaped}\\n\\n)([\\s\\S]*?)(?=\\n# |$)`, "m");
+  const marker = `# ${heading}`;
+  const start = content.indexOf(marker);
 
-  if (pattern.test(content)) {
-    return content.replace(pattern, `$1${nextBody.trim()}\n\n`);
+  if (start >= 0) {
+    const afterHeading = content.indexOf("\n\n", start);
+    const bodyStart = afterHeading >= 0 ? afterHeading + 2 : start + marker.length;
+    const nextHeadingIndex = content.indexOf("\n# ", bodyStart);
+    const end = nextHeadingIndex >= 0 ? nextHeadingIndex : content.length;
+    const before = content.slice(0, bodyStart);
+    const after = content.slice(end);
+    return `${before}${nextBody.trim()}\n${after}`;
   }
 
-  return `${content.trim()}\n\n## ${heading}\n\n${nextBody.trim()}\n`;
+  return `${content.trim()}\n\n# ${heading}\n\n${nextBody.trim()}\n`;
 }
