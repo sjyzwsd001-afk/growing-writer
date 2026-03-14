@@ -20,7 +20,8 @@
     "disable-rule": "tsx src/cli/index.ts disable-rule",
     "list-rules": "tsx src/cli/index.ts list-rules",
     "list-tasks": "tsx src/cli/index.ts list-tasks",
-    "list-feedback": "tsx src/cli/index.ts list-feedback"
+    "list-feedback": "tsx src/cli/index.ts list-feedback",
+    "refresh-tasks": "tsx src/cli/index.ts refresh-tasks"
   },
   "dependencies": {
     "commander": "^14.0.1",

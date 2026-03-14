@@ -31,6 +31,7 @@ import {
 import { writeTaskSections } from "../writers/task-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 import { syncRuleInTasks } from "../writers/task-rule-sync-writer.js";
+import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
 
 const program = new Command();
 
@@ -433,6 +434,61 @@ program
         `- [${entry.feedback_type}] ${entry.id} | task=${entry.task_id || "n/a"} | related_rules=${entry.related_rule_ids.length}`,
     );
     console.log(lines.join("\n"));
+  });
+
+program
+  .command("refresh-tasks")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const [tasks, materials, rules] = await Promise.all([
+      repo.loadTasks(),
+      repo.loadMaterials(),
+      repo.loadRules(),
+    ]);
+
+    const results: Array<{
+      task_id: string;
+      path: string;
+      matched_rules: string[];
+      matched_materials: string[];
+    }> = [];
+
+    for (const task of tasks) {
+      const matchedRules = matchRules(task, rules);
+      const matchedMaterials = matchMaterials(task, materials);
+      await refreshTaskReferences({
+        task,
+        matchedRules,
+        matchedMaterials,
+      });
+      results.push({
+        task_id: task.id,
+        path: task.path,
+        matched_rules: matchedRules.map((rule) => rule.rule_id),
+        matched_materials: matchedMaterials.map((material) => material.id),
+      });
+    }
+
+    if (options.json) {
+      console.log(JSON.stringify(results, null, 2));
+      return;
+    }
+
+    if (!results.length) {
+      console.log("No tasks refreshed.");
+      return;
+    }
+
+    console.log(
+      results
+        .map(
+          (result) =>
+            `- ${result.task_id} | matched_rules=${result.matched_rules.length} | matched_materials=${result.matched_materials.length}`,
+        )
+        .join("\n"),
+    );
   });
 
 program
