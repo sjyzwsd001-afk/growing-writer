@@ -352,6 +352,48 @@ program
   });
 
 program
+  .command("list-tasks")
+  .option("--status <status>", "filter by task status")
+  .option("--json", "output JSON")
+  .action(async (options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const repo = new VaultRepository(vaultRoot);
+    const tasks = await repo.loadTasks();
+    const filtered = options.status
+      ? tasks.filter((task) => task.status === options.status)
+      : tasks;
+
+    const items = filtered
+      .map((task) => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        doc_type: task.docType,
+        audience: task.audience,
+        scenario: task.scenario,
+        matched_rules: task.matchedRules,
+        path: task.path,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+
+    if (options.json) {
+      console.log(JSON.stringify(items, null, 2));
+      return;
+    }
+
+    if (!items.length) {
+      console.log("No tasks found.");
+      return;
+    }
+
+    const lines = items.map(
+      (task) =>
+        `- [${task.status}] ${task.title} (${task.id}) | type=${task.doc_type || "n/a"} | audience=${task.audience || "n/a"} | matched_rules=${task.matched_rules.length}`,
+    );
+    console.log(lines.join("\n"));
+  });
+
+program
   .command("learn-feedback")
   .argument("<feedback-file>", "path to feedback markdown file")
   .action(async (feedbackFile, options, command) => {

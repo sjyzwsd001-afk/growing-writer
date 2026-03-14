@@ -23,6 +23,7 @@
 - `reject-rule`
 - `disable-rule`
 - `list-rules`
+- `list-tasks`
 
 当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
 配置模型后会走真实分析，不配置时仍返回占位结果。
@@ -47,6 +48,7 @@ npm install
 
 `confirm-rule` / `reject-rule` / `disable-rule` 不依赖模型，它们负责管理规则状态，并同步更新默认画像。
 `list-rules` 用于快速查看当前规则库，也支持 `--json` 输出。
+`list-tasks` 用于快速查看当前任务列表，也支持 `--json` 输出。
 
 可用环境变量：
 
@@ -87,10 +89,11 @@ npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts reject-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts disable-rule ../rules/rule-demo-candidate.md
 npx tsx src/cli/index.ts list-rules --status confirmed
+npx tsx src/cli/index.ts list-tasks --status draft
 ```
 
 ## 下一步建议
 
 1. 为规则增加“确认原因 / 拒绝原因 / 停用原因”
-2. 增加任务列表和反馈列表命令
+2. 增加反馈列表命令
 3. 增加规则批量操作命令

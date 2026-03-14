@@ -18,7 +18,8 @@
     "confirm-rule": "tsx src/cli/index.ts confirm-rule",
     "reject-rule": "tsx src/cli/index.ts reject-rule",
     "disable-rule": "tsx src/cli/index.ts disable-rule",
-    "list-rules": "tsx src/cli/index.ts list-rules"
+    "list-rules": "tsx src/cli/index.ts list-rules",
+    "list-tasks": "tsx src/cli/index.ts list-tasks"
   },
   "dependencies": {
     "commander": "^14.0.1",
