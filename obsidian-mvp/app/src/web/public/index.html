@@ -30,39 +30,16 @@
             <code id="vault-root">-</code>
           </div>
         </div>
-        <form id="llm-settings-form" class="settings-card">
-          <h2>模型设置</h2>
-          <label>
-            <span>Bearer Token</span>
-            <input id="llm-bearer-token" name="bearerToken" type="password" placeholder="填入 API Key 或 OAuth token" />
-          </label>
-          <label>
-            <span>Base URL</span>
-            <input id="llm-base-url" name="baseUrl" placeholder="https://api.openai.com/v1" />
-          </label>
-          <label>
-            <span>Model</span>
-            <input id="llm-model" name="model" placeholder="gpt-4.1-mini" />
-          </label>
-          <label>
-            <span>OAuth Auth URL</span>
-            <input id="llm-auth-url" name="authUrl" placeholder="https://example.com/oauth/authorize" />
-          </label>
-          <label>
-            <span>OAuth Token URL</span>
-            <input id="llm-token-url" name="tokenUrl" placeholder="https://example.com/oauth/token" />
-          </label>
-          <label>
-            <span>OAuth Client ID</span>
-            <input id="llm-client-id" name="clientId" placeholder="your-client-id" />
-          </label>
-          <label>
-            <span>OAuth Scope</span>
-            <input id="llm-scope" name="scope" placeholder="openid profile api.read" />
-          </label>
-          <button class="primary-button" type="submit">保存模型配置</button>
-          <button id="start-oauth-login" class="ghost-button" type="button">开始 OAuth 登录</button>
-        </form>
+        <section class="settings-card">
+          <h2>模型登录</h2>
+          <p>当前固定使用 <strong id="llm-provider">OpenAI Codex OAuth</strong>。</p>
+          <div class="meta">
+            <div>Base URL：<code id="llm-base-url-text">https://api.openai.com/v1</code></div>
+            <div>默认模型：<code id="llm-model-text">gpt-5-codex</code></div>
+            <div>最近更新：<span id="llm-updated-at">未登录</span></div>
+          </div>
+          <button id="start-oauth-login" class="primary-button" type="button">开始 OAuth 登录</button>
+        </section>
         <button id="reload-dashboard" class="ghost-button" type="button">刷新全局数据</button>
         <button id="refresh-tasks" class="ghost-button" type="button">刷新任务参考依据</button>
         <button id="refresh-profile" class="ghost-button" type="button">刷新写作画像</button>

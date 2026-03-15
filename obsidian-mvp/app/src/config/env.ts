@@ -1,7 +1,17 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { DEFAULT_VAULT_ROOT, LLM_SETTINGS_FILE_NAME } from "./constants.js";
+import {
+  DEFAULT_VAULT_ROOT,
+  LLM_SETTINGS_FILE_NAME,
+  OPENAI_CODEX_AUTH_URL,
+  OPENAI_CODEX_BASE_URL,
+  OPENAI_CODEX_CLIENT_ID,
+  OPENAI_CODEX_MODEL,
+  OPENAI_CODEX_PROVIDER,
+  OPENAI_CODEX_SCOPE,
+  OPENAI_CODEX_TOKEN_URL,
+} from "./constants.js";
 
 export type LlmConfig = {
   bearerToken: string | null;
@@ -15,10 +25,14 @@ export type StoredLlmSettings = {
   bearerToken: string;
   baseUrl: string;
   model: string;
+  provider: string;
   authUrl: string;
   tokenUrl: string;
   clientId: string;
   scope: string;
+  oauthAccessToken?: string;
+  oauthIdToken?: string;
+  refreshToken?: string;
   updatedAt?: string;
 };
 
@@ -32,15 +46,35 @@ function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): Stor
     baseUrl:
       typeof input?.baseUrl === "string" && input.baseUrl.trim()
         ? input.baseUrl
-        : "https://api.openai.com/v1",
+        : OPENAI_CODEX_BASE_URL,
     model:
       typeof input?.model === "string" && input.model.trim()
         ? input.model
-        : "gpt-4.1-mini",
-    authUrl: typeof input?.authUrl === "string" ? input.authUrl : "",
-    tokenUrl: typeof input?.tokenUrl === "string" ? input.tokenUrl : "",
-    clientId: typeof input?.clientId === "string" ? input.clientId : "",
-    scope: typeof input?.scope === "string" ? input.scope : "",
+        : OPENAI_CODEX_MODEL,
+    provider:
+      typeof input?.provider === "string" && input.provider.trim()
+        ? input.provider
+        : OPENAI_CODEX_PROVIDER,
+    authUrl:
+      typeof input?.authUrl === "string" && input.authUrl.trim()
+        ? input.authUrl
+        : OPENAI_CODEX_AUTH_URL,
+    tokenUrl:
+      typeof input?.tokenUrl === "string" && input.tokenUrl.trim()
+        ? input.tokenUrl
+        : OPENAI_CODEX_TOKEN_URL,
+    clientId:
+      typeof input?.clientId === "string" && input.clientId.trim()
+        ? input.clientId
+        : OPENAI_CODEX_CLIENT_ID,
+    scope:
+      typeof input?.scope === "string" && input.scope.trim()
+        ? input.scope
+        : OPENAI_CODEX_SCOPE,
+    oauthAccessToken:
+      typeof input?.oauthAccessToken === "string" ? input.oauthAccessToken : undefined,
+    oauthIdToken: typeof input?.oauthIdToken === "string" ? input.oauthIdToken : undefined,
+    refreshToken: typeof input?.refreshToken === "string" ? input.refreshToken : undefined,
     updatedAt: typeof input?.updatedAt === "string" ? input.updatedAt : undefined,
   };
 }
@@ -75,8 +109,8 @@ export function saveStoredLlmSettings(
 export function getLlmConfig(vaultRoot = DEFAULT_VAULT_ROOT): LlmConfig {
   const saved = getStoredLlmSettings(vaultRoot);
   const envBearerToken = process.env.OPENAI_BEARER_TOKEN ?? process.env.OPENAI_API_KEY ?? null;
-  const envBaseUrl = process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
-  const envModel = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+  const envBaseUrl = process.env.OPENAI_BASE_URL ?? OPENAI_CODEX_BASE_URL;
+  const envModel = process.env.OPENAI_MODEL ?? OPENAI_CODEX_MODEL;
 
   const bearerToken = saved?.bearerToken?.trim() || envBearerToken || null;
   const baseUrl = saved?.baseUrl?.trim() || envBaseUrl;

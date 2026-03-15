@@ -76,22 +76,18 @@ http://127.0.0.1:4318
 - 这版前端是本地控制台，不是云端部署页面
 - 所有结果仍然直接写回你的 Obsidian vault
 
-现在左侧还支持直接图形化配置模型：
+现在左侧固定使用 `OpenAI Codex OAuth` 登录：
 
-- 填入 `Bearer Token`
-- 填入 `Base URL`
-- 填入 `Model`
-- 点击“保存模型配置”
+- 不需要手动填写 `Bearer Token`
+- 不需要手动填写 `Auth URL / Token URL / Client ID / Scope`
+- 点击 `开始 OAuth 登录` 即可
 
-如果你的后端是 `OAuth` 授权：
+系统会按 OpenAI Codex 官方登录链路自动执行：
 
-- 填入 `OAuth Auth URL`
-- 填入 `OAuth Token URL`
-- 填入 `OAuth Client ID`
-- 填入 `OAuth Scope`
-- 点击 `开始 OAuth 登录`
-
-系统会自动走 `Authorization Code + PKCE`，授权成功后把 access token 写回本地配置。
+- `Authorization Code + PKCE`
+- 先换取 `id_token / access_token / refresh_token`
+- 再用 `id_token` 交换出可直接调用模型的 `openai-api-key`
+- 最后把可用 token 写回本地配置
 
 配置会保存到 vault 根目录下的 `.writer-llm-config.json`，CLI 和前端都会复用这份设置。
 
@@ -131,13 +127,7 @@ export OPENAI_MODEL=gpt-4.1-mini
 - 优先使用 `OPENAI_BEARER_TOKEN`
 - 如果未配置，再回退使用 `OPENAI_API_KEY`
 
-这意味着：
-
-- 直接 API key 可以用
-- OAuth access token 也可以用
-- 其他 OpenAI-compatible 网关签发的 bearer token 也可以用
-
-如果两个都不配置，CLI 会自动回退到本地占位实现。
+如果没有完成 OAuth 登录，CLI 和前端都会自动回退到本地占位实现。
 
 ## 使用
 

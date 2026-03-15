@@ -483,13 +483,10 @@ async function loadDashboard() {
   document.getElementById("llm-status").textContent = data.llm.enabled ? "已启用" : "未配置，走本地回退";
   document.getElementById("llm-source").textContent = data.llm.source;
   document.getElementById("vault-root").textContent = data.vaultRoot;
-  document.getElementById("llm-bearer-token").value = data.llm.bearerToken || "";
-  document.getElementById("llm-base-url").value = data.llm.baseUrl || "https://api.openai.com/v1";
-  document.getElementById("llm-model").value = data.llm.model || "gpt-4.1-mini";
-  document.getElementById("llm-auth-url").value = data.llm.authUrl || "";
-  document.getElementById("llm-token-url").value = data.llm.tokenUrl || "";
-  document.getElementById("llm-client-id").value = data.llm.clientId || "";
-  document.getElementById("llm-scope").value = data.llm.scope || "";
+  document.getElementById("llm-provider").textContent = data.llm.providerLabel || "OpenAI Codex OAuth";
+  document.getElementById("llm-base-url-text").textContent = data.llm.baseUrl || "https://api.openai.com/v1";
+  document.getElementById("llm-model-text").textContent = data.llm.model || "gpt-5-codex";
+  document.getElementById("llm-updated-at").textContent = data.llm.updatedAt || "未登录";
   renderDashboard();
 }
 
@@ -733,50 +730,11 @@ document.getElementById("reload-dashboard").addEventListener("click", async () =
   }
 });
 
-document.getElementById("llm-settings-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const formData = new FormData(event.currentTarget);
-  const payload = Object.fromEntries(formData.entries());
-
-  try {
-    const result = await api("/api/settings/llm", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setRichResult("模型配置已保存", [
-      `
-        <section class="result-card">
-          <h4>当前配置</h4>
-          <div class="result-grid">
-            <div><strong>是否启用</strong><div>${result.resolved.enabled ? "是" : "否"}</div></div>
-            <div><strong>配置来源</strong><div>${escapeHtml(result.resolved.source)}</div></div>
-            <div><strong>Base URL</strong><div>${escapeHtml(result.resolved.baseUrl)}</div></div>
-            <div><strong>Model</strong><div>${escapeHtml(result.resolved.model)}</div></div>
-          </div>
-        </section>
-      `,
-    ]);
-    await loadDashboard();
-  } catch (error) {
-    setResult("模型配置保存失败", { error: error.message });
-  }
-});
-
 document.getElementById("start-oauth-login").addEventListener("click", async () => {
-  const payload = {
-    bearerToken: document.getElementById("llm-bearer-token").value,
-    baseUrl: document.getElementById("llm-base-url").value,
-    model: document.getElementById("llm-model").value,
-    authUrl: document.getElementById("llm-auth-url").value,
-    tokenUrl: document.getElementById("llm-token-url").value,
-    clientId: document.getElementById("llm-client-id").value,
-    scope: document.getElementById("llm-scope").value,
-  };
-
   try {
     const result = await api("/api/settings/llm/oauth/start", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ provider: "openai-codex-oauth" }),
     });
     const popup = window.open(result.authUrl, "writer-oauth-login", "width=680,height=820");
     if (!popup) {
@@ -787,7 +745,7 @@ document.getElementById("start-oauth-login").addEventListener("click", async () 
       `
         <section class="result-card">
           <h4>下一步</h4>
-          <p>已经弹出授权窗口。完成授权后，页面会自动刷新模型状态。</p>
+          <p>已经弹出 OpenAI Codex 授权窗口。完成授权后，页面会自动刷新模型状态。</p>
           <p><strong>回调地址：</strong>${escapeHtml(result.redirectUri)}</p>
         </section>
       `,
@@ -837,7 +795,8 @@ bindFilterInput("profiles-search", "profiles");
 bindFilterInput("feedback-search", "feedback");
 
 window.addEventListener("message", async (event) => {
-  if (event.origin !== window.location.origin) {
+  const trustedOrigins = new Set([window.location.origin, window.location.origin.replace("127.0.0.1", "localhost"), window.location.origin.replace("localhost", "127.0.0.1")]);
+  if (!trustedOrigins.has(event.origin)) {
     return;
   }
 
@@ -847,7 +806,7 @@ window.addEventListener("message", async (event) => {
       `
         <section class="result-card">
           <h4>模型状态已刷新</h4>
-          <p>授权成功，新的 access token 已写入本地配置。</p>
+          <p>OpenAI Codex 登录成功，可直接调用模型的 token 已写入本地配置。</p>
         </section>
       `,
     ]);

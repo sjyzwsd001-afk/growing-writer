@@ -5,7 +5,18 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DEFAULT_VAULT_ROOT } from "../config/constants.js";
+import {
+  DEFAULT_VAULT_ROOT,
+  OPENAI_CODEX_AUTH_URL,
+  OPENAI_CODEX_BASE_URL,
+  OPENAI_CODEX_CLIENT_ID,
+  OPENAI_CODEX_MODEL,
+  OPENAI_CODEX_ORIGINATOR,
+  OPENAI_CODEX_PROVIDER,
+  OPENAI_CODEX_PROVIDER_LABEL,
+  OPENAI_CODEX_SCOPE,
+  OPENAI_CODEX_TOKEN_URL,
+} from "../config/constants.js";
 import {
   getLlmConfig,
   getStoredLlmSettings,
@@ -62,6 +73,7 @@ type PendingOauthRequest = {
   scope: string;
   baseUrl: string;
   model: string;
+  frontendOrigin: string;
   createdAt: number;
 };
 
@@ -88,7 +100,7 @@ function createPkcePair(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
-function buildOauthSuccessPage(): string {
+function buildOauthSuccessPage(frontendOrigin: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -101,17 +113,86 @@ function buildOauthSuccessPage(): string {
 </head>
 <body>
   <div class="card">
-    <h1>OAuth 登录成功</h1>
-    <p>模型 token 已写入本地配置。这个窗口会自动关闭，如果没有关闭，可以手动返回控制台页面。</p>
+    <h1>OpenAI Codex 登录成功</h1>
+    <p>Codex OAuth 已完成，系统已经把可直接调用模型的 token 写入本地配置。这个窗口会自动关闭，如果没有关闭，可以手动返回控制台页面。</p>
   </div>
   <script>
     if (window.opener) {
-      window.opener.postMessage({ type: "oauth-complete", ok: true }, window.location.origin);
+      window.opener.postMessage({ type: "oauth-complete", ok: true }, ${JSON.stringify(frontendOrigin)});
       window.close();
     }
   </script>
 </body>
 </html>`;
+}
+
+async function exchangeCodexAuthorizationCode(input: {
+  code: string;
+  redirectUri: string;
+  codeVerifier: string;
+}) {
+  const response = await fetch(OPENAI_CODEX_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: input.code,
+      redirect_uri: input.redirectUri,
+      client_id: OPENAI_CODEX_CLIENT_ID,
+      code_verifier: input.codeVerifier,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OAuth token exchange failed: ${response.status} ${body}`);
+  }
+
+  const tokenJson = (await response.json()) as {
+    access_token?: string;
+    id_token?: string;
+    refresh_token?: string;
+  };
+
+  if (!tokenJson.access_token || !tokenJson.id_token || !tokenJson.refresh_token) {
+    throw new Error("OAuth token exchange returned incomplete token payload.");
+  }
+
+  return {
+    accessToken: tokenJson.access_token,
+    idToken: tokenJson.id_token,
+    refreshToken: tokenJson.refresh_token,
+  };
+}
+
+async function exchangeCodexApiKey(idToken: string) {
+  const response = await fetch(OPENAI_CODEX_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      client_id: OPENAI_CODEX_CLIENT_ID,
+      requested_token: "openai-api-key",
+      subject_token: idToken,
+      subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Codex API key exchange failed: ${response.status} ${body}`);
+  }
+
+  const data = (await response.json()) as { access_token?: string };
+  if (!data.access_token) {
+    throw new Error("Codex API key exchange returned no access_token.");
+  }
+
+  return data.access_token;
 }
 
 function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
@@ -324,20 +405,19 @@ async function buildDashboard(vaultRoot: string) {
   ]);
 
   const llmConfig = getLlmConfig(vaultRoot);
+  const stored = getStoredLlmSettings(vaultRoot);
 
   return {
     vaultRoot,
     llm: {
+      provider: OPENAI_CODEX_PROVIDER,
+      providerLabel: OPENAI_CODEX_PROVIDER_LABEL,
       enabled: llmConfig.enabled,
       source: llmConfig.source,
       baseUrl: llmConfig.baseUrl,
       model: llmConfig.model,
-      bearerToken: llmConfig.bearerToken ?? "",
-      hasSavedSettings: Boolean(getStoredLlmSettings(vaultRoot)),
-      authUrl: getStoredLlmSettings(vaultRoot)?.authUrl ?? "",
-      tokenUrl: getStoredLlmSettings(vaultRoot)?.tokenUrl ?? "",
-      clientId: getStoredLlmSettings(vaultRoot)?.clientId ?? "",
-      scope: getStoredLlmSettings(vaultRoot)?.scope ?? "",
+      hasSavedSettings: Boolean(stored),
+      updatedAt: stored?.updatedAt ?? null,
     },
     materials: materials
       .map((item) => ({
@@ -423,8 +503,8 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const body = (await readBody(req)) as Record<string, string | undefined>;
         const settings = saveStoredLlmSettings(vaultRoot, {
           bearerToken: body.bearerToken ?? "",
-          baseUrl: body.baseUrl ?? "https://api.openai.com/v1",
-          model: body.model ?? "gpt-4.1-mini",
+          baseUrl: body.baseUrl ?? OPENAI_CODEX_BASE_URL,
+          model: body.model ?? OPENAI_CODEX_MODEL,
           authUrl: body.authUrl ?? "",
           tokenUrl: body.tokenUrl ?? "",
           clientId: body.clientId ?? "",
@@ -436,25 +516,28 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm/oauth/start") {
-        const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.authUrl || !body.tokenUrl || !body.clientId) {
-          sendJson(res, 400, { error: "authUrl、tokenUrl、clientId 是必填项。" });
-          return;
-        }
+        const frontendOrigin = req.headers.host
+          ? `http://${req.headers.host}`
+          : `http://127.0.0.1:${port}`;
+        const existing = getStoredLlmSettings(vaultRoot);
 
         const settings = saveStoredLlmSettings(vaultRoot, {
-          bearerToken: body.bearerToken ?? "",
-          baseUrl: body.baseUrl ?? "https://api.openai.com/v1",
-          model: body.model ?? "gpt-4.1-mini",
-          authUrl: body.authUrl,
-          tokenUrl: body.tokenUrl,
-          clientId: body.clientId,
-          scope: body.scope ?? "",
+          provider: OPENAI_CODEX_PROVIDER,
+          bearerToken: existing?.bearerToken ?? "",
+          baseUrl: OPENAI_CODEX_BASE_URL,
+          model: OPENAI_CODEX_MODEL,
+          authUrl: OPENAI_CODEX_AUTH_URL,
+          tokenUrl: OPENAI_CODEX_TOKEN_URL,
+          clientId: OPENAI_CODEX_CLIENT_ID,
+          scope: OPENAI_CODEX_SCOPE,
+          oauthAccessToken: existing?.oauthAccessToken,
+          oauthIdToken: existing?.oauthIdToken,
+          refreshToken: existing?.refreshToken,
         });
 
         const { verifier, challenge } = createPkcePair();
         const state = toBase64Url(randomBytes(18));
-        const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
+        const redirectUri = `http://localhost:${port}/auth/callback`;
         pendingOauthRequests.set(state, {
           state,
           codeVerifier: verifier,
@@ -464,29 +547,35 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           scope: settings.scope,
           baseUrl: settings.baseUrl,
           model: settings.model,
+          frontendOrigin,
           createdAt: Date.now(),
         });
 
-        const authUrl = new URL(settings.authUrl);
+        const authUrl = new URL(OPENAI_CODEX_AUTH_URL);
         authUrl.searchParams.set("response_type", "code");
-        authUrl.searchParams.set("client_id", settings.clientId);
+        authUrl.searchParams.set("client_id", OPENAI_CODEX_CLIENT_ID);
         authUrl.searchParams.set("redirect_uri", redirectUri);
         authUrl.searchParams.set("state", state);
         authUrl.searchParams.set("code_challenge_method", "S256");
         authUrl.searchParams.set("code_challenge", challenge);
-        if (settings.scope.trim()) {
-          authUrl.searchParams.set("scope", settings.scope);
-        }
+        authUrl.searchParams.set("scope", OPENAI_CODEX_SCOPE);
+        authUrl.searchParams.set("id_token_add_organizations", "true");
+        authUrl.searchParams.set("codex_cli_simplified_flow", "true");
+        authUrl.searchParams.set("originator", OPENAI_CODEX_ORIGINATOR);
 
         sendJson(res, 200, {
           authUrl: authUrl.toString(),
           redirectUri,
           state,
+          provider: OPENAI_CODEX_PROVIDER_LABEL,
         });
         return;
       }
 
-      if (req.method === "GET" && url.pathname === "/oauth/callback") {
+      if (
+        req.method === "GET" &&
+        (url.pathname === "/oauth/callback" || url.pathname === "/auth/callback")
+      ) {
         const code = url.searchParams.get("code");
         const state = url.searchParams.get("state");
         const oauthError = url.searchParams.get("error");
@@ -507,44 +596,34 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         }
         pendingOauthRequests.delete(state);
 
-        const tokenResponse = await fetch(pending.tokenUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
+        try {
+          const tokens = await exchangeCodexAuthorizationCode({
             code,
-            client_id: pending.clientId,
-            redirect_uri: pending.redirectUri,
-            code_verifier: pending.codeVerifier,
-          }),
-        });
+            redirectUri: pending.redirectUri,
+            codeVerifier: pending.codeVerifier,
+          });
+          const apiKey = await exchangeCodexApiKey(tokens.idToken);
 
-        if (!tokenResponse.ok) {
-          const body = await tokenResponse.text();
-          sendText(res, 500, `OAuth token exchange failed: ${tokenResponse.status} ${body}`);
+          saveStoredLlmSettings(vaultRoot, {
+            provider: OPENAI_CODEX_PROVIDER,
+            bearerToken: apiKey,
+            baseUrl: pending.baseUrl,
+            model: pending.model,
+            authUrl: OPENAI_CODEX_AUTH_URL,
+            tokenUrl: pending.tokenUrl,
+            clientId: pending.clientId,
+            scope: pending.scope,
+            oauthAccessToken: tokens.accessToken,
+            oauthIdToken: tokens.idToken,
+            refreshToken: tokens.refreshToken,
+          });
+        } catch (error) {
+          sendText(res, 500, error instanceof Error ? error.message : "OAuth login failed.");
           return;
         }
-
-        const tokenJson = (await tokenResponse.json()) as { access_token?: string };
-        if (!tokenJson.access_token) {
-          sendText(res, 500, "OAuth token exchange returned no access_token.");
-          return;
-        }
-
-        saveStoredLlmSettings(vaultRoot, {
-          bearerToken: tokenJson.access_token,
-          baseUrl: pending.baseUrl,
-          model: pending.model,
-          authUrl: getStoredLlmSettings(vaultRoot)?.authUrl ?? "",
-          tokenUrl: pending.tokenUrl,
-          clientId: pending.clientId,
-          scope: pending.scope,
-        });
 
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(buildOauthSuccessPage());
+        res.end(buildOauthSuccessPage(pending.frontendOrigin));
         return;
       }
 
