@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/cli/index.ts",
+    "web": "tsx src/web/server.ts",
     "parse-task": "tsx src/cli/index.ts parse-task",
     "diagnose": "tsx src/cli/index.ts diagnose",
     "outline": "tsx src/cli/index.ts outline",
@@ -26,8 +27,8 @@
     "import-material": "tsx src/cli/index.ts import-material",
     "import-materials-dir": "tsx src/cli/index.ts import-materials-dir",
     "analyze-material": "tsx src/cli/index.ts analyze-material",
-    "refresh-tasks": "tsx src/cli/index.ts refresh-tasks"
-    ,"refresh-profile": "tsx src/cli/index.ts refresh-profile"
+    "refresh-tasks": "tsx src/cli/index.ts refresh-tasks",
+    "refresh-profile": "tsx src/cli/index.ts refresh-profile"
   },
   "dependencies": {
     "commander": "^14.0.1",

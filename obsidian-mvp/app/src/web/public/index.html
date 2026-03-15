@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>写作助手控制台</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">GW</div>
+          <div>
+            <div class="eyebrow">Obsidian MVP</div>
+            <h1>写作助手控制台</h1>
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="status-row">
+            <span>模型接入</span>
+            <strong id="llm-status">检查中</strong>
+          </div>
+          <div class="status-row">
+            <span>Vault</span>
+            <code id="vault-root">-</code>
+          </div>
+        </div>
+        <button id="reload-dashboard" class="ghost-button" type="button">刷新全局数据</button>
+        <button id="refresh-tasks" class="ghost-button" type="button">刷新任务参考依据</button>
+        <button id="refresh-profile" class="ghost-button" type="button">刷新写作画像</button>
+        <div class="help-card">
+          <h2>适合你的用法</h2>
+          <p>先导入历史材料，再选择任务跑诊断、提纲、初稿。规则和反馈也能在这里直接处理。</p>
+        </div>
+      </aside>
+
+      <main class="content-grid">
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 1</div>
+              <h2>导入材料</h2>
+            </div>
+          </div>
+          <form id="material-form" class="form-grid">
+            <label>
+              <span>标题</span>
+              <input name="title" placeholder="例如：某项目周报样稿" required />
+            </label>
+            <label>
+              <span>文档类型</span>
+              <input name="docType" placeholder="例如：工作汇报" required />
+            </label>
+            <label>
+              <span>面向对象</span>
+              <input name="audience" placeholder="例如：领导" />
+            </label>
+            <label>
+              <span>使用场景</span>
+              <input name="scenario" placeholder="例如：月度汇报" />
+            </label>
+            <label>
+              <span>来源说明</span>
+              <input name="source" placeholder="例如：个人旧稿" />
+            </label>
+            <label>
+              <span>质量标签</span>
+              <select name="quality">
+                <option value="high">high</option>
+                <option value="medium">medium</option>
+                <option value="low">low</option>
+              </select>
+            </label>
+            <label class="field-span">
+              <span>本地文件路径（可选，支持 txt/md/docx/pdf）</span>
+              <input name="sourceFile" placeholder="/Users/zw/Documents/raw/example.docx" />
+            </label>
+            <label class="field-span">
+              <span>正文内容（和文件路径二选一即可）</span>
+              <textarea name="body" rows="8" placeholder="把历史材料粘贴到这里"></textarea>
+            </label>
+            <div class="field-span">
+              <button class="primary-button" type="submit">导入材料</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Materials</div>
+              <h2>材料库</h2>
+            </div>
+            <span class="panel-count" id="materials-count">0</span>
+          </div>
+          <div id="materials-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Tasks</div>
+              <h2>任务</h2>
+            </div>
+            <span class="panel-count" id="tasks-count">0</span>
+          </div>
+          <div id="tasks-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Rules</div>
+              <h2>规则库</h2>
+            </div>
+            <span class="panel-count" id="rules-count">0</span>
+          </div>
+          <div id="rules-list" class="list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Feedback</div>
+              <h2>反馈记录</h2>
+            </div>
+            <span class="panel-count" id="feedback-count">0</span>
+          </div>
+          <div id="feedback-list" class="list"></div>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Preview</div>
+              <h2>文件预览 / 运行结果</h2>
+            </div>
+          </div>
+          <pre id="result-viewer" class="result-viewer">加载后会在这里显示文件内容或操作结果。</pre>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+  </html>
