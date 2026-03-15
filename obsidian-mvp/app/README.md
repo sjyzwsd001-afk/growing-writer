@@ -63,6 +63,7 @@ http://127.0.0.1:4318
 - 导入材料
 - 浏览器上传 `txt/md/docx/pdf` 材料
 - 新建任务
+- 新建反馈
 - 查看材料 / 任务 / 规则 / 反馈
 - 对任务运行 `diagnose / outline / draft`
 - 对反馈运行 `learn-feedback`

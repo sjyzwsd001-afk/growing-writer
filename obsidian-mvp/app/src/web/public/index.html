@@ -164,6 +164,75 @@
           </form>
         </section>
 
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 3</div>
+              <h2>新建反馈</h2>
+            </div>
+          </div>
+          <form id="feedback-form" class="form-grid">
+            <label>
+              <span>关联任务</span>
+              <select name="taskId" id="feedback-task-options">
+                <option value="">不关联任务</option>
+              </select>
+            </label>
+            <label>
+              <span>反馈类型</span>
+              <select name="feedbackType">
+                <option value="">先留空</option>
+                <option value="wording">wording</option>
+                <option value="structure">structure</option>
+                <option value="order">order</option>
+                <option value="logic">logic</option>
+                <option value="missing_info">missing_info</option>
+                <option value="scenario_mismatch">scenario_mismatch</option>
+                <option value="factual_fix">factual_fix</option>
+              </select>
+            </label>
+            <label>
+              <span>严重程度</span>
+              <select name="severity">
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="low">low</option>
+              </select>
+            </label>
+            <label>
+              <span>动作</span>
+              <select name="action">
+                <option value="review">review</option>
+                <option value="rewrite">rewrite</option>
+                <option value="archive">archive</option>
+              </select>
+            </label>
+            <label class="field-span">
+              <span>原始反馈</span>
+              <textarea name="rawFeedback" rows="6" placeholder="例如：这一段太虚了，必须把影响范围写具体。"></textarea>
+            </label>
+            <label>
+              <span>影响段落</span>
+              <input name="affectedParagraph" placeholder="例如：主体分析段" />
+            </label>
+            <label>
+              <span>影响章节</span>
+              <input name="affectedSection" placeholder="例如：主体内容" />
+            </label>
+            <label>
+              <span>影响整体结构</span>
+              <select name="affectsStructure">
+                <option value="">留空</option>
+                <option value="否">否</option>
+                <option value="是">是</option>
+              </select>
+            </label>
+            <div class="field-span">
+              <button class="primary-button" type="submit">新建反馈</button>
+            </div>
+          </form>
+        </section>
+
         <section class="panel">
           <div class="panel-header">
             <div>
@@ -215,7 +284,7 @@
               <h2>文件预览 / 运行结果</h2>
             </div>
           </div>
-          <pre id="result-viewer" class="result-viewer">加载后会在这里显示文件内容或操作结果。</pre>
+          <div id="result-viewer" class="result-viewer">加载后会在这里显示文件内容或操作结果。</div>
         </section>
       </main>
     </div>

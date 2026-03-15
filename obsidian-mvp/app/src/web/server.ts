@@ -40,6 +40,7 @@ import { attachRuleToTask } from "../writers/task-link-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 import { writeCandidateRule } from "../writers/rule-writer.js";
 import { createTask } from "../writers/task-create-writer.js";
+import { createFeedback } from "../writers/feedback-create-writer.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -510,6 +511,29 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           candidateRulePath: candidateRule?.path ?? null,
           candidateRuleId: candidateRule?.ruleId ?? null,
         });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/feedback/create") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        if (!body.rawFeedback) {
+          sendJson(res, 400, { error: "rawFeedback 是必填项。" });
+          return;
+        }
+
+        const result = await createFeedback({
+          vaultRoot,
+          taskId: body.taskId,
+          feedbackType: body.feedbackType,
+          severity: body.severity,
+          action: body.action,
+          rawFeedback: body.rawFeedback,
+          affectedParagraph: body.affectedParagraph,
+          affectedSection: body.affectedSection,
+          affectsStructure: body.affectsStructure,
+        });
+
+        sendJson(res, 200, result);
         return;
       }
 

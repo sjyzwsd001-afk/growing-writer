@@ -4,6 +4,15 @@ const state = {
 
 const resultViewer = document.getElementById("result-viewer");
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: {
@@ -22,7 +31,18 @@ async function api(path, options = {}) {
 
 function setResult(title, payload) {
   const body = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-  resultViewer.textContent = `${title}\n\n${body}`;
+  resultViewer.innerHTML = `<pre>${escapeHtml(`${title}\n\n${body}`)}</pre>`;
+}
+
+function setRichResult(title, sections) {
+  resultViewer.innerHTML = `
+    <div class="result-stack">
+      <div class="result-card">
+        <h3>${escapeHtml(title)}</h3>
+      </div>
+      ${sections.join("")}
+    </div>
+  `;
 }
 
 async function fileToBase64(file) {
@@ -115,6 +135,18 @@ function renderTaskMaterialOptions(items) {
   }
 }
 
+function renderFeedbackTaskOptions(items) {
+  const select = document.getElementById("feedback-task-options");
+  select.innerHTML = `<option value="">不关联任务</option>`;
+
+  for (const item of items) {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = `${item.title} (${item.docType || "未标注文档类型"})`;
+    select.append(option);
+  }
+}
+
 function renderTasks(items) {
   const container = document.getElementById("tasks-list");
   document.getElementById("tasks-count").textContent = String(items.length);
@@ -143,14 +175,16 @@ function renderTasks(items) {
     actions.append(
       makeButton("查看文件", async () => {
         const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        setResult(`任务文件：${item.title}`, data.raw);
+        setRichResult(`任务文件：${item.title}`, [
+          `<section class="result-card"><pre>${escapeHtml(data.raw)}</pre></section>`,
+        ]);
       }),
       makeButton("跑诊断", async () => {
         const data = await api("/api/tasks/run", {
           method: "POST",
           body: JSON.stringify({ path: item.path, action: "diagnose" }),
         });
-        setResult(`任务诊断：${item.title}`, data);
+        showTaskResult(`任务诊断：${item.title}`, data);
         await loadDashboard();
       }),
       makeButton("跑提纲", async () => {
@@ -158,7 +192,7 @@ function renderTasks(items) {
           method: "POST",
           body: JSON.stringify({ path: item.path, action: "outline" }),
         });
-        setResult(`任务提纲：${item.title}`, data);
+        showTaskResult(`任务提纲：${item.title}`, data);
         await loadDashboard();
       }),
       makeButton("跑初稿", async () => {
@@ -166,7 +200,7 @@ function renderTasks(items) {
           method: "POST",
           body: JSON.stringify({ path: item.path, action: "draft" }),
         });
-        setResult(`任务初稿：${item.title}`, data);
+        showTaskResult(`任务初稿：${item.title}`, data);
         await loadDashboard();
       }),
     );
@@ -261,14 +295,16 @@ function renderFeedback(items) {
     actions.append(
       makeButton("查看文件", async () => {
         const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        setResult(`反馈文件：${item.id}`, data.raw);
+        setRichResult(`反馈文件：${item.id}`, [
+          `<section class="result-card"><pre>${escapeHtml(data.raw)}</pre></section>`,
+        ]);
       }),
       makeButton("学习反馈", async () => {
         const data = await api("/api/feedback/learn", {
           method: "POST",
           body: JSON.stringify({ path: item.path }),
         });
-        setResult(`反馈学习结果：${item.id}`, data);
+        showFeedbackResult(`反馈学习结果：${item.id}`, data);
         await loadDashboard();
       }),
     );
@@ -285,8 +321,119 @@ async function loadDashboard() {
   renderMaterials(data.materials || []);
   renderTaskMaterialOptions(data.materials || []);
   renderTasks(data.tasks || []);
+  renderFeedbackTaskOptions(data.tasks || []);
   renderRules(data.rules || []);
   renderFeedback(data.feedback || []);
+}
+
+function formatList(items) {
+  if (!items || !items.length) {
+    return "<li>无</li>";
+  }
+
+  return items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+}
+
+function showTaskResult(title, data) {
+  const sections = [];
+
+  if (data.analysis) {
+    sections.push(`
+      <section class="result-card">
+        <h4>任务解析</h4>
+        <div class="result-grid">
+          <div><strong>文体</strong><div>${escapeHtml(data.analysis.task_type || "-")}</div></div>
+          <div><strong>对象</strong><div>${escapeHtml(data.analysis.audience || "-")}</div></div>
+          <div><strong>场景</strong><div>${escapeHtml(data.analysis.scenario || "-")}</div></div>
+          <div><strong>目标</strong><div>${escapeHtml(data.analysis.goal || "-")}</div></div>
+        </div>
+        <h4>缺失信息</h4>
+        <ul>${formatList(data.analysis.missing_info)}</ul>
+      </section>
+    `);
+  }
+
+  if (data.diagnosis) {
+    sections.push(`
+      <section class="result-card">
+        <h4>写前诊断</h4>
+        <div class="result-grid">
+          <div><strong>就绪度</strong><div>${escapeHtml(data.diagnosis.readiness || "-")}</div></div>
+          <div><strong>下一步</strong><div>${escapeHtml(data.diagnosis.next_action || "-")}</div></div>
+        </div>
+        <p>${escapeHtml(data.diagnosis.diagnosis_summary || "")}</p>
+        <h4>建议结构</h4>
+        <ul>${(data.diagnosis.recommended_structure || [])
+          .map(
+            (item) =>
+              `<li><strong>${escapeHtml(item.section)}</strong>：${escapeHtml(item.purpose)}<br />必须覆盖：${escapeHtml((item.must_cover || []).join("、") || "无")}</li>`,
+          )
+          .join("")}</ul>
+      </section>
+    `);
+  }
+
+  if (data.outline) {
+    sections.push(`
+      <section class="result-card">
+        <h4>提纲</h4>
+        <ul>${(data.outline.sections || [])
+          .map(
+            (item) =>
+              `<li><strong>${escapeHtml(item.heading)}</strong>：${escapeHtml(item.purpose)}<br />关键点：${escapeHtml((item.key_points || []).join("、") || "无")}</li>`,
+          )
+          .join("")}</ul>
+      </section>
+    `);
+  }
+
+  if (data.draft) {
+    sections.push(`
+      <section class="result-card">
+        <h4>初稿</h4>
+        <pre>${escapeHtml(data.draft.draft_markdown || "")}</pre>
+      </section>
+      <section class="result-card">
+        <h4>自检</h4>
+        <div class="result-grid">
+          <div><strong>优点</strong><ul>${formatList(data.draft.self_review?.strengths || [])}</ul></div>
+          <div><strong>风险</strong><ul>${formatList(data.draft.self_review?.risks || [])}</ul></div>
+          <div><strong>缺失点</strong><ul>${formatList(data.draft.self_review?.missing_points || [])}</ul></div>
+          <div><strong>规则违例</strong><ul>${formatList(data.draft.self_review?.rule_violations || [])}</ul></div>
+        </div>
+      </section>
+    `);
+  }
+
+  sections.push(`
+    <section class="result-card">
+      <h4>原始 JSON</h4>
+      <pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+    </section>
+  `);
+
+  setRichResult(title, sections);
+}
+
+function showFeedbackResult(title, data) {
+  setRichResult(title, [
+    `
+      <section class="result-card">
+        <h4>反馈学习摘要</h4>
+        <div class="result-grid">
+          <div><strong>类型</strong><div>${escapeHtml(data.analysis?.feedback_type || "-")}</div></div>
+          <div><strong>可复用为规则</strong><div>${data.analysis?.is_reusable_rule ? "是" : "否"}</div></div>
+        </div>
+        <p>${escapeHtml(data.analysis?.feedback_summary || "")}</p>
+        <p><strong>建议：</strong>${escapeHtml(data.analysis?.suggested_update || "")}</p>
+        <p><strong>候选规则：</strong>${escapeHtml(data.candidateRuleId || "无")}</p>
+      </section>
+      <section class="result-card">
+        <h4>原始 JSON</h4>
+        <pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+      </section>
+    `,
+  ]);
 }
 
 document.getElementById("material-form").addEventListener("submit", async (event) => {
@@ -306,7 +453,11 @@ document.getElementById("material-form").addEventListener("submit", async (event
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setResult("材料导入完成", result);
+    setRichResult("材料导入完成", [
+      `<section class="result-card"><div class="result-grid"><div><strong>materialId</strong><div>${escapeHtml(
+        result.materialId,
+      )}</div></div><div><strong>路径</strong><div>${escapeHtml(result.path)}</div></div></div></section>`,
+    ]);
     form.reset();
     await loadDashboard();
   } catch (error) {
@@ -340,11 +491,38 @@ document.getElementById("task-form").addEventListener("submit", async (event) =>
       method: "POST",
       body: JSON.stringify(payload),
     });
-    setResult("任务已创建", result);
+    setRichResult("任务已创建", [
+      `<section class="result-card"><div class="result-grid"><div><strong>taskId</strong><div>${escapeHtml(
+        result.taskId,
+      )}</div></div><div><strong>路径</strong><div>${escapeHtml(result.path)}</div></div></div></section>`,
+    ]);
     form.reset();
     await loadDashboard();
   } catch (error) {
     setResult("任务创建失败", { error: error.message });
+  }
+});
+
+document.getElementById("feedback-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+
+  try {
+    const result = await api("/api/feedback/create", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setRichResult("反馈已创建", [
+      `<section class="result-card"><div class="result-grid"><div><strong>feedbackId</strong><div>${escapeHtml(
+        result.feedbackId,
+      )}</div></div><div><strong>路径</strong><div>${escapeHtml(result.path)}</div></div></div></section>`,
+    ]);
+    form.reset();
+    await loadDashboard();
+  } catch (error) {
+    setResult("反馈创建失败", { error: error.message });
   }
 });
 
