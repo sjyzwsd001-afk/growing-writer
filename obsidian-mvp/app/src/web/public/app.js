@@ -54,6 +54,15 @@ function parseMarkdownSections(raw) {
   }));
 }
 
+function parseTopLevelSections(raw) {
+  const text = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
+  const matches = [...text.matchAll(/^#\s+(.+)\n([\s\S]*?)(?=^#\s+|\Z)/gm)];
+  return matches.map((match) => ({
+    heading: match[1].trim(),
+    body: match[2].trim(),
+  }));
+}
+
 async function fileToBase64(file) {
   const buffer = await file.arrayBuffer();
   let binary = "";
@@ -103,7 +112,43 @@ function renderMaterials(items) {
 
     const actions = card.querySelector(".actions");
     actions.append(
-      makeButton("查看文件", async () => {
+      makeButton("结构预览", async () => {
+        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
+        const sections = parseTopLevelSections(data.raw);
+        const lookup = Object.fromEntries(sections.map((section) => [section.heading, section.body]));
+        setRichResult(`材料预览：${item.title}`, [
+          `
+            <section class="result-card">
+              <h4>材料摘要</h4>
+              <div class="result-grid">
+                <div><strong>类型</strong><div>${escapeHtml(item.docType || "-")}</div></div>
+                <div><strong>对象</strong><div>${escapeHtml(item.audience || "-")}</div></div>
+                <div><strong>场景</strong><div>${escapeHtml(item.scenario || "-")}</div></div>
+                <div><strong>质量</strong><div>${escapeHtml(item.quality || "-")}</div></div>
+              </div>
+            </section>
+          `,
+          `
+            <section class="result-card">
+              <h4>原文内容</h4>
+              <pre>${escapeHtml(lookup["原文内容"] || "无")}</pre>
+            </section>
+          `,
+          `
+            <section class="result-card">
+              <h4>结构拆解</h4>
+              <pre>${escapeHtml(lookup["结构拆解"] || "无")}</pre>
+            </section>
+          `,
+          `
+            <section class="result-card">
+              <h4>风格观察</h4>
+              <pre>${escapeHtml(lookup["风格观察"] || "无")}</pre>
+            </section>
+          `,
+        ]);
+      }),
+      makeButton("查看原文", async () => {
         const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
         setResult(`材料文件：${item.title}`, data.raw);
       }),
@@ -187,6 +232,24 @@ function renderTasks(items) {
         setRichResult(`任务文件：${item.title}`, [
           `<section class="result-card"><pre>${escapeHtml(data.raw)}</pre></section>`,
         ]);
+      }),
+      makeButton("看最新结果", async () => {
+        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
+        const sections = parseTopLevelSections(data.raw);
+        const wanted = ["写前诊断", "参考依据", "提纲", "初稿", "修改记录"];
+        const picked = sections.filter((section) => wanted.includes(section.heading));
+        setRichResult(`任务最新结果：${item.title}`, picked.length
+          ? picked.map(
+              (section) => `
+                <section class="result-card">
+                  <h4>${escapeHtml(section.heading)}</h4>
+                  <pre>${escapeHtml(section.body)}</pre>
+                </section>
+              `,
+            )
+          : [
+              `<section class="result-card"><pre>${escapeHtml("这条任务还没有生成结果。")}</pre></section>`,
+            ]);
       }),
       makeButton("一键生成", async () => {
         const data = await api("/api/tasks/run", {
