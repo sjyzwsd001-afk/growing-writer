@@ -92,9 +92,33 @@ export const materialAnalysisSchema = z.object({
   candidate_rules: z.array(z.string()).max(3),
 });
 
+export const profileSummarySchema = z.object({
+  overall_style: z.object({
+    tone: z.string(),
+    sentence_style: z.string(),
+    typical_length: z.string(),
+    detail_preference: z.string(),
+  }),
+  structure_habits: z.object({
+    opening: z.string(),
+    body: z.string(),
+    ending: z.string(),
+  }),
+  high_priority_preferences: z.array(z.string()),
+  common_taboos: z.array(z.string()),
+  scenario_guidance: z.object({
+    leadership_report: z.array(z.string()),
+    proposal_doc: z.array(z.string()),
+    review_doc: z.array(z.string()),
+  }),
+  stable_rule_summary: z.array(z.string()),
+  pending_observations: z.array(z.string()),
+});
+
 export type TaskAnalysis = z.infer<typeof taskAnalysisSchema>;
 export type DiagnosisResult = z.infer<typeof diagnosisResultSchema>;
 export type OutlineResult = z.infer<typeof outlineResultSchema>;
 export type DraftResult = z.infer<typeof draftResultSchema>;
 export type FeedbackAnalysis = z.infer<typeof feedbackAnalysisSchema>;
 export type MaterialAnalysis = z.infer<typeof materialAnalysisSchema>;
+export type ProfileSummary = z.infer<typeof profileSummarySchema>;

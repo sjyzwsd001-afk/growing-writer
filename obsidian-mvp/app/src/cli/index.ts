@@ -57,7 +57,10 @@ async function applyRuleAction(input: {
   rules: Awaited<ReturnType<VaultRepository["loadRules"]>>;
   profiles: Awaited<ReturnType<VaultRepository["loadProfiles"]>>;
   tasks: Awaited<ReturnType<VaultRepository["loadTasks"]>>;
+  materials?: Awaited<ReturnType<VaultRepository["loadMaterials"]>>;
+  feedbackEntries?: Awaited<ReturnType<VaultRepository["loadFeedbackEntries"]>>;
 }) {
+  const client = createLlmClient(input.vaultRoot);
   if (input.action === "confirm") {
     const updatedRule = await confirmRule(input.rule, input.reason);
     const updatedTasks = await syncRuleInTasks({
@@ -69,6 +72,9 @@ async function applyRuleAction(input: {
       vaultRoot: input.vaultRoot,
       profiles: input.profiles,
       rules: input.rules.map((rule) => (rule.id === updatedRule.id ? updatedRule : rule)),
+      materials: input.materials ?? [],
+      feedbackEntries: input.feedbackEntries ?? [],
+      client,
     });
     return {
       rule: updatedRule,
@@ -90,6 +96,9 @@ async function applyRuleAction(input: {
     vaultRoot: input.vaultRoot,
     profiles: input.profiles,
     rules: input.rules.map((rule) => (rule.id === updatedRule.id ? updatedRule : rule)),
+    materials: input.materials ?? [],
+    feedbackEntries: input.feedbackEntries ?? [],
+    client,
   });
   return {
     rule: updatedRule,
@@ -259,11 +268,13 @@ program
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rule, rules, profiles, tasks] = await Promise.all([
+    const [rule, rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
       repo.loadRule(resolve(ruleFile)),
       repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
+      repo.loadMaterials(),
+      repo.loadFeedbackEntries(),
     ]);
     const result = await applyRuleAction({
       action: "confirm",
@@ -273,6 +284,8 @@ program
       rules,
       profiles,
       tasks,
+      materials,
+      feedbackEntries,
     });
 
     console.log(
@@ -297,11 +310,13 @@ program
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rule, rules, profiles, tasks] = await Promise.all([
+    const [rule, rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
       repo.loadRule(resolve(ruleFile)),
       repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
+      repo.loadMaterials(),
+      repo.loadFeedbackEntries(),
     ]);
     const result = await applyRuleAction({
       action: "reject",
@@ -311,6 +326,8 @@ program
       rules,
       profiles,
       tasks,
+      materials,
+      feedbackEntries,
     });
 
     console.log(
@@ -335,11 +352,13 @@ program
   .action(async (ruleFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rule, rules, profiles, tasks] = await Promise.all([
+    const [rule, rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
       repo.loadRule(resolve(ruleFile)),
       repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
+      repo.loadMaterials(),
+      repo.loadFeedbackEntries(),
     ]);
     const result = await applyRuleAction({
       action: "disable",
@@ -349,6 +368,8 @@ program
       rules,
       profiles,
       tasks,
+      materials,
+      feedbackEntries,
     });
 
     console.log(
@@ -381,10 +402,12 @@ program
 
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [rules, profiles, tasks] = await Promise.all([
+    const [rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
       repo.loadRules(),
       repo.loadProfiles(),
       repo.loadTasks(),
+      repo.loadMaterials(),
+      repo.loadFeedbackEntries(),
     ]);
 
     const ids = typeof options.ids === "string"
@@ -414,6 +437,8 @@ program
         rules,
         profiles,
         tasks,
+        materials,
+        feedbackEntries,
       });
       results.push({
         rule_id: result.rule.id,
@@ -753,11 +778,20 @@ program
   .action(async (options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [profiles, rules] = await Promise.all([repo.loadProfiles(), repo.loadRules()]);
+    const client = createLlmClient(vaultRoot);
+    const [profiles, rules, materials, feedbackEntries] = await Promise.all([
+      repo.loadProfiles(),
+      repo.loadRules(),
+      repo.loadMaterials(),
+      repo.loadFeedbackEntries(),
+    ]);
     const profilePath = await refreshDefaultProfile({
       vaultRoot,
       profiles,
       rules,
+      materials,
+      feedbackEntries,
+      client,
     });
     console.log(
       JSON.stringify(

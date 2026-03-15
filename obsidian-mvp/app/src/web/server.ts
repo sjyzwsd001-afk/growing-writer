@@ -406,11 +406,14 @@ async function applyRuleAction(input: {
   reason?: string;
 }) {
   const repo = new VaultRepository(input.vaultRoot);
-  const [rule, rules, profiles, tasks] = await Promise.all([
+  const client = createLlmClient(input.vaultRoot);
+  const [rule, rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
     repo.loadRule(input.rulePath),
     repo.loadRules(),
     repo.loadProfiles(),
     repo.loadTasks(),
+    repo.loadMaterials(),
+    repo.loadFeedbackEntries(),
   ]);
 
   const updatedRule =
@@ -430,6 +433,9 @@ async function applyRuleAction(input: {
     vaultRoot: input.vaultRoot,
     profiles,
     rules: rules.map((item) => (item.id === updatedRule.id ? updatedRule : item)),
+    materials,
+    feedbackEntries,
+    client,
   });
 
   return {
@@ -1180,11 +1186,20 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/refresh/profile") {
         const repo = new VaultRepository(vaultRoot);
-        const [profiles, rules] = await Promise.all([repo.loadProfiles(), repo.loadRules()]);
+        const client = createLlmClient(vaultRoot);
+        const [profiles, rules, materials, feedbackEntries] = await Promise.all([
+          repo.loadProfiles(),
+          repo.loadRules(),
+          repo.loadMaterials(),
+          repo.loadFeedbackEntries(),
+        ]);
         const profilePath = await refreshDefaultProfile({
           vaultRoot,
           profiles,
           rules,
+          materials,
+          feedbackEntries,
+          client,
         });
         sendJson(res, 200, {
           profilePath,
