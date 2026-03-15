@@ -9,6 +9,7 @@ import {
   DEFAULT_VAULT_ROOT,
   OPENAI_CODEX_AUTH_URL,
   OPENAI_CODEX_BASE_URL,
+  OPENAI_CODEX_CALLBACK_PORT,
   OPENAI_CODEX_CLIENT_ID,
   OPENAI_CODEX_MODEL,
   OPENAI_CODEX_ORIGINATOR,
@@ -77,10 +78,16 @@ type PendingOauthRequest = {
   createdAt: number;
 };
 
+type OauthCallbackServerState = {
+  port: number;
+  close: () => Promise<void>;
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
 const pendingOauthRequests = new Map<string, PendingOauthRequest>();
+let oauthCallbackServerState: OauthCallbackServerState | null = null;
 
 function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
@@ -475,6 +482,114 @@ async function readDocumentByPath(path: string) {
   return { path, raw };
 }
 
+async function handleOauthCallbackRequest(input: {
+  req: IncomingMessage;
+  res: ServerResponse;
+  vaultRoot: string;
+  url: URL;
+}) {
+  const code = input.url.searchParams.get("code");
+  const state = input.url.searchParams.get("state");
+  const oauthError = input.url.searchParams.get("error");
+
+  if (oauthError) {
+    sendText(input.res, 400, `OAuth failed: ${oauthError}`);
+    return;
+  }
+  if (!code || !state) {
+    sendText(input.res, 400, "Missing code or state.");
+    return;
+  }
+
+  const pending = pendingOauthRequests.get(state);
+  if (!pending) {
+    sendText(input.res, 400, "OAuth state is invalid or expired.");
+    return;
+  }
+  pendingOauthRequests.delete(state);
+
+  try {
+    const tokens = await exchangeCodexAuthorizationCode({
+      code,
+      redirectUri: pending.redirectUri,
+      codeVerifier: pending.codeVerifier,
+    });
+    const apiKey = await exchangeCodexApiKey(tokens.idToken);
+
+    saveStoredLlmSettings(input.vaultRoot, {
+      provider: OPENAI_CODEX_PROVIDER,
+      bearerToken: apiKey,
+      baseUrl: pending.baseUrl,
+      model: pending.model,
+      authUrl: OPENAI_CODEX_AUTH_URL,
+      tokenUrl: pending.tokenUrl,
+      clientId: pending.clientId,
+      scope: pending.scope,
+      oauthAccessToken: tokens.accessToken,
+      oauthIdToken: tokens.idToken,
+      refreshToken: tokens.refreshToken,
+    });
+  } catch (error) {
+    sendText(input.res, 500, error instanceof Error ? error.message : "OAuth login failed.");
+    return;
+  }
+
+  input.res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+  input.res.end(buildOauthSuccessPage(pending.frontendOrigin));
+}
+
+async function ensureOauthCallbackServer(vaultRoot: string) {
+  if (oauthCallbackServerState) {
+    return oauthCallbackServerState;
+  }
+
+  const callbackServer = createServer(async (req, res) => {
+    try {
+      if (!req.url || !req.method) {
+        sendText(res, 400, "Bad request");
+        return;
+      }
+
+      const url = new URL(req.url, `http://127.0.0.1:${OPENAI_CODEX_CALLBACK_PORT}`);
+      if (req.method === "GET" && url.pathname === "/auth/callback") {
+        await handleOauthCallbackRequest({ req, res, vaultRoot, url });
+        return;
+      }
+
+      sendJson(res, 404, { error: `Unsupported route: ${toSafeId(url.pathname) || url.pathname}` });
+    } catch (error) {
+      sendJson(res, 500, {
+        error: error instanceof Error ? error.message : "Unknown callback server error",
+      });
+    }
+  });
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    callbackServer.once("error", rejectPromise);
+    callbackServer.listen(OPENAI_CODEX_CALLBACK_PORT, "127.0.0.1", () => {
+      callbackServer.off("error", rejectPromise);
+      resolvePromise();
+    });
+  });
+
+  oauthCallbackServerState = {
+    port: OPENAI_CODEX_CALLBACK_PORT,
+    close: () =>
+      new Promise<void>((resolvePromise, rejectPromise) => {
+        callbackServer.close((error) => {
+          if (error) {
+            rejectPromise(error);
+            return;
+          }
+          oauthCallbackServerState = null;
+          resolvePromise();
+        });
+      }),
+  };
+
+  return oauthCallbackServerState;
+}
+
 export async function startWebServer(options?: Partial<ServerOptions>) {
   const vaultRoot = resolve(options?.vaultRoot ?? DEFAULT_VAULT_ROOT);
   const port = options?.port ?? 4318;
@@ -491,6 +606,12 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/assets/"))) {
         const staticPath = url.pathname === "/" ? "/index.html" : url.pathname.replace(/^\/assets/, "");
         await serveStatic(res, staticPath);
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/favicon.ico") {
+        res.writeHead(204);
+        res.end();
         return;
       }
 
@@ -520,6 +641,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           ? `http://${req.headers.host}`
           : `http://127.0.0.1:${port}`;
         const existing = getStoredLlmSettings(vaultRoot);
+        await ensureOauthCallbackServer(vaultRoot);
 
         const settings = saveStoredLlmSettings(vaultRoot, {
           provider: OPENAI_CODEX_PROVIDER,
@@ -537,7 +659,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
         const { verifier, challenge } = createPkcePair();
         const state = toBase64Url(randomBytes(18));
-        const redirectUri = `http://localhost:${port}/auth/callback`;
+        const redirectUri = `http://localhost:${OPENAI_CODEX_CALLBACK_PORT}/auth/callback`;
         pendingOauthRequests.set(state, {
           state,
           codeVerifier: verifier,
@@ -569,61 +691,6 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           state,
           provider: OPENAI_CODEX_PROVIDER_LABEL,
         });
-        return;
-      }
-
-      if (
-        req.method === "GET" &&
-        (url.pathname === "/oauth/callback" || url.pathname === "/auth/callback")
-      ) {
-        const code = url.searchParams.get("code");
-        const state = url.searchParams.get("state");
-        const oauthError = url.searchParams.get("error");
-
-        if (oauthError) {
-          sendText(res, 400, `OAuth failed: ${oauthError}`);
-          return;
-        }
-        if (!code || !state) {
-          sendText(res, 400, "Missing code or state.");
-          return;
-        }
-
-        const pending = pendingOauthRequests.get(state);
-        if (!pending) {
-          sendText(res, 400, "OAuth state is invalid or expired.");
-          return;
-        }
-        pendingOauthRequests.delete(state);
-
-        try {
-          const tokens = await exchangeCodexAuthorizationCode({
-            code,
-            redirectUri: pending.redirectUri,
-            codeVerifier: pending.codeVerifier,
-          });
-          const apiKey = await exchangeCodexApiKey(tokens.idToken);
-
-          saveStoredLlmSettings(vaultRoot, {
-            provider: OPENAI_CODEX_PROVIDER,
-            bearerToken: apiKey,
-            baseUrl: pending.baseUrl,
-            model: pending.model,
-            authUrl: OPENAI_CODEX_AUTH_URL,
-            tokenUrl: pending.tokenUrl,
-            clientId: pending.clientId,
-            scope: pending.scope,
-            oauthAccessToken: tokens.accessToken,
-            oauthIdToken: tokens.idToken,
-            refreshToken: tokens.refreshToken,
-          });
-        } catch (error) {
-          sendText(res, 500, error instanceof Error ? error.message : "OAuth login failed.");
-          return;
-        }
-
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(buildOauthSuccessPage(pending.frontendOrigin));
         return;
       }
 
