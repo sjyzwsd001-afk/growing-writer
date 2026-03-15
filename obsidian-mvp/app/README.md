@@ -83,6 +83,16 @@ http://127.0.0.1:4318
 - 填入 `Model`
 - 点击“保存模型配置”
 
+如果你的后端是 `OAuth` 授权：
+
+- 填入 `OAuth Auth URL`
+- 填入 `OAuth Token URL`
+- 填入 `OAuth Client ID`
+- 填入 `OAuth Scope`
+- 点击 `开始 OAuth 登录`
+
+系统会自动走 `Authorization Code + PKCE`，授权成功后把 access token 写回本地配置。
+
 配置会保存到 vault 根目录下的 `.writer-llm-config.json`，CLI 和前端都会复用这份设置。
 
 ## 模型配置

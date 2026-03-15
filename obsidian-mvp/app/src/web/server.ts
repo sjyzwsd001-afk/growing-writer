@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
@@ -52,13 +53,65 @@ type ServerOptions = {
 };
 
 type RuleAction = "confirm" | "disable" | "reject";
+type PendingOauthRequest = {
+  state: string;
+  codeVerifier: string;
+  redirectUri: string;
+  tokenUrl: string;
+  clientId: string;
+  scope: string;
+  baseUrl: string;
+  model: string;
+  createdAt: number;
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
+const pendingOauthRequests = new Map<string, PendingOauthRequest>();
 
 function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
+}
+
+function toBase64Url(input: Buffer): string {
+  return input
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function createPkcePair(): { verifier: string; challenge: string } {
+  const verifier = toBase64Url(randomBytes(32));
+  const challenge = toBase64Url(createHash("sha256").update(verifier).digest());
+  return { verifier, challenge };
+}
+
+function buildOauthSuccessPage(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>OAuth 已完成</title>
+  <style>
+    body { font-family: sans-serif; padding: 32px; background: #f7f1e6; color: #2d2518; }
+    .card { max-width: 560px; margin: 48px auto; background: white; border-radius: 16px; padding: 24px; border: 1px solid #d9c7a8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>OAuth 登录成功</h1>
+    <p>模型 token 已写入本地配置。这个窗口会自动关闭，如果没有关闭，可以手动返回控制台页面。</p>
+  </div>
+  <script>
+    if (window.opener) {
+      window.opener.postMessage({ type: "oauth-complete", ok: true }, window.location.origin);
+      window.close();
+    }
+  </script>
+</body>
+</html>`;
 }
 
 function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
@@ -281,6 +334,10 @@ async function buildDashboard(vaultRoot: string) {
       model: llmConfig.model,
       bearerToken: llmConfig.bearerToken ?? "",
       hasSavedSettings: Boolean(getStoredLlmSettings(vaultRoot)),
+      authUrl: getStoredLlmSettings(vaultRoot)?.authUrl ?? "",
+      tokenUrl: getStoredLlmSettings(vaultRoot)?.tokenUrl ?? "",
+      clientId: getStoredLlmSettings(vaultRoot)?.clientId ?? "",
+      scope: getStoredLlmSettings(vaultRoot)?.scope ?? "",
     },
     materials: materials
       .map((item) => ({
@@ -368,9 +425,126 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           bearerToken: body.bearerToken ?? "",
           baseUrl: body.baseUrl ?? "https://api.openai.com/v1",
           model: body.model ?? "gpt-4.1-mini",
+          authUrl: body.authUrl ?? "",
+          tokenUrl: body.tokenUrl ?? "",
+          clientId: body.clientId ?? "",
+          scope: body.scope ?? "",
         });
         const resolved = getLlmConfig(vaultRoot);
         sendJson(res, 200, { settings, resolved });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/settings/llm/oauth/start") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        if (!body.authUrl || !body.tokenUrl || !body.clientId) {
+          sendJson(res, 400, { error: "authUrl、tokenUrl、clientId 是必填项。" });
+          return;
+        }
+
+        const settings = saveStoredLlmSettings(vaultRoot, {
+          bearerToken: body.bearerToken ?? "",
+          baseUrl: body.baseUrl ?? "https://api.openai.com/v1",
+          model: body.model ?? "gpt-4.1-mini",
+          authUrl: body.authUrl,
+          tokenUrl: body.tokenUrl,
+          clientId: body.clientId,
+          scope: body.scope ?? "",
+        });
+
+        const { verifier, challenge } = createPkcePair();
+        const state = toBase64Url(randomBytes(18));
+        const redirectUri = `http://127.0.0.1:${port}/oauth/callback`;
+        pendingOauthRequests.set(state, {
+          state,
+          codeVerifier: verifier,
+          redirectUri,
+          tokenUrl: settings.tokenUrl,
+          clientId: settings.clientId,
+          scope: settings.scope,
+          baseUrl: settings.baseUrl,
+          model: settings.model,
+          createdAt: Date.now(),
+        });
+
+        const authUrl = new URL(settings.authUrl);
+        authUrl.searchParams.set("response_type", "code");
+        authUrl.searchParams.set("client_id", settings.clientId);
+        authUrl.searchParams.set("redirect_uri", redirectUri);
+        authUrl.searchParams.set("state", state);
+        authUrl.searchParams.set("code_challenge_method", "S256");
+        authUrl.searchParams.set("code_challenge", challenge);
+        if (settings.scope.trim()) {
+          authUrl.searchParams.set("scope", settings.scope);
+        }
+
+        sendJson(res, 200, {
+          authUrl: authUrl.toString(),
+          redirectUri,
+          state,
+        });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/oauth/callback") {
+        const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state");
+        const oauthError = url.searchParams.get("error");
+
+        if (oauthError) {
+          sendText(res, 400, `OAuth failed: ${oauthError}`);
+          return;
+        }
+        if (!code || !state) {
+          sendText(res, 400, "Missing code or state.");
+          return;
+        }
+
+        const pending = pendingOauthRequests.get(state);
+        if (!pending) {
+          sendText(res, 400, "OAuth state is invalid or expired.");
+          return;
+        }
+        pendingOauthRequests.delete(state);
+
+        const tokenResponse = await fetch(pending.tokenUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            client_id: pending.clientId,
+            redirect_uri: pending.redirectUri,
+            code_verifier: pending.codeVerifier,
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          const body = await tokenResponse.text();
+          sendText(res, 500, `OAuth token exchange failed: ${tokenResponse.status} ${body}`);
+          return;
+        }
+
+        const tokenJson = (await tokenResponse.json()) as { access_token?: string };
+        if (!tokenJson.access_token) {
+          sendText(res, 500, "OAuth token exchange returned no access_token.");
+          return;
+        }
+
+        saveStoredLlmSettings(vaultRoot, {
+          bearerToken: tokenJson.access_token,
+          baseUrl: pending.baseUrl,
+          model: pending.model,
+          authUrl: getStoredLlmSettings(vaultRoot)?.authUrl ?? "",
+          tokenUrl: pending.tokenUrl,
+          clientId: pending.clientId,
+          scope: pending.scope,
+        });
+
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(buildOauthSuccessPage());
         return;
       }
 

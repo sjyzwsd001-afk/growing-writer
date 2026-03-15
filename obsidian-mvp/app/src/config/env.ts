@@ -15,6 +15,10 @@ export type StoredLlmSettings = {
   bearerToken: string;
   baseUrl: string;
   model: string;
+  authUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  scope: string;
   updatedAt?: string;
 };
 
@@ -33,6 +37,10 @@ function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): Stor
       typeof input?.model === "string" && input.model.trim()
         ? input.model
         : "gpt-4.1-mini",
+    authUrl: typeof input?.authUrl === "string" ? input.authUrl : "",
+    tokenUrl: typeof input?.tokenUrl === "string" ? input.tokenUrl : "",
+    clientId: typeof input?.clientId === "string" ? input.clientId : "",
+    scope: typeof input?.scope === "string" ? input.scope : "",
     updatedAt: typeof input?.updatedAt === "string" ? input.updatedAt : undefined,
   };
 }

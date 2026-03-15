@@ -44,7 +44,24 @@
             <span>Model</span>
             <input id="llm-model" name="model" placeholder="gpt-4.1-mini" />
           </label>
+          <label>
+            <span>OAuth Auth URL</span>
+            <input id="llm-auth-url" name="authUrl" placeholder="https://example.com/oauth/authorize" />
+          </label>
+          <label>
+            <span>OAuth Token URL</span>
+            <input id="llm-token-url" name="tokenUrl" placeholder="https://example.com/oauth/token" />
+          </label>
+          <label>
+            <span>OAuth Client ID</span>
+            <input id="llm-client-id" name="clientId" placeholder="your-client-id" />
+          </label>
+          <label>
+            <span>OAuth Scope</span>
+            <input id="llm-scope" name="scope" placeholder="openid profile api.read" />
+          </label>
           <button class="primary-button" type="submit">保存模型配置</button>
+          <button id="start-oauth-login" class="ghost-button" type="button">开始 OAuth 登录</button>
         </form>
         <button id="reload-dashboard" class="ghost-button" type="button">刷新全局数据</button>
         <button id="refresh-tasks" class="ghost-button" type="button">刷新任务参考依据</button>

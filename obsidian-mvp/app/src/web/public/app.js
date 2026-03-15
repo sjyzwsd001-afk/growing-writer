@@ -486,6 +486,10 @@ async function loadDashboard() {
   document.getElementById("llm-bearer-token").value = data.llm.bearerToken || "";
   document.getElementById("llm-base-url").value = data.llm.baseUrl || "https://api.openai.com/v1";
   document.getElementById("llm-model").value = data.llm.model || "gpt-4.1-mini";
+  document.getElementById("llm-auth-url").value = data.llm.authUrl || "";
+  document.getElementById("llm-token-url").value = data.llm.tokenUrl || "";
+  document.getElementById("llm-client-id").value = data.llm.clientId || "";
+  document.getElementById("llm-scope").value = data.llm.scope || "";
   renderDashboard();
 }
 
@@ -758,6 +762,41 @@ document.getElementById("llm-settings-form").addEventListener("submit", async (e
   }
 });
 
+document.getElementById("start-oauth-login").addEventListener("click", async () => {
+  const payload = {
+    bearerToken: document.getElementById("llm-bearer-token").value,
+    baseUrl: document.getElementById("llm-base-url").value,
+    model: document.getElementById("llm-model").value,
+    authUrl: document.getElementById("llm-auth-url").value,
+    tokenUrl: document.getElementById("llm-token-url").value,
+    clientId: document.getElementById("llm-client-id").value,
+    scope: document.getElementById("llm-scope").value,
+  };
+
+  try {
+    const result = await api("/api/settings/llm/oauth/start", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const popup = window.open(result.authUrl, "writer-oauth-login", "width=680,height=820");
+    if (!popup) {
+      window.location.href = result.authUrl;
+      return;
+    }
+    setRichResult("OAuth 登录已发起", [
+      `
+        <section class="result-card">
+          <h4>下一步</h4>
+          <p>已经弹出授权窗口。完成授权后，页面会自动刷新模型状态。</p>
+          <p><strong>回调地址：</strong>${escapeHtml(result.redirectUri)}</p>
+        </section>
+      `,
+    ]);
+  } catch (error) {
+    setResult("OAuth 登录发起失败", { error: error.message });
+  }
+});
+
 document.getElementById("refresh-tasks").addEventListener("click", async () => {
   try {
     const result = await api("/api/refresh/tasks", { method: "POST" });
@@ -796,3 +835,21 @@ bindFilterInput("rules-search", "rules");
 bindFilterInput("rules-status-filter", "ruleStatus", "change");
 bindFilterInput("profiles-search", "profiles");
 bindFilterInput("feedback-search", "feedback");
+
+window.addEventListener("message", async (event) => {
+  if (event.origin !== window.location.origin) {
+    return;
+  }
+
+  if (event.data?.type === "oauth-complete" && event.data?.ok) {
+    await loadDashboard();
+    setRichResult("OAuth 登录完成", [
+      `
+        <section class="result-card">
+          <h4>模型状态已刷新</h4>
+          <p>授权成功，新的 access token 已写入本地配置。</p>
+        </section>
+      `,
+    ]);
+  }
+});
