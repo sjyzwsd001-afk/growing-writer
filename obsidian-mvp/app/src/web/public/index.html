@@ -73,6 +73,10 @@
               </select>
             </label>
             <label class="field-span">
+              <span>浏览器上传文件（推荐，支持 txt/md/docx/pdf）</span>
+              <input name="uploadFile" type="file" accept=".txt,.md,.docx,.pdf" />
+            </label>
+            <label class="field-span">
               <span>本地文件路径（可选，支持 txt/md/docx/pdf）</span>
               <input name="sourceFile" placeholder="/Users/zw/Documents/raw/example.docx" />
             </label>
@@ -82,6 +86,80 @@
             </label>
             <div class="field-span">
               <button class="primary-button" type="submit">导入材料</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <div class="eyebrow">Step 2</div>
+              <h2>新建任务</h2>
+            </div>
+          </div>
+          <form id="task-form" class="form-grid">
+            <label>
+              <span>任务标题</span>
+              <input name="title" placeholder="例如：联调阶段风险汇报" required />
+            </label>
+            <label>
+              <span>文档类型</span>
+              <input name="docType" placeholder="例如：风险汇报" required />
+            </label>
+            <label>
+              <span>面向对象</span>
+              <input name="audience" placeholder="例如：领导" />
+            </label>
+            <label>
+              <span>使用场景</span>
+              <input name="scenario" placeholder="例如：项目阶段汇报" />
+            </label>
+            <label>
+              <span>优先级</span>
+              <select name="priority">
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="low">low</option>
+              </select>
+            </label>
+            <label>
+              <span>目标字数</span>
+              <input name="targetLength" placeholder="例如：1200" />
+            </label>
+            <label>
+              <span>截止日期</span>
+              <input name="deadline" placeholder="例如：2026-03-20" />
+            </label>
+            <label>
+              <span>写作目标</span>
+              <input name="goal" placeholder="这次要写什么" />
+            </label>
+            <label class="field-span">
+              <span>希望达到的效果</span>
+              <input name="targetEffect" placeholder="例如：让领导快速掌握风险并协调资源" />
+            </label>
+            <label class="field-span">
+              <span>背景（每行一条）</span>
+              <textarea name="background" rows="4" placeholder="项目已进入联调阶段"></textarea>
+            </label>
+            <label class="field-span">
+              <span>事实与数据（每行一条）</span>
+              <textarea name="facts" rows="5" placeholder="接口稳定性存在波动"></textarea>
+            </label>
+            <label class="field-span">
+              <span>必须包含的信息（每行一条）</span>
+              <textarea name="mustInclude" rows="4" placeholder="风险点&#10;影响&#10;措施"></textarea>
+            </label>
+            <label class="field-span">
+              <span>特殊要求（每行一条）</span>
+              <textarea name="specialRequirements" rows="4" placeholder="语气正式&#10;结构清晰"></textarea>
+            </label>
+            <fieldset class="field-span materials-selector">
+              <legend>关联历史材料</legend>
+              <div id="task-material-options" class="checkbox-grid"></div>
+            </fieldset>
+            <div class="field-span">
+              <button class="primary-button" type="submit">新建任务</button>
             </div>
           </form>
         </section>

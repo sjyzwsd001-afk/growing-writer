@@ -25,6 +25,20 @@ function setResult(title, payload) {
   resultViewer.textContent = `${title}\n\n${body}`;
 }
 
+async function fileToBase64(file) {
+  const buffer = await file.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+}
+
 function makeButton(label, onClick, className = "inline-button") {
   const button = document.createElement("button");
   button.type = "button";
@@ -75,6 +89,29 @@ function renderMaterials(items) {
     );
 
     container.append(card);
+  }
+}
+
+function renderTaskMaterialOptions(items) {
+  const container = document.getElementById("task-material-options");
+  container.innerHTML = "";
+
+  if (!items.length) {
+    container.innerHTML = `<div class="meta">还没有可选材料，先在上面导入几篇。</div>`;
+    return;
+  }
+
+  for (const item of items) {
+    const label = document.createElement("label");
+    label.className = "checkbox-item";
+    label.innerHTML = `
+      <input type="checkbox" name="sourceMaterialIds" value="${item.id}" />
+      <span>
+        <strong>${item.title}</strong><br />
+        <span class="meta">类型：${item.docType || "-"} / 对象：${item.audience || "-"}</span>
+      </span>
+    `;
+    container.append(label);
   }
 }
 
@@ -246,6 +283,7 @@ async function loadDashboard() {
   document.getElementById("llm-status").textContent = data.llm_enabled ? "已启用" : "未配置，走本地回退";
   document.getElementById("vault-root").textContent = data.vaultRoot;
   renderMaterials(data.materials || []);
+  renderTaskMaterialOptions(data.materials || []);
   renderTasks(data.tasks || []);
   renderRules(data.rules || []);
   renderFeedback(data.feedback || []);
@@ -253,18 +291,60 @@ async function loadDashboard() {
 
 document.getElementById("material-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const formData = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const formData = new FormData(form);
   const payload = Object.fromEntries(formData.entries());
+  const uploadFile = formData.get("uploadFile");
+
+  if (uploadFile instanceof File && uploadFile.size > 0) {
+    payload.uploadName = uploadFile.name;
+    payload.uploadBase64 = await fileToBase64(uploadFile);
+  }
+
   try {
     const result = await api("/api/materials/import", {
       method: "POST",
       body: JSON.stringify(payload),
     });
     setResult("材料导入完成", result);
-    event.currentTarget.reset();
+    form.reset();
     await loadDashboard();
   } catch (error) {
     setResult("材料导入失败", { error: error.message });
+  }
+});
+
+document.getElementById("task-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const payload = {
+    title: String(formData.get("title") || ""),
+    docType: String(formData.get("docType") || ""),
+    audience: String(formData.get("audience") || ""),
+    scenario: String(formData.get("scenario") || ""),
+    priority: String(formData.get("priority") || "medium"),
+    targetLength: String(formData.get("targetLength") || ""),
+    deadline: String(formData.get("deadline") || ""),
+    goal: String(formData.get("goal") || ""),
+    targetEffect: String(formData.get("targetEffect") || ""),
+    background: String(formData.get("background") || ""),
+    facts: String(formData.get("facts") || ""),
+    mustInclude: String(formData.get("mustInclude") || ""),
+    specialRequirements: String(formData.get("specialRequirements") || ""),
+    sourceMaterialIds: formData.getAll("sourceMaterialIds").map(String),
+  };
+
+  try {
+    const result = await api("/api/tasks/create", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setResult("任务已创建", result);
+    form.reset();
+    await loadDashboard();
+  } catch (error) {
+    setResult("任务创建失败", { error: error.message });
   }
 });
 

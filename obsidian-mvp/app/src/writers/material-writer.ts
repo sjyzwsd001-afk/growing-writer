@@ -243,6 +243,31 @@ async function extractTextFromFile(path: string): Promise<string> {
   throw new Error(`Unsupported material file type: ${extension}`);
 }
 
+export async function extractTextFromBuffer(input: {
+  fileName: string;
+  buffer: Buffer;
+}): Promise<string> {
+  const extension = extname(input.fileName).toLowerCase();
+
+  if (extension === ".txt" || extension === ".md") {
+    return input.buffer.toString("utf8");
+  }
+
+  if (extension === ".docx") {
+    const result = await mammoth.extractRawText({ buffer: input.buffer });
+    return result.value;
+  }
+
+  if (extension === ".pdf") {
+    const parser = new PDFParse({ data: input.buffer });
+    const result = await parser.getText();
+    await parser.destroy();
+    return result.text;
+  }
+
+  throw new Error(`Unsupported uploaded material file type: ${extension}`);
+}
+
 export async function analyzeImportedMaterial(
   materialPath: string,
   options?: { analyze?: (payload: { title: string; rawBody: string; docType: string; audience?: string; scenario?: string }) => Promise<MaterialAnalysis> },

@@ -25,6 +25,7 @@ import { writeFeedbackResult } from "../writers/feedback-writer.js";
 import {
   analyzeImportedMaterial,
   createMaterialAnalyzer,
+  extractTextFromBuffer,
   importMaterial,
 } from "../writers/material-writer.js";
 import { refreshDefaultProfile } from "../writers/profile-writer.js";
@@ -38,6 +39,7 @@ import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 import { writeCandidateRule } from "../writers/rule-writer.js";
+import { createTask } from "../writers/task-create-writer.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -358,17 +360,25 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/materials/import") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.title || !body.docType || (!body.body && !body.sourceFile)) {
-          sendJson(res, 400, { error: "title、docType、body/sourceFile 至少要提供必要字段。" });
+        if (!body.title || !body.docType || (!body.body && !body.sourceFile && !body.uploadName)) {
+          sendJson(res, 400, { error: "title、docType，以及正文/文件路径/浏览器上传文件至少要提供一项。" });
           return;
         }
 
         const client = createLlmClient();
         const analyzer = createMaterialAnalyzer(client);
-        const analysis = body.body
+        const uploadedBody =
+          body.uploadName && body.uploadBase64
+            ? await extractTextFromBuffer({
+                fileName: body.uploadName,
+                buffer: Buffer.from(body.uploadBase64, "base64"),
+              })
+            : "";
+        const rawBody = body.body || uploadedBody;
+        const analysis = rawBody
           ? await analyzer({
               title: body.title,
-              rawBody: body.body,
+              rawBody,
               docType: body.docType,
               audience: body.audience,
               scenario: body.scenario,
@@ -383,9 +393,46 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           scenario: body.scenario,
           source: body.source,
           quality: body.quality,
-          body: body.body,
+          body: rawBody,
           sourceFile: body.sourceFile ? resolve(body.sourceFile) : undefined,
           analysis,
+        });
+
+        sendJson(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/tasks/create") {
+        const body = (await readBody(req)) as Record<string, string | string[] | undefined>;
+        if (!body.title || !body.docType) {
+          sendJson(res, 400, { error: "title 和 docType 是必填项。" });
+          return;
+        }
+
+        const repo = new VaultRepository(vaultRoot);
+        const materials = await repo.loadMaterials();
+        const selectedMaterialIds = Array.isArray(body.sourceMaterialIds)
+          ? body.sourceMaterialIds.filter((item): item is string => typeof item === "string")
+          : [];
+        const selectedMaterials = materials.filter((item) => selectedMaterialIds.includes(item.id));
+
+        const result = await createTask({
+          vaultRoot,
+          title: String(body.title),
+          docType: String(body.docType),
+          audience: typeof body.audience === "string" ? body.audience : "",
+          scenario: typeof body.scenario === "string" ? body.scenario : "",
+          priority: typeof body.priority === "string" ? body.priority : "medium",
+          targetLength: typeof body.targetLength === "string" ? body.targetLength : "",
+          deadline: typeof body.deadline === "string" ? body.deadline : "",
+          goal: typeof body.goal === "string" ? body.goal : "",
+          targetEffect: typeof body.targetEffect === "string" ? body.targetEffect : "",
+          background: typeof body.background === "string" ? body.background : "",
+          facts: typeof body.facts === "string" ? body.facts : "",
+          mustInclude: typeof body.mustInclude === "string" ? body.mustInclude : "",
+          specialRequirements:
+            typeof body.specialRequirements === "string" ? body.specialRequirements : "",
+          sourceMaterials: selectedMaterials,
         });
 
         sendJson(res, 200, result);
