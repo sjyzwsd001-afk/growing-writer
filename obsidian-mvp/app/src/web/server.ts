@@ -133,6 +133,111 @@ function buildOauthSuccessPage(frontendOrigin: string): string {
 </html>`;
 }
 
+function buildOauthErrorPage(input: {
+  title: string;
+  message: string;
+  details?: string;
+  frontendOrigin?: string;
+}): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>OAuth 登录失败</title>
+  <style>
+    body { font-family: sans-serif; padding: 32px; background: #f7f1e6; color: #2d2518; }
+    .card { max-width: 760px; margin: 48px auto; background: white; border-radius: 16px; padding: 24px; border: 1px solid #d9c7a8; }
+    .detail { white-space: pre-wrap; background: #f6efe1; padding: 16px; border-radius: 12px; border: 1px solid #e0cfb4; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>${input.title}</h1>
+    <p>${input.message}</p>
+    ${input.details ? `<div class="detail">${input.details}</div>` : ""}
+  </div>
+  <script>
+    if (window.opener && ${JSON.stringify(Boolean(input.frontendOrigin))}) {
+      window.opener.postMessage({ type: "oauth-complete", ok: false }, ${JSON.stringify(input.frontendOrigin ?? "")});
+    }
+  </script>
+</body>
+</html>`;
+}
+
+function toBase64Padding(input: string): string {
+  const remainder = input.length % 4;
+  return remainder === 0 ? input : `${input}${"=".repeat(4 - remainder)}`;
+}
+
+function parseJwtPayload(jwt: string): Record<string, unknown> | null {
+  const parts = jwt.split(".");
+  if (parts.length < 2 || !parts[1]) {
+    return null;
+  }
+
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const raw = Buffer.from(toBase64Padding(payload), "base64").toString("utf8");
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function extractOpenAiAuthClaims(jwt: string): Record<string, unknown> | null {
+  const payload = parseJwtPayload(jwt);
+  if (!payload) {
+    return null;
+  }
+
+  const authClaims = payload["https://api.openai.com/auth"];
+  if (!authClaims || typeof authClaims !== "object") {
+    return null;
+  }
+
+  return authClaims as Record<string, unknown>;
+}
+
+function buildFriendlyOauthExchangeError(input: {
+  error: unknown;
+  idToken?: string;
+}) {
+  const rawMessage = input.error instanceof Error ? input.error.message : "OAuth login failed.";
+  const authClaims = input.idToken ? extractOpenAiAuthClaims(input.idToken) : null;
+  const chatgptAccountId =
+    typeof authClaims?.chatgpt_account_id === "string" ? authClaims.chatgpt_account_id : "";
+  const planType = typeof authClaims?.chatgpt_plan_type === "string" ? authClaims.chatgpt_plan_type : "";
+  const organizationId =
+    typeof authClaims?.organization_id === "string" ? authClaims.organization_id : "";
+
+  if (rawMessage.includes("missing organization_id")) {
+    const details = [
+      "OAuth 登录本身已经成功，但 OpenAI 返回的身份令牌里没有 organization_id，所以没法继续换出 Codex 可用的 API token。",
+      "这通常说明当前登录的是个人 ChatGPT 身份，或者账号还没有加入已开通 Codex 的组织/工作区。",
+      "如果你有团队/企业工作区，请在 OpenAI 登录页切换到正确工作区后再试。",
+      "如果没有可切换工作区，一般需要管理员完成 workspace setup，或者把你加入正确的组织。",
+      chatgptAccountId ? `当前 token 的 workspace/account id: ${chatgptAccountId}` : "",
+      planType ? `当前 token 的 plan type: ${planType}` : "",
+      organizationId ? `当前 token 的 organization_id: ${organizationId}` : "当前 token 的 organization_id: 缺失",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    return {
+      title: "账号缺少组织信息",
+      message: "这不是本地按钮或回调端口的问题，而是当前 OpenAI 账号没有返回 Codex 所需的组织信息。",
+      details,
+    };
+  }
+
+  return {
+    title: "OAuth 登录失败",
+    message: "OpenAI Codex 登录在最后一步失败了。",
+    details: rawMessage,
+  };
+}
+
 async function exchangeCodexAuthorizationCode(input: {
   code: string;
   redirectUri: string;
@@ -514,7 +619,23 @@ async function handleOauthCallbackRequest(input: {
       redirectUri: pending.redirectUri,
       codeVerifier: pending.codeVerifier,
     });
-    const apiKey = await exchangeCodexApiKey(tokens.idToken);
+    let apiKey: string;
+    try {
+      apiKey = await exchangeCodexApiKey(tokens.idToken);
+    } catch (error) {
+      const friendlyError = buildFriendlyOauthExchangeError({
+        error,
+        idToken: tokens.idToken,
+      });
+      input.res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
+      input.res.end(
+        buildOauthErrorPage({
+          ...friendlyError,
+          frontendOrigin: pending.frontendOrigin,
+        }),
+      );
+      return;
+    }
 
     saveStoredLlmSettings(input.vaultRoot, {
       provider: OPENAI_CODEX_PROVIDER,
@@ -530,7 +651,15 @@ async function handleOauthCallbackRequest(input: {
       refreshToken: tokens.refreshToken,
     });
   } catch (error) {
-    sendText(input.res, 500, error instanceof Error ? error.message : "OAuth login failed.");
+    input.res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
+    input.res.end(
+      buildOauthErrorPage({
+        title: "OAuth 登录失败",
+        message: "OpenAI OAuth 登录没有完成。",
+        details: error instanceof Error ? error.message : "OAuth login failed.",
+        frontendOrigin: pending.frontendOrigin,
+      }),
+    );
     return;
   }
 
