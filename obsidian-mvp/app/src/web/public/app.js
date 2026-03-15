@@ -731,7 +731,20 @@ document.getElementById("reload-dashboard").addEventListener("click", async () =
 });
 
 document.getElementById("start-oauth-login").addEventListener("click", async () => {
+  const button = document.getElementById("start-oauth-login");
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "正在打开登录...";
+
   try {
+    setRichResult("正在发起 OAuth 登录", [
+      `
+        <section class="result-card">
+          <h4>处理中</h4>
+          <p>正在向本地服务请求 OpenAI Codex 授权地址。如果浏览器拦截了弹窗，会自动在当前页面跳转。</p>
+        </section>
+      `,
+    ]);
     const result = await api("/api/settings/llm/oauth/start", {
       method: "POST",
       body: JSON.stringify({ provider: "openai-codex-oauth" }),
@@ -752,6 +765,9 @@ document.getElementById("start-oauth-login").addEventListener("click", async () 
     ]);
   } catch (error) {
     setResult("OAuth 登录发起失败", { error: error.message });
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
   }
 });
 

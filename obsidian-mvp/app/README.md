@@ -119,7 +119,7 @@ http://127.0.0.1:4318
 ```bash
 export OPENAI_BEARER_TOKEN=your_token
 export OPENAI_BASE_URL=https://api.openai.com/v1
-export OPENAI_MODEL=gpt-4.1-mini
+export OPENAI_MODEL=gpt-5.2-codex
 ```
 
 兼容策略：

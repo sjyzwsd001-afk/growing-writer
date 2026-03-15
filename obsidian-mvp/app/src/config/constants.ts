@@ -12,7 +12,7 @@ export const OPENAI_CODEX_SCOPE =
   "openid profile email offline_access api.connectors.read api.connectors.invoke";
 export const OPENAI_CODEX_ORIGINATOR = "codex_cli_rs";
 export const OPENAI_CODEX_BASE_URL = "https://api.openai.com/v1";
-export const OPENAI_CODEX_MODEL = "gpt-5-codex";
+export const OPENAI_CODEX_MODEL = "gpt-5.2-codex";
 
 export const TASK_SECTIONS = [
   "写前诊断",

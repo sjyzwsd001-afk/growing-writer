@@ -41,34 +41,47 @@ function getSettingsPath(vaultRoot: string): string {
 }
 
 function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): StoredLlmSettings {
+  const provider =
+    typeof input?.provider === "string" && input.provider.trim()
+      ? input.provider
+      : OPENAI_CODEX_PROVIDER;
+  const isCodexProvider = provider === OPENAI_CODEX_PROVIDER;
+
   return {
     bearerToken: typeof input?.bearerToken === "string" ? input.bearerToken : "",
-    baseUrl:
-      typeof input?.baseUrl === "string" && input.baseUrl.trim()
+    baseUrl: isCodexProvider
+      ? OPENAI_CODEX_BASE_URL
+      : typeof input?.baseUrl === "string" && input.baseUrl.trim()
         ? input.baseUrl
         : OPENAI_CODEX_BASE_URL,
-    model:
-      typeof input?.model === "string" && input.model.trim()
+    model: isCodexProvider
+      ? OPENAI_CODEX_MODEL
+      : typeof input?.model === "string" && input.model.trim()
         ? input.model
         : OPENAI_CODEX_MODEL,
-    provider:
-      typeof input?.provider === "string" && input.provider.trim()
-        ? input.provider
-        : OPENAI_CODEX_PROVIDER,
+    provider,
     authUrl:
-      typeof input?.authUrl === "string" && input.authUrl.trim()
+      isCodexProvider
+        ? OPENAI_CODEX_AUTH_URL
+        : typeof input?.authUrl === "string" && input.authUrl.trim()
         ? input.authUrl
         : OPENAI_CODEX_AUTH_URL,
     tokenUrl:
-      typeof input?.tokenUrl === "string" && input.tokenUrl.trim()
+      isCodexProvider
+        ? OPENAI_CODEX_TOKEN_URL
+        : typeof input?.tokenUrl === "string" && input.tokenUrl.trim()
         ? input.tokenUrl
         : OPENAI_CODEX_TOKEN_URL,
     clientId:
-      typeof input?.clientId === "string" && input.clientId.trim()
+      isCodexProvider
+        ? OPENAI_CODEX_CLIENT_ID
+        : typeof input?.clientId === "string" && input.clientId.trim()
         ? input.clientId
         : OPENAI_CODEX_CLIENT_ID,
     scope:
-      typeof input?.scope === "string" && input.scope.trim()
+      isCodexProvider
+        ? OPENAI_CODEX_SCOPE
+        : typeof input?.scope === "string" && input.scope.trim()
         ? input.scope
         : OPENAI_CODEX_SCOPE,
     oauthAccessToken:
