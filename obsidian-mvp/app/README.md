@@ -1,54 +1,24 @@
-# TypeScript CLI MVP
+# Growing Writer 使用说明（含流程与架构）
 
-这个目录是 Obsidian 写作助手的本地 CLI 骨架。
+这个目录是写作助手的应用端（CLI + Web 前端 + 后端服务）。
 
-## 当前已包含
+你可以把它理解成一个可学习个人写法的本地系统：
 
-- `schema` 类型定义
-- vault markdown 读取
-- task section 回写
-- 材料和规则的基础匹配
-- 5 个 CLI 命令入口
+1. 导入历史材料和模板
+2. 通过反馈沉淀规则
+3. 自动生成写作画像
+4. 在新任务中按“规则 + 画像 + 材料”生成初稿并迭代
 
-## 当前实现状态
+---
 
-下面这些步骤里，前四步已接模型，`learn-feedback` 目前仍是占位实现：
+## 1. 当前可用功能
 
-- `parse-task`
-- `diagnose`
-- `outline`
-- `draft`
-- `learn-feedback`
-- `confirm-rule`
-- `reject-rule`
-- `disable-rule`
-- `batch-rules`
-- `list-rules`
-- `list-tasks`
-- `list-feedback`
-- `list-materials`
-- `import-material`
-- `import-materials-dir`
-- `analyze-material`
-- `refresh-tasks`
-- `refresh-profile`
+### 1.1 前端（Web 控制台）
 
-当前 `learn-feedback` 已完成 CLI 接线、规则文件写入和回退逻辑；
-配置模型后会走真实分析，不配置时仍返回占位结果。
-如果分析结果可复用为规则，系统会新增 `rules/` 下的候选规则文件，
-并回写 `feedback` 的分析结果与关联 rule id。
-
-## 安装
+启动：
 
 ```bash
-npm install
-```
-
-## 本地前端
-
-如果你不想直接敲 CLI，现在可以启动一个本地 Web 控制台：
-
-```bash
+cd "/Users/zw/Documents/growing writer/obsidian-mvp/app"
 npm run web
 ```
 
@@ -58,110 +28,221 @@ npm run web
 http://127.0.0.1:4318
 ```
 
-这个页面当前支持：
+主要界面：
 
-- 导入材料
-- 浏览器上传 `txt/md/docx/pdf` 材料
-- 新建任务
-- 新建反馈
-- 查看材料 / 任务 / 规则 / 反馈
-- 对任务运行 `diagnose / outline / draft`
-- 对反馈运行 `learn-feedback`
-- 对规则执行确认 / 停用 / 拒绝
-- 刷新任务参考依据
-- 刷新写作画像
+- `新建写作`：引导式 4 步流程，生成并迭代稿件
+- `设置`：模型配置、材料导入、模板库、规则库、画像、反馈记录
 
-注意：
+### 1.2 后端能力
 
-- 这版前端是本地控制台，不是云端部署页面
-- 所有结果仍然直接写回你的 Obsidian vault
+- 导入材料（支持 txt/md/docx/pdf，浏览器上传或文件路径）
+- 新建任务并执行 `diagnose / outline / draft`
+- 反馈学习（可生成候选规则）
+- 规则确认/停用/拒绝
+- 刷新画像（已改为 LLM 驱动，失败回退）
 
-现在左侧固定使用 `OpenAI Codex OAuth` 登录：
+### 1.3 模型接入方式
 
-- 不需要手动填写 `Bearer Token`
-- 不需要手动填写 `Auth URL / Token URL / Client ID / Scope`
-- 点击 `开始 OAuth 登录` 即可
+- `API Key` 模式：模型名可手输（自定义）
+- `OAuth (OpenAI Codex)` 模式：模型可选 `gpt-5.4` 或 `gpt-5.3-codex`
 
-系统会按 OpenAI Codex 官方登录链路自动执行：
+---
 
-- `Authorization Code + PKCE`
-- 先换取 `id_token / access_token / refresh_token`
-- 再用 `id_token` 交换出可直接调用模型的 `openai-api-key`
-- 最后把可用 token 写回本地配置
+## 2. 小白可用操作流程
 
-配置会保存到 vault 根目录下的 `.writer-llm-config.json`，CLI 和前端都会复用这份设置。
+### 2.1 第一次使用
 
-## 模型配置
+1. 进入 `设置 -> 模型配置`，先完成模型接入
+2. 进入 `设置 -> 材料导入`，导入 10-30 篇历史材料
+3. 把高价值范文用 `模板模式` 导入（高权重）
+4. 回到 `新建写作` 开始首个任务
 
-当前这些命令都已支持通过 OpenAI 兼容接口调用模型：
+### 2.2 日常写作
 
-- `parse-task`
-- `diagnose`
-- `outline`
-- `draft`
-- `learn-feedback`
+1. `新建写作 Step 1` 填任务信息
+2. `Step 2` 选模板 + 历史材料
+3. `Step 3` 上传本次背景材料并填事实/要求
+4. `Step 4` 生成初稿
+5. 在正文区直接修改，填写“修改位置/原因/批注”
+6. 点“提交反馈并再次生成”，反复迭代
+7. 满意后点“直接定稿”
 
-`confirm-rule` / `reject-rule` / `disable-rule` 不依赖模型，它们负责管理规则状态，并同步更新默认画像。
-`batch-rules` 用于按状态或规则 id 批量执行确认/停用/拒绝。
-`list-rules` 用于快速查看当前规则库，也支持 `--json` 输出。
-`list-tasks` 用于快速查看当前任务列表，也支持 `--json` 输出。
-`list-feedback` 用于快速查看反馈记录，也支持 `--json` 输出。
-`list-materials` 用于快速查看材料库，也支持 `--json` 输出。
-`import-material` 用于快速导入历史材料到标准模板，支持 `txt/md/docx/pdf`。
-`import-materials-dir` 用于把目录下的 `txt/md/docx/pdf` 批量导入为标准材料文件。
-`analyze-material` 用于对已导入材料重新生成一版初步结构分析。
-`refresh-tasks` 用于按当前规则和材料状态批量刷新任务的参考依据与 matched_rules。
-`refresh-profile` 用于根据已确认规则重建默认写作画像摘要。
-规则状态命令支持 `--reason`，用于记录确认、拒绝或停用原因。
+---
 
-可用环境变量：
+## 3. 前端流程设计（你当前看到的版本）
+
+### 3.1 信息架构
+
+- 主入口只保留 `新建写作`，保证高频动作简洁
+- `设置` 集中放低频但关键配置：
+  - 材料导入
+  - 模板库
+  - 规则库
+  - 写作画像
+  - 反馈记录
+  - 模型配置
+
+### 3.2 引导式写作流程
+
+`新建写作` 固定为 4 步：
+
+1. 任务基础信息
+2. 模板/材料选择
+3. 本次背景素材上传与填写
+4. 确认并生成
+
+设计目的：
+
+- 避免“一屏大表单”导致漏填
+- 明确模板在流程中的高权重位置
+- 保证每次写作都有“本次背景材料”输入
+
+### 3.3 修改反馈流程
+
+生成后进入“编辑与反馈”区：
+
+- 正文可直接改
+- 记录本轮：位置、原因、批注
+- 提交后自动触发：反馈学习 -> 再生成
+- 同位置多次修改采用“最后一次为最高权重”展示
+
+---
+
+## 4. 后端逻辑设计（核心链路）
+
+### 4.1 材料与模板
+
+- 接口：`POST /api/materials/import`
+- 模板本质是“材料的一种”，通过 `tags` 和 `quality` 提升权重
+- 匹配时模板会额外加分（高优先被召回）
+
+### 4.2 任务生成
+
+- 接口：`POST /api/tasks/create` 只建任务，不生成正文
+- 接口：`POST /api/tasks/run` 执行 `diagnose/outline/draft`
+- 任务文件会回写这些章节：
+  - 写前诊断
+  - 参考依据
+  - 提纲
+  - 初稿
+  - 修改记录
+
+### 4.3 反馈与规则
+
+- 接口：`POST /api/feedback/create` 创建反馈记录
+- 接口：`POST /api/feedback/learn` 分析反馈并可产出候选规则
+- 接口：`POST /api/rules/action` 人工确认/停用/拒绝
+
+### 4.4 画像刷新
+
+- 接口：`POST /api/refresh/profile`
+- 画像输入：已确认规则 + 历史材料 + 反馈记录
+- 输出：结构化画像文档，供后续任务生成使用
+
+---
+
+## 5. 大模型配合与介入节点
+
+这部分是当前版本最关键的机制。
+
+### 5.1 会交给模型处理的环节
+
+1. 材料分析（导入时或重分析时）
+2. 任务解析（parse-task）
+3. 写前诊断（diagnose）
+4. 提纲生成（outline）
+5. 初稿生成（draft）
+6. 反馈学习（learn-feedback）
+7. 写作画像生成（refresh-profile）
+
+### 5.2 不直接由模型处理的环节
+
+1. 规则/材料匹配排序（代码规则打分）
+2. 任务、反馈、规则文件的落盘与状态管理
+3. 定稿状态与修改记录写回
+
+### 5.3 模型介入程度（新建写作）
+
+- 在点击“生成初稿”后，属于高介入：
+  - 解析任务 -> 诊断 -> 提纲 -> 初稿，链路全部可由模型驱动
+- 在“提交反馈并再次生成”时，属于高介入：
+  - 反馈学习（模型） -> 再次 draft（模型）
+- 在“仅保存正文/直接定稿”时，属于低介入：
+  - 这两步主要是文件写回，不走生成模型
+
+### 5.4 截断与摘要是谁做
+
+当前是“后端代码先做摘要与截断，再喂给模型”：
+
+- 材料摘要：代码生成
+- 候选规则/材料数量：代码先裁剪
+- 文本片段长度：代码切片后再拼 prompt
+
+不是把全文无限制塞给模型。
+
+### 5.5 模型不可用时
+
+系统会回退到本地占位/规则逻辑，不会让流程直接中断。
+
+---
+
+## 6. 数据与目录
+
+应用运行时会读写 vault 根目录（`app` 的上一级）：
+
+- `materials/`
+- `rules/`
+- `tasks/`
+- `feedback/`
+- `profiles/`
+
+模型配置会写入：
+
+- `.writer-llm-config.json`
+
+---
+
+## 7. 常见问题
+
+### 7.1 `npm ERR! ENOENT package.json`
+
+你不在 `app` 目录。先执行：
 
 ```bash
-export OPENAI_BEARER_TOKEN=your_token
-export OPENAI_BASE_URL=https://api.openai.com/v1
-export OPENAI_MODEL=gpt-5.2-codex
+cd "/Users/zw/Documents/growing writer/obsidian-mvp/app"
 ```
 
-兼容策略：
+### 7.2 `EADDRINUSE`
 
-- 优先使用 `OPENAI_BEARER_TOKEN`
-- 如果未配置，再回退使用 `OPENAI_API_KEY`
-
-如果没有完成 OAuth 登录，CLI 和前端都会自动回退到本地占位实现。
-
-## 使用
-
-在 `app/` 目录执行：
+端口被占用，换端口：
 
 ```bash
-npm run check
-npm run dev -- diagnose ../tasks/your-task.md
+npm run web -- --port=4319
 ```
 
-或者：
+### 7.3 OAuth 成功但换 token 失败
+
+常见原因是账号/组织信息不完整，导致拿不到可用 token。可先切到 API Key 模式继续使用。
+
+---
+
+## 8. CLI（可选）
+
+常用命令示例：
 
 ```bash
 npx tsx src/cli/index.ts draft ../tasks/your-task.md
-npx tsx src/cli/index.ts learn-feedback ../feedback/feedback-demo.md
-npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md
-npx tsx src/cli/index.ts reject-rule ../rules/rule-demo-candidate.md
-npx tsx src/cli/index.ts disable-rule ../rules/rule-demo-candidate.md
-npx tsx src/cli/index.ts batch-rules --action disable --status candidate --reason "批量清理待确认规则"
-npx tsx src/cli/index.ts list-rules --status confirmed
-npx tsx src/cli/index.ts list-tasks --status draft
-npx tsx src/cli/index.ts list-feedback --type logic
-npx tsx src/cli/index.ts list-materials --doc-type 风险汇报
-npx tsx src/cli/index.ts import-material --title "某项目月报" --doc-type 工作汇报 --body "这里是正文"
-npx tsx src/cli/index.ts import-material --title "旧方案" --doc-type 方案材料 --source-file ./old.docx
-npx tsx src/cli/index.ts import-materials-dir --source-dir ./raw-materials --doc-type 工作汇报
-npx tsx src/cli/index.ts analyze-material ../materials/your-material.md
-npx tsx src/cli/index.ts confirm-rule ../rules/rule-demo-candidate.md --reason "已在两次任务中验证有效"
-npx tsx src/cli/index.ts refresh-tasks
+npx tsx src/cli/index.ts learn-feedback ../feedback/your-feedback.md
 npx tsx src/cli/index.ts refresh-profile
+npx tsx src/cli/index.ts confirm-rule ../rules/your-rule.md --reason "验证有效"
 ```
 
-## 下一步建议
+---
 
-1. 增加 task/profile 的批量诊断命令
-2. 进一步优化材料分析的模型提示词
-3. 增加规则确认后的自动 profile 刷新
+## 9. 开发检查
+
+```bash
+npm run check
+```
+
+如果你要继续扩展（如多模型路由、长文分块重写、规则自动 AB 对比），建议从 `src/web/server.ts` 和 `src/workflows/stubs.ts` 两条主链开始看。
