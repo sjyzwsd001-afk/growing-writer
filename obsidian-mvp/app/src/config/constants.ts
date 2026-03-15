@@ -15,6 +15,7 @@ export const OPENAI_CODEX_SCOPE =
 export const OPENAI_CODEX_ORIGINATOR = "codex_cli_rs";
 export const OPENAI_CODEX_BASE_URL = "https://api.openai.com/v1";
 export const OPENAI_CODEX_MODEL = "gpt-5.4";
+export const OPENAI_CODEX_ALLOWED_MODELS = ["gpt-5.4", "gpt-5.3-codex"] as const;
 export const OPENAI_CODEX_CALLBACK_PORT = 1455;
 
 export const TASK_SECTIONS = [

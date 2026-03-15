@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   DEFAULT_VAULT_ROOT,
   OPENAI_CODEX_AUTH_URL,
+  OPENAI_CODEX_ALLOWED_MODELS,
   OPENAI_CODEX_BASE_URL,
   OPENAI_CODEX_CALLBACK_PORT,
   OPENAI_CODEX_CLIENT_ID,
@@ -91,6 +92,16 @@ const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
 const pendingOauthRequests = new Map<string, PendingOauthRequest>();
 let oauthCallbackServerState: OauthCallbackServerState | null = null;
+
+function normalizeCodexModel(model: unknown): string {
+  if (typeof model !== "string" || !model.trim()) {
+    return OPENAI_CODEX_MODEL;
+  }
+
+  return OPENAI_CODEX_ALLOWED_MODELS.includes(model as (typeof OPENAI_CODEX_ALLOWED_MODELS)[number])
+    ? model
+    : OPENAI_CODEX_MODEL;
+}
 
 function normalizeTagList(input: unknown): string[] {
   if (Array.isArray(input)) {
@@ -800,6 +811,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
         const existing = getStoredLlmSettings(vaultRoot);
         const isCodex = provider === OPENAI_CODEX_PROVIDER;
+        const model = isCodex ? normalizeCodexModel(body.model ?? existing?.model) : body.model?.trim() || existing?.model || OPENAI_CODEX_MODEL;
 
         const settings = saveStoredLlmSettings(vaultRoot, {
           provider,
@@ -808,7 +820,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
             isCodex
               ? OPENAI_CODEX_BASE_URL
               : body.baseUrl?.trim() || existing?.baseUrl || OPENAI_CODEX_BASE_URL,
-          model: body.model ?? OPENAI_CODEX_MODEL,
+          model,
           authUrl: isCodex ? OPENAI_CODEX_AUTH_URL : body.authUrl?.trim() || existing?.authUrl || "",
           tokenUrl:
             isCodex ? OPENAI_CODEX_TOKEN_URL : body.tokenUrl?.trim() || existing?.tokenUrl || "",
@@ -824,17 +836,19 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm/oauth/start") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
         const frontendOrigin = req.headers.host
           ? `http://${req.headers.host}`
           : `http://127.0.0.1:${port}`;
         const existing = getStoredLlmSettings(vaultRoot);
         await ensureOauthCallbackServer(vaultRoot);
+        const selectedModel = normalizeCodexModel(body.model ?? existing?.model);
 
         const settings = saveStoredLlmSettings(vaultRoot, {
           provider: OPENAI_CODEX_PROVIDER,
           bearerToken: existing?.bearerToken ?? "",
           baseUrl: OPENAI_CODEX_BASE_URL,
-          model: OPENAI_CODEX_MODEL,
+          model: selectedModel,
           authUrl: OPENAI_CODEX_AUTH_URL,
           tokenUrl: OPENAI_CODEX_TOKEN_URL,
           clientId: OPENAI_CODEX_CLIENT_ID,

@@ -149,11 +149,14 @@
                   <option value="openai-codex-oauth">OAuth (OpenAI Codex)</option>
                 </select>
               </label>
-              <label>模型
-                <select id="llm-model-input">
+              <label id="llm-model-oauth-wrap">OAuth 模型
+                <select id="llm-model-oauth-select">
                   <option value="gpt-5.4">gpt-5.4</option>
                   <option value="gpt-5.3-codex">gpt-5.3-codex</option>
                 </select>
+              </label>
+              <label id="llm-model-key-wrap">API Key 模型（可自定义）
+                <input id="llm-model-key-input" placeholder="例如：gpt-5.4 / gpt-4.1 / 自定义兼容模型名" />
               </label>
             </div>
             <div id="key-config">
@@ -173,6 +176,11 @@
               <button id="save-llm-settings" class="btn primary" type="button">保存模型配置</button>
             </div>
             <div class="meta">最近更新：<span id="llm-updated-at">-</span></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header"><h2>设置操作结果</h2></div>
+            <div id="settings-result" class="result-viewer">在下方点击“查看/执行”后，这里会显示结果。</div>
           </section>
 
           <section class="panel">
@@ -207,7 +215,10 @@
           </section>
 
           <section class="panel">
-            <div class="panel-header"><h2>写作画像</h2></div>
+            <div class="panel-header">
+              <h2>写作画像</h2>
+              <button id="refresh-profile" type="button" class="btn ghost">刷新画像</button>
+            </div>
             <div id="settings-profiles" class="simple-list"></div>
           </section>
 

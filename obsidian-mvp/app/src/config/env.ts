@@ -7,6 +7,7 @@ import {
   OPENAI_CODEX_AUTH_URL,
   OPENAI_CODEX_BASE_URL,
   OPENAI_CODEX_CLIENT_ID,
+  OPENAI_CODEX_ALLOWED_MODELS,
   OPENAI_CODEX_MODEL,
   OPENAI_CODEX_PROVIDER,
   OPENAI_CODEX_SCOPE,
@@ -53,6 +54,16 @@ function getSettingsPath(vaultRoot: string): string {
   return join(vaultRoot, LLM_SETTINGS_FILE_NAME);
 }
 
+function normalizeCodexModel(model: unknown): string {
+  if (typeof model !== "string" || !model.trim()) {
+    return OPENAI_CODEX_MODEL;
+  }
+
+  return OPENAI_CODEX_ALLOWED_MODELS.includes(model as (typeof OPENAI_CODEX_ALLOWED_MODELS)[number])
+    ? model
+    : OPENAI_CODEX_MODEL;
+}
+
 function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): StoredLlmSettings {
   const provider = normalizeProvider(input?.provider);
   const isCodexProvider = provider === OPENAI_CODEX_PROVIDER;
@@ -64,11 +75,7 @@ function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): Stor
       : typeof input?.baseUrl === "string" && input.baseUrl.trim()
         ? input.baseUrl
         : OPENAI_CODEX_BASE_URL,
-    model: isCodexProvider
-      ? OPENAI_CODEX_MODEL
-      : typeof input?.model === "string" && input.model.trim()
-        ? input.model
-        : OPENAI_CODEX_MODEL,
+    model: isCodexProvider ? normalizeCodexModel(input?.model) : typeof input?.model === "string" && input.model.trim() ? input.model : OPENAI_CODEX_MODEL,
     provider,
     authUrl:
       isCodexProvider

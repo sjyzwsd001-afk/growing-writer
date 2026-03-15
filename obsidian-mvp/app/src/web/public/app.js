@@ -31,6 +31,16 @@ function setInfo(message, isError = false) {
   summary.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
 }
 
+function setSettingsResult(title, payload) {
+  const container = document.getElementById("settings-result");
+  if (!container) {
+    return;
+  }
+
+  const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3><pre>${escapeHtml(content)}</pre>`;
+}
+
 function setTaskBadge(text, isError = false) {
   const badge = document.getElementById("task-badge");
   if (!badge) {
@@ -232,37 +242,57 @@ function renderSimpleList(containerId, items, renderItem) {
 function renderSettingsLists() {
   const data = state.dashboard || {};
   renderSimpleList("settings-materials", data.materials || [], (item) => {
-    return `<div>
+    return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+      <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
     </div>`;
   });
 
   renderSimpleList("settings-templates", data.templates || [], (item) => {
-    return `<div>
+    return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">模板权重高 / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
     </div>`;
   });
 
   renderSimpleList("settings-rules", data.rules || [], (item) => {
-    return `<div>
+    return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.status)} / ${escapeHtml(item.scope || "-")} / 置信度 ${escapeHtml(String(item.confidence ?? 0))}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-rule" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+      <button type="button" class="mini-btn" data-action="rule-confirm" data-path="${escapeHtml(item.path)}">确认</button>
+      <button type="button" class="mini-btn" data-action="rule-disable" data-path="${escapeHtml(item.path)}">停用</button>
+      <button type="button" class="mini-btn" data-action="rule-reject" data-path="${escapeHtml(item.path)}">拒绝</button>
     </div>`;
   });
 
   renderSimpleList("settings-profiles", data.profiles || [], (item) => {
-    return `<div>
+    return `<div class="row-main">
       <strong>${escapeHtml(item.name)}</strong>
       <div class="mini">版本 ${escapeHtml(String(item.version || 1))}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-profile" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)}">查看</button>
     </div>`;
   });
 
   renderSimpleList("settings-feedback", data.feedback || [], (item) => {
-    return `<div>
+    return `<div class="row-main">
       <strong>${escapeHtml(item.id)}</strong>
       <div class="mini">${escapeHtml(item.feedbackType || "-")} / 任务 ${escapeHtml(item.taskId || "-")}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">查看</button>
+      <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
     </div>`;
   });
 }
@@ -271,6 +301,11 @@ function toggleLlmMode(mode) {
   const isOauth = mode === "openai-codex-oauth";
   document.getElementById("oauth-config").classList.toggle("hidden", !isOauth);
   document.getElementById("key-config").classList.toggle("hidden", isOauth);
+  document.getElementById("llm-model-oauth-wrap").classList.toggle("hidden", !isOauth);
+  document.getElementById("llm-model-key-wrap").classList.toggle("hidden", isOauth);
+  if (isOauth && !document.getElementById("llm-model-oauth-select").value) {
+    document.getElementById("llm-model-oauth-select").value = "gpt-5.4";
+  }
 }
 
 function renderFeedbackHistory() {
@@ -324,8 +359,11 @@ function updateTopStatus(data) {
 function hydrateLlmSettings(data) {
   const llm = data.llm || {};
   const mode = llm.provider || "openai-api-key";
+  const oauthModels = new Set(["gpt-5.4", "gpt-5.3-codex"]);
+  const oauthModel = oauthModels.has(llm.model) ? llm.model : "gpt-5.4";
   document.getElementById("llm-mode").value = mode;
-  document.getElementById("llm-model-input").value = llm.model || "gpt-5.4";
+  document.getElementById("llm-model-oauth-select").value = oauthModel;
+  document.getElementById("llm-model-key-input").value = llm.model || "gpt-5.4";
   document.getElementById("llm-base-url-input").value = llm.baseUrl || "https://api.openai.com/v1";
   toggleLlmMode(mode);
 }
@@ -669,9 +707,13 @@ function bindLlmSettings() {
 
   document.getElementById("save-llm-settings").addEventListener("click", async () => {
     const mode = document.getElementById("llm-mode").value;
+    const model =
+      mode === "openai-codex-oauth"
+        ? document.getElementById("llm-model-oauth-select").value
+        : document.getElementById("llm-model-key-input").value.trim();
     const payload = {
       provider: mode,
-      model: document.getElementById("llm-model-input").value,
+      model,
       bearerToken: document.getElementById("llm-token-input").value.trim(),
       baseUrl: document.getElementById("llm-base-url-input").value.trim(),
       authUrl: document.getElementById("llm-auth-url-input").value.trim(),
@@ -695,9 +737,10 @@ function bindLlmSettings() {
     button.disabled = true;
     button.textContent = "正在跳转授权...";
     try {
+      const model = document.getElementById("llm-model-oauth-select").value;
       const result = await api("/api/settings/llm/oauth/start", {
         method: "POST",
-        body: JSON.stringify({ provider: "openai-codex-oauth" }),
+        body: JSON.stringify({ provider: "openai-codex-oauth", model }),
       });
       const popup = window.open(result.authUrl, "gw-oauth", "width=680,height=820");
       if (!popup) {
@@ -708,6 +751,102 @@ function bindLlmSettings() {
     } finally {
       button.disabled = false;
       button.textContent = "开始 OAuth 登录";
+    }
+  });
+}
+
+async function runSettingsAction(action, button) {
+  const path = button.dataset.path || "";
+  const title = button.dataset.title || "";
+
+  if (!action) {
+    return;
+  }
+
+  if (action === "view-material" || action === "view-rule" || action === "view-profile" || action === "view-feedback") {
+    const data = await api(`/api/document?path=${encodeURIComponent(path)}`);
+    setSettingsResult(`${title || "文档"} - 内容预览`, data.raw);
+    return;
+  }
+
+  if (action === "analyze-material") {
+    const result = await api("/api/materials/analyze", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+    setSettingsResult(`${title || "材料"} - 重分析完成`, result);
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "rule-confirm" || action === "rule-disable" || action === "rule-reject") {
+    const mappedAction =
+      action === "rule-confirm" ? "confirm" : action === "rule-disable" ? "disable" : "reject";
+    const result = await api("/api/rules/action", {
+      method: "POST",
+      body: JSON.stringify({ path, action: mappedAction, reason: "通过设置页操作" }),
+    });
+    setSettingsResult(`规则操作完成：${mappedAction}`, result);
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "learn-feedback") {
+    const result = await api("/api/feedback/learn", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+    setSettingsResult(`${title || "反馈"} - 学习结果`, result);
+    await loadDashboard();
+  }
+}
+
+function bindSettingsActions() {
+  const containers = [
+    "settings-materials",
+    "settings-templates",
+    "settings-rules",
+    "settings-profiles",
+    "settings-feedback",
+  ];
+
+  for (const id of containers) {
+    const container = document.getElementById(id);
+    container.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) {
+        return;
+      }
+
+      const action = button.dataset.action;
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "处理中...";
+      try {
+        await runSettingsAction(action, button);
+      } catch (error) {
+        setSettingsResult("操作失败", { error: error.message });
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  }
+
+  document.getElementById("refresh-profile").addEventListener("click", async () => {
+    const button = document.getElementById("refresh-profile");
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "刷新中...";
+    try {
+      const result = await api("/api/refresh/profile", { method: "POST" });
+      setSettingsResult("写作画像刷新完成", result);
+      await loadDashboard();
+    } catch (error) {
+      setSettingsResult("刷新画像失败", { error: error.message });
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
     }
   });
 }
@@ -727,6 +866,7 @@ bindWizard();
 bindEditorActions();
 bindMaterialImport();
 bindLlmSettings();
+bindSettingsActions();
 updateWizardStep();
 setEditorVisible(false);
 
