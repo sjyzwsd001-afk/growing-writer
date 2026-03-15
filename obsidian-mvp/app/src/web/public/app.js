@@ -45,6 +45,15 @@ function setRichResult(title, sections) {
   `;
 }
 
+function parseMarkdownSections(raw) {
+  const text = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
+  const matches = [...text.matchAll(/^##\s+(.+)\n([\s\S]*?)(?=^##\s+|\Z)/gm)];
+  return matches.map((match) => ({
+    heading: match[1].trim(),
+    body: match[2].trim(),
+  }));
+}
+
 async function fileToBase64(file) {
   const buffer = await file.arrayBuffer();
   let binary = "";
@@ -179,6 +188,14 @@ function renderTasks(items) {
           `<section class="result-card"><pre>${escapeHtml(data.raw)}</pre></section>`,
         ]);
       }),
+      makeButton("一键生成", async () => {
+        const data = await api("/api/tasks/run", {
+          method: "POST",
+          body: JSON.stringify({ path: item.path, action: "draft" }),
+        });
+        showTaskResult(`任务一键生成：${item.title}`, data);
+        await loadDashboard();
+      }, "inline-button primary-button"),
       makeButton("跑诊断", async () => {
         const data = await api("/api/tasks/run", {
           method: "POST",
@@ -236,7 +253,28 @@ function renderRules(items) {
     actions.append(
       makeButton("查看文件", async () => {
         const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        setResult(`规则文件：${item.title}`, data.raw);
+        const sections = parseMarkdownSections(data.raw);
+        setRichResult(`规则预览：${item.title}`, [
+          `
+            <section class="result-card">
+              <h4>规则摘要</h4>
+              <div class="result-grid">
+                <div><strong>状态</strong><div>${escapeHtml(item.status)}</div></div>
+                <div><strong>适用范围</strong><div>${escapeHtml(item.scope || "-")}</div></div>
+                <div><strong>置信度</strong><div>${escapeHtml(String(item.confidence))}</div></div>
+                <div><strong>文件路径</strong><div>${escapeHtml(item.path)}</div></div>
+              </div>
+            </section>
+          `,
+          ...sections.slice(0, 4).map(
+            (section) => `
+              <section class="result-card">
+                <h4>${escapeHtml(section.heading)}</h4>
+                <pre>${escapeHtml(section.body)}</pre>
+              </section>
+            `,
+          ),
+        ]);
       }),
       makeButton("确认", async () => {
         const data = await api("/api/rules/action", {
@@ -261,6 +299,48 @@ function renderRules(items) {
         });
         setResult(`规则已拒绝：${item.title}`, data);
         await loadDashboard();
+      }),
+    );
+
+    container.append(card);
+  }
+}
+
+function renderProfiles(items) {
+  const container = document.getElementById("profiles-list");
+  document.getElementById("profiles-count").textContent = String(items.length);
+  container.innerHTML = "";
+
+  if (!items.length) {
+    container.innerHTML = `<div class="card"><div class="meta">当前没有画像文件。</div></div>`;
+    return;
+  }
+
+  for (const item of items) {
+    const card = document.createElement("article");
+    card.className = "card";
+    card.innerHTML = `
+      <h3>${item.name}</h3>
+      <div class="meta">
+        <div>版本：${item.version}</div>
+        <div>路径：${item.path}</div>
+      </div>
+      <div class="actions"></div>
+    `;
+
+    const actions = card.querySelector(".actions");
+    actions.append(
+      makeButton("查看画像", async () => {
+        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
+        const sections = parseMarkdownSections(data.raw);
+        setRichResult(`写作画像：${item.name}`, sections.map(
+          (section) => `
+            <section class="result-card">
+              <h4>${escapeHtml(section.heading)}</h4>
+              <pre>${escapeHtml(section.body)}</pre>
+            </section>
+          `,
+        ));
       }),
     );
 
@@ -323,6 +403,7 @@ async function loadDashboard() {
   renderTasks(data.tasks || []);
   renderFeedbackTaskOptions(data.tasks || []);
   renderRules(data.rules || []);
+  renderProfiles(data.profiles || []);
   renderFeedback(data.feedback || []);
 }
 
