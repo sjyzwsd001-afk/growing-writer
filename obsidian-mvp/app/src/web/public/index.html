@@ -241,6 +241,9 @@
             </div>
             <span class="panel-count" id="materials-count">0</span>
           </div>
+          <div class="panel-toolbar">
+            <input id="materials-search" placeholder="搜索标题 / 类型 / 场景" />
+          </div>
           <div id="materials-list" class="list"></div>
         </section>
 
@@ -251,6 +254,9 @@
               <h2>任务</h2>
             </div>
             <span class="panel-count" id="tasks-count">0</span>
+          </div>
+          <div class="panel-toolbar">
+            <input id="tasks-search" placeholder="搜索标题 / 类型 / 对象" />
           </div>
           <div id="tasks-list" class="list"></div>
         </section>
@@ -263,6 +269,15 @@
             </div>
             <span class="panel-count" id="rules-count">0</span>
           </div>
+          <div class="panel-toolbar panel-toolbar-double">
+            <input id="rules-search" placeholder="搜索规则标题 / 范围" />
+            <select id="rules-status-filter">
+              <option value="all">全部状态</option>
+              <option value="candidate">candidate</option>
+              <option value="confirmed">confirmed</option>
+              <option value="disabled">disabled</option>
+            </select>
+          </div>
           <div id="rules-list" class="list"></div>
         </section>
 
@@ -274,6 +289,9 @@
             </div>
             <span class="panel-count" id="profiles-count">0</span>
           </div>
+          <div class="panel-toolbar">
+            <input id="profiles-search" placeholder="搜索画像名称" />
+          </div>
           <div id="profiles-list" class="list"></div>
         </section>
 
@@ -284,6 +302,9 @@
               <h2>反馈记录</h2>
             </div>
             <span class="panel-count" id="feedback-count">0</span>
+          </div>
+          <div class="panel-toolbar">
+            <input id="feedback-search" placeholder="搜索反馈 id / 类型 / 任务" />
           </div>
           <div id="feedback-list" class="list"></div>
         </section>

@@ -181,6 +181,16 @@ h2 {
   font-weight: 700;
 }
 
+.panel-toolbar {
+  padding: 12px 20px 0;
+}
+
+.panel-toolbar-double {
+  display: grid;
+  grid-template-columns: 1fr 160px;
+  gap: 10px;
+}
+
 .list {
   padding: 10px 12px 14px;
   max-height: 420px;
@@ -360,6 +370,10 @@ textarea {
   }
 
   .result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-toolbar-double {
     grid-template-columns: 1fr;
   }
 }

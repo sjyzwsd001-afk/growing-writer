@@ -1,5 +1,13 @@
 const state = {
   dashboard: null,
+  filters: {
+    materials: "",
+    tasks: "",
+    rules: "",
+    ruleStatus: "all",
+    profiles: "",
+    feedback: "",
+  },
 };
 
 const resultViewer = document.getElementById("result-viewer");
@@ -43,6 +51,19 @@ function setRichResult(title, sections) {
       ${sections.join("")}
     </div>
   `;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function matchesSearch(values, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  return values.some((value) => normalizeText(value).includes(normalizedQuery));
 }
 
 function parseMarkdownSections(raw) {
@@ -461,13 +482,38 @@ async function loadDashboard() {
   state.dashboard = data;
   document.getElementById("llm-status").textContent = data.llm_enabled ? "已启用" : "未配置，走本地回退";
   document.getElementById("vault-root").textContent = data.vaultRoot;
-  renderMaterials(data.materials || []);
-  renderTaskMaterialOptions(data.materials || []);
-  renderTasks(data.tasks || []);
-  renderFeedbackTaskOptions(data.tasks || []);
-  renderRules(data.rules || []);
-  renderProfiles(data.profiles || []);
-  renderFeedback(data.feedback || []);
+  renderDashboard();
+}
+
+function renderDashboard() {
+  if (!state.dashboard) {
+    return;
+  }
+
+  const filteredMaterials = (state.dashboard.materials || []).filter((item) =>
+    matchesSearch([item.title, item.docType, item.audience, item.scenario], state.filters.materials),
+  );
+  const filteredTasks = (state.dashboard.tasks || []).filter((item) =>
+    matchesSearch([item.title, item.docType, item.audience, item.scenario], state.filters.tasks),
+  );
+  const filteredRules = (state.dashboard.rules || []).filter((item) =>
+    (state.filters.ruleStatus === "all" || item.status === state.filters.ruleStatus) &&
+    matchesSearch([item.title, item.scope, item.status], state.filters.rules),
+  );
+  const filteredProfiles = (state.dashboard.profiles || []).filter((item) =>
+    matchesSearch([item.name, item.path], state.filters.profiles),
+  );
+  const filteredFeedback = (state.dashboard.feedback || []).filter((item) =>
+    matchesSearch([item.id, item.feedbackType, item.taskId], state.filters.feedback),
+  );
+
+  renderMaterials(filteredMaterials);
+  renderTaskMaterialOptions(state.dashboard.materials || []);
+  renderTasks(filteredTasks);
+  renderFeedbackTaskOptions(state.dashboard.tasks || []);
+  renderRules(filteredRules);
+  renderProfiles(filteredProfiles);
+  renderFeedback(filteredFeedback);
 }
 
 function formatList(items) {
@@ -702,3 +748,18 @@ document.getElementById("refresh-profile").addEventListener("click", async () =>
 loadDashboard().catch((error) => {
   setResult("初始化失败", { error: error.message });
 });
+
+function bindFilterInput(id, key, eventName = "input") {
+  const element = document.getElementById(id);
+  element.addEventListener(eventName, () => {
+    state.filters[key] = element.value;
+    renderDashboard();
+  });
+}
+
+bindFilterInput("materials-search", "materials");
+bindFilterInput("tasks-search", "tasks");
+bindFilterInput("rules-search", "rules");
+bindFilterInput("rules-status-filter", "ruleStatus", "change");
+bindFilterInput("profiles-search", "profiles");
+bindFilterInput("feedback-search", "feedback");
