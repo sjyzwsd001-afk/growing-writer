@@ -1,19 +1,21 @@
 const state = {
   dashboard: null,
-  filters: {
-    materials: "",
-    tasks: "",
-    rules: "",
-    ruleStatus: "all",
-    profiles: "",
-    feedback: "",
-  },
+  currentView: "create",
+  wizardStep: 1,
+  currentTask: null,
+  feedbackHistory: [],
+  latestFeedbackByLocation: {},
 };
 
-const resultViewer = document.getElementById("result-viewer");
+const MAX_WIZARD_STEP = 4;
+const trustedOrigins = new Set([
+  window.location.origin,
+  window.location.origin.replace("127.0.0.1", "localhost"),
+  window.location.origin.replace("localhost", "127.0.0.1"),
+]);
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -21,67 +23,94 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function setInfo(message, isError = false) {
+  const summary = document.getElementById("wizard-summary");
+  if (!summary) {
+    return;
+  }
+  summary.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
+}
+
+function setTaskBadge(text, isError = false) {
+  const badge = document.getElementById("task-badge");
+  if (!badge) {
+    return;
+  }
+  badge.textContent = text;
+  badge.classList.toggle("danger", isError);
+}
+
+function normalizeLocation(value) {
+  const cleaned = String(value || "").trim();
+  return cleaned || "全文";
+}
+
+function inferFeedbackType(text) {
+  const normalized = String(text || "").toLowerCase();
+  if (/结构|顺序|层次/.test(normalized)) {
+    return "structure";
+  }
+  if (/逻辑|因果/.test(normalized)) {
+    return "logic";
+  }
+  if (/缺失|没写|遗漏/.test(normalized)) {
+    return "missing_info";
+  }
+  return "wording";
+}
+
+function historyStorageKey(taskId) {
+  return `gw-feedback-history-${taskId}`;
+}
+
+function saveFeedbackHistoryToStorage(taskId) {
+  if (!taskId) {
+    return;
+  }
+  localStorage.setItem(
+    historyStorageKey(taskId),
+    JSON.stringify({
+      history: state.feedbackHistory,
+      latestByLocation: state.latestFeedbackByLocation,
+    }),
+  );
+}
+
+function loadFeedbackHistoryFromStorage(taskId) {
+  state.feedbackHistory = [];
+  state.latestFeedbackByLocation = {};
+  if (!taskId) {
+    return;
+  }
+
+  const raw = localStorage.getItem(historyStorageKey(taskId));
+  if (!raw) {
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    state.feedbackHistory = Array.isArray(parsed.history) ? parsed.history : [];
+    state.latestFeedbackByLocation =
+      parsed.latestByLocation && typeof parsed.latestByLocation === "object"
+        ? parsed.latestByLocation
+        : {};
+  } catch {
+    state.feedbackHistory = [];
+    state.latestFeedbackByLocation = {};
+  }
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     ...options,
   });
-
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || `Request failed: ${response.status}`);
   }
-
   return data;
-}
-
-function setResult(title, payload) {
-  const body = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-  resultViewer.innerHTML = `<pre>${escapeHtml(`${title}\n\n${body}`)}</pre>`;
-}
-
-function setRichResult(title, sections) {
-  resultViewer.innerHTML = `
-    <div class="result-stack">
-      <div class="result-card">
-        <h3>${escapeHtml(title)}</h3>
-      </div>
-      ${sections.join("")}
-    </div>
-  `;
-}
-
-function normalizeText(value) {
-  return String(value || "").trim().toLowerCase();
-}
-
-function matchesSearch(values, query) {
-  const normalizedQuery = normalizeText(query);
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  return values.some((value) => normalizeText(value).includes(normalizedQuery));
-}
-
-function parseMarkdownSections(raw) {
-  const text = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
-  const matches = [...text.matchAll(/^##\s+(.+)\n([\s\S]*?)(?=^##\s+|\Z)/gm)];
-  return matches.map((match) => ({
-    heading: match[1].trim(),
-    body: match[2].trim(),
-  }));
-}
-
-function parseTopLevelSections(raw) {
-  const text = raw.replace(/^---[\s\S]*?---\n?/, "").trim();
-  const matches = [...text.matchAll(/^#\s+(.+)\n([\s\S]*?)(?=^#\s+|\Z)/gm)];
-  return matches.map((match) => ({
-    heading: match[1].trim(),
-    body: match[2].trim(),
-  }));
 }
 
 async function fileToBase64(file) {
@@ -94,737 +123,613 @@ async function fileToBase64(file) {
     const chunk = bytes.subarray(offset, offset + chunkSize);
     binary += String.fromCharCode(...chunk);
   }
-
   return btoa(binary);
 }
 
-function makeButton(label, onClick, className = "inline-button") {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = className;
-  button.textContent = label;
-  button.addEventListener("click", onClick);
-  return button;
+function parseTopLevelSections(raw) {
+  const text = String(raw || "").replace(/^---[\s\S]*?---\n?/, "").trim();
+  const matches = [...text.matchAll(/^#\s+(.+)\n([\s\S]*?)(?=^#\s+|\Z)/gm)];
+  return matches.map((match) => ({
+    heading: match[1].trim(),
+    body: match[2].trim(),
+  }));
 }
 
-function renderMaterials(items) {
-  const container = document.getElementById("materials-list");
-  document.getElementById("materials-count").textContent = String(items.length);
-  container.innerHTML = "";
+async function getTaskDraftFromFile(path) {
+  const doc = await api(`/api/document?path=${encodeURIComponent(path)}`);
+  const sections = parseTopLevelSections(doc.raw);
+  const draft = sections.find((item) => item.heading === "初稿");
+  return draft?.body || "";
+}
 
-  if (!items.length) {
-    container.innerHTML = `<div class="card"><div class="meta">还没有材料，先在上方导入一篇。</div></div>`;
-    return;
-  }
+function toggleView(viewName) {
+  state.currentView = viewName;
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.view === viewName);
+  });
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.toggle("active", view.id === `view-${viewName}`);
+  });
+}
 
-  for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `
-      <h3>${item.title}</h3>
-      <div class="meta">
-        <div>类型：${item.docType || "-"}</div>
-        <div>对象：${item.audience || "-"}</div>
-        <div>场景：${item.scenario || "-"}</div>
-        <div>质量：${item.quality || "-"}</div>
-      </div>
-      <div class="actions"></div>
-    `;
+function updateWizardSummary() {
+  const form = document.getElementById("wizard-form");
+  const formData = new FormData(form);
+  const selectedCount = formData.getAll("sourceMaterialIds").length;
+  const templateTitle =
+    document.querySelector("#template-selector option:checked")?.textContent || "不使用模板";
+  const lines = [
+    `任务：${String(formData.get("title") || "").trim() || "未填写"}`,
+    `文档类型：${String(formData.get("docType") || "").trim() || "未填写"}`,
+    `模板：${templateTitle}`,
+    `历史材料：${selectedCount} 篇`,
+    `背景条目：${String(formData.get("background") || "").trim() ? "已填写" : "未填写"}`,
+  ];
+  document.getElementById("wizard-summary").innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+}
 
-    const actions = card.querySelector(".actions");
-    actions.append(
-      makeButton("结构预览", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        const sections = parseTopLevelSections(data.raw);
-        const lookup = Object.fromEntries(sections.map((section) => [section.heading, section.body]));
-        setRichResult(`材料预览：${item.title}`, [
-          `
-            <section class="result-card">
-              <h4>材料摘要</h4>
-              <div class="result-grid">
-                <div><strong>类型</strong><div>${escapeHtml(item.docType || "-")}</div></div>
-                <div><strong>对象</strong><div>${escapeHtml(item.audience || "-")}</div></div>
-                <div><strong>场景</strong><div>${escapeHtml(item.scenario || "-")}</div></div>
-                <div><strong>质量</strong><div>${escapeHtml(item.quality || "-")}</div></div>
-              </div>
-            </section>
-          `,
-          `
-            <section class="result-card">
-              <h4>原文内容</h4>
-              <pre>${escapeHtml(lookup["原文内容"] || "无")}</pre>
-            </section>
-          `,
-          `
-            <section class="result-card">
-              <h4>结构拆解</h4>
-              <pre>${escapeHtml(lookup["结构拆解"] || "无")}</pre>
-            </section>
-          `,
-          `
-            <section class="result-card">
-              <h4>风格观察</h4>
-              <pre>${escapeHtml(lookup["风格观察"] || "无")}</pre>
-            </section>
-          `,
-        ]);
-      }),
-      makeButton("查看原文", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        setResult(`材料文件：${item.title}`, data.raw);
-      }),
-      makeButton("重分析", async () => {
-        const data = await api("/api/materials/analyze", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path }),
-        });
-        setResult(`材料重分析完成：${item.title}`, data);
-        await loadDashboard();
-      }),
-    );
-
-    container.append(card);
+function updateWizardStep() {
+  document.getElementById("wizard-step-index").textContent = String(state.wizardStep);
+  document.querySelectorAll(".wizard-step").forEach((step) => {
+    step.classList.toggle("active", Number(step.dataset.step) === state.wizardStep);
+  });
+  document.getElementById("wizard-prev").disabled = state.wizardStep === 1;
+  document.getElementById("wizard-next").classList.toggle("hidden", state.wizardStep >= MAX_WIZARD_STEP);
+  document.getElementById("wizard-submit").classList.toggle("hidden", state.wizardStep < MAX_WIZARD_STEP);
+  if (state.wizardStep === MAX_WIZARD_STEP) {
+    updateWizardSummary();
   }
 }
 
-function renderTaskMaterialOptions(items) {
-  const container = document.getElementById("task-material-options");
+function renderCheckOptions(containerId, items, name) {
+  const container = document.getElementById(containerId);
   container.innerHTML = "";
-
   if (!items.length) {
-    container.innerHTML = `<div class="meta">还没有可选材料，先在上面导入几篇。</div>`;
+    container.innerHTML = `<div class="empty">暂无可选项</div>`;
     return;
   }
 
   for (const item of items) {
     const label = document.createElement("label");
-    label.className = "checkbox-item";
+    label.className = "check-item";
     label.innerHTML = `
-      <input type="checkbox" name="sourceMaterialIds" value="${item.id}" />
+      <input type="checkbox" name="${name}" value="${escapeHtml(item.id)}" />
       <span>
-        <strong>${item.title}</strong><br />
-        <span class="meta">类型：${item.docType || "-"} / 对象：${item.audience || "-"}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <span class="mini">类型：${escapeHtml(item.docType || "-")} / 场景：${escapeHtml(item.scenario || "-")}</span>
       </span>
     `;
     container.append(label);
   }
 }
 
-function renderFeedbackTaskOptions(items) {
-  const select = document.getElementById("feedback-task-options");
-  select.innerHTML = `<option value="">不关联任务</option>`;
-
+function renderTemplateSelector(items) {
+  const select = document.getElementById("template-selector");
+  select.innerHTML = `<option value="">不使用模板</option>`;
   for (const item of items) {
     const option = document.createElement("option");
     option.value = item.id;
-    option.textContent = `${item.title} (${item.docType || "未标注文档类型"})`;
+    option.textContent = `${item.title}${item.docType ? `（${item.docType}）` : ""}`;
     select.append(option);
   }
 }
 
-function renderTasks(items) {
-  const container = document.getElementById("tasks-list");
-  document.getElementById("tasks-count").textContent = String(items.length);
+function renderSimpleList(containerId, items, renderItem) {
+  const container = document.getElementById(containerId);
   container.innerHTML = "";
-
   if (!items.length) {
-    container.innerHTML = `<div class="card"><div class="meta">任务目录里还没有任务文件。</div></div>`;
+    container.innerHTML = `<div class="empty">暂无数据</div>`;
     return;
   }
-
   for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `
-      <h3>${item.title}</h3>
-      <div class="meta">
-        <div>状态：${item.status || "-"}</div>
-        <div>类型：${item.docType || "-"}</div>
-        <div>对象：${item.audience || "-"}</div>
-        <div>已匹配规则：${(item.matchedRules || []).length}</div>
-      </div>
-      <div class="actions"></div>
-    `;
-
-    const actions = card.querySelector(".actions");
-    actions.append(
-      makeButton("查看文件", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        setRichResult(`任务文件：${item.title}`, [
-          `<section class="result-card"><pre>${escapeHtml(data.raw)}</pre></section>`,
-        ]);
-      }),
-      makeButton("看最新结果", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        const sections = parseTopLevelSections(data.raw);
-        const wanted = ["写前诊断", "参考依据", "提纲", "初稿", "修改记录"];
-        const picked = sections.filter((section) => wanted.includes(section.heading));
-        setRichResult(`任务最新结果：${item.title}`, picked.length
-          ? picked.map(
-              (section) => `
-                <section class="result-card">
-                  <h4>${escapeHtml(section.heading)}</h4>
-                  <pre>${escapeHtml(section.body)}</pre>
-                </section>
-              `,
-            )
-          : [
-              `<section class="result-card"><pre>${escapeHtml("这条任务还没有生成结果。")}</pre></section>`,
-            ]);
-      }),
-      makeButton("一键生成", async () => {
-        const data = await api("/api/tasks/run", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "draft" }),
-        });
-        showTaskResult(`任务一键生成：${item.title}`, data);
-        await loadDashboard();
-      }, "inline-button primary-button"),
-      makeButton("跑诊断", async () => {
-        const data = await api("/api/tasks/run", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "diagnose" }),
-        });
-        showTaskResult(`任务诊断：${item.title}`, data);
-        await loadDashboard();
-      }),
-      makeButton("跑提纲", async () => {
-        const data = await api("/api/tasks/run", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "outline" }),
-        });
-        showTaskResult(`任务提纲：${item.title}`, data);
-        await loadDashboard();
-      }),
-      makeButton("跑初稿", async () => {
-        const data = await api("/api/tasks/run", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "draft" }),
-        });
-        showTaskResult(`任务初稿：${item.title}`, data);
-        await loadDashboard();
-      }),
-    );
-
-    container.append(card);
+    const row = document.createElement("div");
+    row.className = "row-item";
+    row.innerHTML = renderItem(item);
+    container.append(row);
   }
 }
 
-function renderRules(items) {
-  const container = document.getElementById("rules-list");
-  document.getElementById("rules-count").textContent = String(items.length);
-  container.innerHTML = "";
+function renderSettingsLists() {
+  const data = state.dashboard || {};
+  renderSimpleList("settings-materials", data.materials || [], (item) => {
+    return `<div>
+      <strong>${escapeHtml(item.title)}</strong>
+      <div class="mini">${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
+    </div>`;
+  });
 
-  if (!items.length) {
-    container.innerHTML = `<div class="card"><div class="meta">当前没有规则文件。</div></div>`;
-    return;
-  }
+  renderSimpleList("settings-templates", data.templates || [], (item) => {
+    return `<div>
+      <strong>${escapeHtml(item.title)}</strong>
+      <div class="mini">模板权重高 / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
+    </div>`;
+  });
 
-  for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `
-      <h3>${item.title}</h3>
-      <div class="meta">
-        <div>状态：<span class="status-${item.status}">${item.status}</span></div>
-        <div>范围：${item.scope || "-"}</div>
-        <div>置信度：${item.confidence}</div>
-      </div>
-      <div class="actions"></div>
-    `;
+  renderSimpleList("settings-rules", data.rules || [], (item) => {
+    return `<div>
+      <strong>${escapeHtml(item.title)}</strong>
+      <div class="mini">${escapeHtml(item.status)} / ${escapeHtml(item.scope || "-")} / 置信度 ${escapeHtml(String(item.confidence ?? 0))}</div>
+    </div>`;
+  });
 
-    const actions = card.querySelector(".actions");
-    actions.append(
-      makeButton("查看文件", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        const sections = parseMarkdownSections(data.raw);
-        setRichResult(`规则预览：${item.title}`, [
-          `
-            <section class="result-card">
-              <h4>规则摘要</h4>
-              <div class="result-grid">
-                <div><strong>状态</strong><div>${escapeHtml(item.status)}</div></div>
-                <div><strong>适用范围</strong><div>${escapeHtml(item.scope || "-")}</div></div>
-                <div><strong>置信度</strong><div>${escapeHtml(String(item.confidence))}</div></div>
-                <div><strong>文件路径</strong><div>${escapeHtml(item.path)}</div></div>
-              </div>
-            </section>
-          `,
-          ...sections.slice(0, 4).map(
-            (section) => `
-              <section class="result-card">
-                <h4>${escapeHtml(section.heading)}</h4>
-                <pre>${escapeHtml(section.body)}</pre>
-              </section>
-            `,
-          ),
-        ]);
-      }),
-      makeButton("确认", async () => {
-        const data = await api("/api/rules/action", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "confirm", reason: "通过前端确认" }),
-        });
-        setResult(`规则已确认：${item.title}`, data);
-        await loadDashboard();
-      }),
-      makeButton("停用", async () => {
-        const data = await api("/api/rules/action", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "disable", reason: "通过前端停用" }),
-        });
-        setResult(`规则已停用：${item.title}`, data);
-        await loadDashboard();
-      }),
-      makeButton("拒绝", async () => {
-        const data = await api("/api/rules/action", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path, action: "reject", reason: "通过前端拒绝" }),
-        });
-        setResult(`规则已拒绝：${item.title}`, data);
-        await loadDashboard();
-      }),
-    );
+  renderSimpleList("settings-profiles", data.profiles || [], (item) => {
+    return `<div>
+      <strong>${escapeHtml(item.name)}</strong>
+      <div class="mini">版本 ${escapeHtml(String(item.version || 1))}</div>
+    </div>`;
+  });
 
-    container.append(card);
-  }
+  renderSimpleList("settings-feedback", data.feedback || [], (item) => {
+    return `<div>
+      <strong>${escapeHtml(item.id)}</strong>
+      <div class="mini">${escapeHtml(item.feedbackType || "-")} / 任务 ${escapeHtml(item.taskId || "-")}</div>
+    </div>`;
+  });
 }
 
-function renderProfiles(items) {
-  const container = document.getElementById("profiles-list");
-  document.getElementById("profiles-count").textContent = String(items.length);
-  container.innerHTML = "";
-
-  if (!items.length) {
-    container.innerHTML = `<div class="card"><div class="meta">当前没有画像文件。</div></div>`;
-    return;
-  }
-
-  for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `
-      <h3>${item.name}</h3>
-      <div class="meta">
-        <div>版本：${item.version}</div>
-        <div>路径：${item.path}</div>
-      </div>
-      <div class="actions"></div>
-    `;
-
-    const actions = card.querySelector(".actions");
-    actions.append(
-      makeButton("查看画像", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        const sections = parseMarkdownSections(data.raw);
-        setRichResult(`写作画像：${item.name}`, sections.map(
-          (section) => `
-            <section class="result-card">
-              <h4>${escapeHtml(section.heading)}</h4>
-              <pre>${escapeHtml(section.body)}</pre>
-            </section>
-          `,
-        ));
-      }),
-    );
-
-    container.append(card);
-  }
+function toggleLlmMode(mode) {
+  const isOauth = mode === "openai-codex-oauth";
+  document.getElementById("oauth-config").classList.toggle("hidden", !isOauth);
+  document.getElementById("key-config").classList.toggle("hidden", isOauth);
 }
 
-function renderFeedback(items) {
-  const container = document.getElementById("feedback-list");
-  document.getElementById("feedback-count").textContent = String(items.length);
-  container.innerHTML = "";
-
-  if (!items.length) {
-    container.innerHTML = `<div class="card"><div class="meta">当前没有反馈文件。</div></div>`;
+function renderFeedbackHistory() {
+  const container = document.getElementById("feedback-history");
+  if (!state.feedbackHistory.length) {
+    container.innerHTML = `<div class="empty">还没有反馈记录，先改一轮正文再提交。</div>`;
     return;
   }
 
-  for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    card.innerHTML = `
-      <h3>${item.id}</h3>
-      <div class="meta">
-        <div>反馈类型：${item.feedbackType || "-"}</div>
-        <div>关联任务：${item.taskId || "-"}</div>
-        <div>关联规则：${(item.relatedRuleIds || []).length}</div>
-      </div>
-      <div class="actions"></div>
-    `;
+  const latestRows = Object.values(state.latestFeedbackByLocation)
+    .map((item) => `<li><strong>${escapeHtml(item.location)}</strong>：${escapeHtml(item.reason || "未填原因")}（最新版本 ${escapeHtml(item.version || "-")}）</li>`)
+    .join("");
 
-    const actions = card.querySelector(".actions");
-    actions.append(
-      makeButton("查看文件", async () => {
-        const data = await api(`/api/document?path=${encodeURIComponent(item.path)}`);
-        setRichResult(`反馈文件：${item.id}`, [
-          `<section class="result-card"><pre>${escapeHtml(data.raw)}</pre></section>`,
-        ]);
-      }),
-      makeButton("学习反馈", async () => {
-        const data = await api("/api/feedback/learn", {
-          method: "POST",
-          body: JSON.stringify({ path: item.path }),
-        });
-        showFeedbackResult(`反馈学习结果：${item.id}`, data);
-        await loadDashboard();
-      }),
-    );
+  const allRows = [...state.feedbackHistory]
+    .reverse()
+    .map(
+      (item) => `<li>
+        <div><strong>${escapeHtml(item.version || "-")}</strong> ${escapeHtml(item.createdAt || "")}</div>
+        <div>位置：${escapeHtml(item.location)}</div>
+        <div>原因：${escapeHtml(item.reason || "-")}</div>
+        <div class="mini">${escapeHtml(item.comment || "")}</div>
+      </li>`,
+    )
+    .join("");
 
-    container.append(card);
-  }
+  container.innerHTML = `
+    <div class="history-block">
+      <h4>最新权重（每个位置取最后一次）</h4>
+      <ul>${latestRows || "<li>无</li>"}</ul>
+    </div>
+    <div class="history-block">
+      <h4>完整修改过程</h4>
+      <ul>${allRows}</ul>
+    </div>
+  `;
+}
+
+function setEditorVisible(visible) {
+  document.getElementById("editor-panel").classList.toggle("hidden", !visible);
+}
+
+function updateTopStatus(data) {
+  document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
+  document.getElementById("llm-status").textContent = data.llm.enabled ? "已可调用" : "未就绪";
+  document.getElementById("llm-source").textContent = data.llm.source || "-";
+  document.getElementById("llm-model-text").textContent = data.llm.model || "-";
+  document.getElementById("vault-root").textContent = data.vaultRoot || "-";
+  document.getElementById("llm-updated-at").textContent = data.llm.updatedAt || "未更新";
+}
+
+function hydrateLlmSettings(data) {
+  const llm = data.llm || {};
+  const mode = llm.provider || "openai-api-key";
+  document.getElementById("llm-mode").value = mode;
+  document.getElementById("llm-model-input").value = llm.model || "gpt-5.4";
+  document.getElementById("llm-base-url-input").value = llm.baseUrl || "https://api.openai.com/v1";
+  toggleLlmMode(mode);
 }
 
 async function loadDashboard() {
   const data = await api("/api/dashboard");
   state.dashboard = data;
-  document.getElementById("llm-status").textContent = data.llm.enabled ? "已启用" : "未配置，走本地回退";
-  document.getElementById("llm-source").textContent = data.llm.source;
-  document.getElementById("vault-root").textContent = data.vaultRoot;
-  document.getElementById("llm-provider").textContent = data.llm.providerLabel || "OpenAI Codex OAuth";
-  document.getElementById("llm-base-url-text").textContent = data.llm.baseUrl || "https://api.openai.com/v1";
-  document.getElementById("llm-model-text").textContent = data.llm.model || "gpt-5-codex";
-  document.getElementById("llm-updated-at").textContent = data.llm.updatedAt || "未登录";
-  renderDashboard();
+  updateTopStatus(data);
+  hydrateLlmSettings(data);
+  renderTemplateSelector(data.templates || []);
+  renderCheckOptions("wizard-material-options", data.materials || [], "sourceMaterialIds");
+  renderSettingsLists();
+  updateWizardSummary();
 }
 
-function renderDashboard() {
-  if (!state.dashboard) {
-    return;
+async function importBackgroundMaterialIfNeeded(formData) {
+  const upload = formData.get("backgroundUpload");
+  if (!(upload instanceof File) || upload.size === 0) {
+    return null;
   }
 
-  const filteredMaterials = (state.dashboard.materials || []).filter((item) =>
-    matchesSearch([item.title, item.docType, item.audience, item.scenario], state.filters.materials),
-  );
-  const filteredTasks = (state.dashboard.tasks || []).filter((item) =>
-    matchesSearch([item.title, item.docType, item.audience, item.scenario], state.filters.tasks),
-  );
-  const filteredRules = (state.dashboard.rules || []).filter((item) =>
-    (state.filters.ruleStatus === "all" || item.status === state.filters.ruleStatus) &&
-    matchesSearch([item.title, item.scope, item.status], state.filters.rules),
-  );
-  const filteredProfiles = (state.dashboard.profiles || []).filter((item) =>
-    matchesSearch([item.name, item.path], state.filters.profiles),
-  );
-  const filteredFeedback = (state.dashboard.feedback || []).filter((item) =>
-    matchesSearch([item.id, item.feedbackType, item.taskId], state.filters.feedback),
-  );
-
-  renderMaterials(filteredMaterials);
-  renderTaskMaterialOptions(state.dashboard.materials || []);
-  renderTasks(filteredTasks);
-  renderFeedbackTaskOptions(state.dashboard.tasks || []);
-  renderRules(filteredRules);
-  renderProfiles(filteredProfiles);
-  renderFeedback(filteredFeedback);
-}
-
-function formatList(items) {
-  if (!items || !items.length) {
-    return "<li>无</li>";
-  }
-
-  return items.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-}
-
-function showTaskResult(title, data) {
-  const sections = [];
-
-  if (data.analysis) {
-    sections.push(`
-      <section class="result-card">
-        <h4>任务解析</h4>
-        <div class="result-grid">
-          <div><strong>文体</strong><div>${escapeHtml(data.analysis.task_type || "-")}</div></div>
-          <div><strong>对象</strong><div>${escapeHtml(data.analysis.audience || "-")}</div></div>
-          <div><strong>场景</strong><div>${escapeHtml(data.analysis.scenario || "-")}</div></div>
-          <div><strong>目标</strong><div>${escapeHtml(data.analysis.goal || "-")}</div></div>
-        </div>
-        <h4>缺失信息</h4>
-        <ul>${formatList(data.analysis.missing_info)}</ul>
-      </section>
-    `);
-  }
-
-  if (data.diagnosis) {
-    sections.push(`
-      <section class="result-card">
-        <h4>写前诊断</h4>
-        <div class="result-grid">
-          <div><strong>就绪度</strong><div>${escapeHtml(data.diagnosis.readiness || "-")}</div></div>
-          <div><strong>下一步</strong><div>${escapeHtml(data.diagnosis.next_action || "-")}</div></div>
-        </div>
-        <p>${escapeHtml(data.diagnosis.diagnosis_summary || "")}</p>
-        <h4>建议结构</h4>
-        <ul>${(data.diagnosis.recommended_structure || [])
-          .map(
-            (item) =>
-              `<li><strong>${escapeHtml(item.section)}</strong>：${escapeHtml(item.purpose)}<br />必须覆盖：${escapeHtml((item.must_cover || []).join("、") || "无")}</li>`,
-          )
-          .join("")}</ul>
-      </section>
-    `);
-  }
-
-  if (data.outline) {
-    sections.push(`
-      <section class="result-card">
-        <h4>提纲</h4>
-        <ul>${(data.outline.sections || [])
-          .map(
-            (item) =>
-              `<li><strong>${escapeHtml(item.heading)}</strong>：${escapeHtml(item.purpose)}<br />关键点：${escapeHtml((item.key_points || []).join("、") || "无")}</li>`,
-          )
-          .join("")}</ul>
-      </section>
-    `);
-  }
-
-  if (data.draft) {
-    sections.push(`
-      <section class="result-card">
-        <h4>初稿</h4>
-        <pre>${escapeHtml(data.draft.draft_markdown || "")}</pre>
-      </section>
-      <section class="result-card">
-        <h4>自检</h4>
-        <div class="result-grid">
-          <div><strong>优点</strong><ul>${formatList(data.draft.self_review?.strengths || [])}</ul></div>
-          <div><strong>风险</strong><ul>${formatList(data.draft.self_review?.risks || [])}</ul></div>
-          <div><strong>缺失点</strong><ul>${formatList(data.draft.self_review?.missing_points || [])}</ul></div>
-          <div><strong>规则违例</strong><ul>${formatList(data.draft.self_review?.rule_violations || [])}</ul></div>
-        </div>
-      </section>
-    `);
-  }
-
-  sections.push(`
-    <section class="result-card">
-      <h4>原始 JSON</h4>
-      <pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>
-    </section>
-  `);
-
-  setRichResult(title, sections);
-}
-
-function showFeedbackResult(title, data) {
-  setRichResult(title, [
-    `
-      <section class="result-card">
-        <h4>反馈学习摘要</h4>
-        <div class="result-grid">
-          <div><strong>类型</strong><div>${escapeHtml(data.analysis?.feedback_type || "-")}</div></div>
-          <div><strong>可复用为规则</strong><div>${data.analysis?.is_reusable_rule ? "是" : "否"}</div></div>
-        </div>
-        <p>${escapeHtml(data.analysis?.feedback_summary || "")}</p>
-        <p><strong>建议：</strong>${escapeHtml(data.analysis?.suggested_update || "")}</p>
-        <p><strong>候选规则：</strong>${escapeHtml(data.candidateRuleId || "无")}</p>
-      </section>
-      <section class="result-card">
-        <h4>原始 JSON</h4>
-        <pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre>
-      </section>
-    `,
-  ]);
-}
-
-document.getElementById("material-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const formData = new FormData(form);
-  const payload = Object.fromEntries(formData.entries());
-  const uploadFile = formData.get("uploadFile");
-
-  if (uploadFile instanceof File && uploadFile.size > 0) {
-    payload.uploadName = uploadFile.name;
-    payload.uploadBase64 = await fileToBase64(uploadFile);
-  }
-
-  try {
-    const result = await api("/api/materials/import", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setRichResult("材料导入完成", [
-      `<section class="result-card"><div class="result-grid"><div><strong>materialId</strong><div>${escapeHtml(
-        result.materialId,
-      )}</div></div><div><strong>路径</strong><div>${escapeHtml(result.path)}</div></div></div></section>`,
-    ]);
-    form.reset();
-    await loadDashboard();
-  } catch (error) {
-    setResult("材料导入失败", { error: error.message });
-  }
-});
-
-document.getElementById("task-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const formData = new FormData(form);
   const payload = {
-    title: String(formData.get("title") || ""),
-    docType: String(formData.get("docType") || ""),
+    mode: "normal",
+    title: `${String(formData.get("title") || "未命名任务")} - 本次背景材料`,
+    docType: String(formData.get("docType") || "背景材料"),
     audience: String(formData.get("audience") || ""),
     scenario: String(formData.get("scenario") || ""),
-    priority: String(formData.get("priority") || "medium"),
-    targetLength: String(formData.get("targetLength") || ""),
-    deadline: String(formData.get("deadline") || ""),
-    goal: String(formData.get("goal") || ""),
-    targetEffect: String(formData.get("targetEffect") || ""),
-    background: String(formData.get("background") || ""),
-    facts: String(formData.get("facts") || ""),
-    mustInclude: String(formData.get("mustInclude") || ""),
-    specialRequirements: String(formData.get("specialRequirements") || ""),
-    sourceMaterialIds: formData.getAll("sourceMaterialIds").map(String),
+    source: "本次写作上传",
+    quality: "high",
+    tags: "runtime-context",
+    uploadName: upload.name,
+    uploadBase64: await fileToBase64(upload),
   };
 
-  try {
-    const result = await api("/api/tasks/create", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setRichResult("任务已创建", [
-      `<section class="result-card"><div class="result-grid"><div><strong>taskId</strong><div>${escapeHtml(
-        result.taskId,
-      )}</div></div><div><strong>路径</strong><div>${escapeHtml(result.path)}</div></div></div></section>`,
-    ]);
-    form.reset();
-    await loadDashboard();
-  } catch (error) {
-    setResult("任务创建失败", { error: error.message });
-  }
-});
+  const result = await api("/api/materials/import", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return result.materialId || null;
+}
 
-document.getElementById("feedback-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
+async function createAndRunTask() {
+  const form = document.getElementById("wizard-form");
   const formData = new FormData(form);
-  const payload = Object.fromEntries(formData.entries());
+  const submitButton = document.getElementById("wizard-submit");
+
+  submitButton.disabled = true;
+  submitButton.textContent = "生成中...";
 
   try {
-    const result = await api("/api/feedback/create", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    setRichResult("反馈已创建", [
-      `<section class="result-card"><div class="result-grid"><div><strong>feedbackId</strong><div>${escapeHtml(
-        result.feedbackId,
-      )}</div></div><div><strong>路径</strong><div>${escapeHtml(result.path)}</div></div></div></section>`,
-    ]);
-    form.reset();
-    await loadDashboard();
-  } catch (error) {
-    setResult("反馈创建失败", { error: error.message });
-  }
-});
-
-document.getElementById("reload-dashboard").addEventListener("click", async () => {
-  try {
-    await loadDashboard();
-    setResult("全局数据已刷新", state.dashboard);
-  } catch (error) {
-    setResult("刷新失败", { error: error.message });
-  }
-});
-
-document.getElementById("start-oauth-login").addEventListener("click", async () => {
-  const button = document.getElementById("start-oauth-login");
-  const originalLabel = button.textContent;
-  button.disabled = true;
-  button.textContent = "正在打开登录...";
-
-  try {
-    setRichResult("正在发起 OAuth 登录", [
-      `
-        <section class="result-card">
-          <h4>处理中</h4>
-          <p>正在向本地服务请求 OpenAI Codex 授权地址。如果浏览器拦截了弹窗，会自动在当前页面跳转。</p>
-        </section>
-      `,
-    ]);
-    const result = await api("/api/settings/llm/oauth/start", {
-      method: "POST",
-      body: JSON.stringify({ provider: "openai-codex-oauth" }),
-    });
-    const popup = window.open(result.authUrl, "writer-oauth-login", "width=680,height=820");
-    if (!popup) {
-      window.location.href = result.authUrl;
-      return;
+    const sourceMaterialIds = formData.getAll("sourceMaterialIds").map(String).filter(Boolean);
+    const templateId = String(formData.get("templateId") || "").trim();
+    if (templateId) {
+      sourceMaterialIds.unshift(templateId);
     }
-    setRichResult("OAuth 登录已发起", [
-      `
-        <section class="result-card">
-          <h4>下一步</h4>
-          <p>已经弹出 OpenAI Codex 授权窗口。完成授权后，页面会自动刷新模型状态。</p>
-          <p><strong>回调地址：</strong>${escapeHtml(result.redirectUri)}</p>
-        </section>
-      `,
-    ]);
-  } catch (error) {
-    setResult("OAuth 登录发起失败", { error: error.message });
+
+    const uploadedBackgroundMaterialId = await importBackgroundMaterialIfNeeded(formData);
+    if (uploadedBackgroundMaterialId) {
+      sourceMaterialIds.push(uploadedBackgroundMaterialId);
+    }
+
+    const taskPayload = {
+      title: String(formData.get("title") || "").trim(),
+      docType: String(formData.get("docType") || "").trim(),
+      audience: String(formData.get("audience") || "").trim(),
+      scenario: String(formData.get("scenario") || "").trim(),
+      targetLength: String(formData.get("targetLength") || "").trim(),
+      deadline: String(formData.get("deadline") || "").trim(),
+      goal: String(formData.get("goal") || "").trim(),
+      targetEffect: String(formData.get("targetEffect") || "").trim(),
+      background: String(formData.get("background") || "").trim(),
+      facts: String(formData.get("facts") || "").trim(),
+      mustInclude: String(formData.get("mustInclude") || "").trim(),
+      specialRequirements: String(formData.get("specialRequirements") || "").trim(),
+      sourceMaterialIds: [...new Set(sourceMaterialIds)],
+    };
+
+    if (!taskPayload.title || !taskPayload.docType) {
+      throw new Error("任务标题和文档类型是必填项。");
+    }
+
+    const created = await api("/api/tasks/create", {
+      method: "POST",
+      body: JSON.stringify(taskPayload),
+    });
+
+    const generated = await api("/api/tasks/run", {
+      method: "POST",
+      body: JSON.stringify({
+        path: created.path,
+        action: "draft",
+      }),
+    });
+
+    const draftText =
+      generated?.draft?.draft_markdown || (await getTaskDraftFromFile(created.path)) || "生成完成，但未找到正文。";
+    document.getElementById("draft-editor").value = draftText;
+
+    state.currentTask = {
+      id: created.taskId,
+      path: created.path,
+      title: taskPayload.title,
+    };
+
+    loadFeedbackHistoryFromStorage(created.taskId);
+    renderFeedbackHistory();
+    setEditorVisible(true);
+    setTaskBadge(`当前任务：${taskPayload.title}`);
+    setInfo("初稿已生成。你可以直接改正文，写修改原因，再提交反馈继续生成。");
+    await loadDashboard();
   } finally {
-    button.disabled = false;
-    button.textContent = originalLabel;
+    submitButton.disabled = false;
+    submitButton.textContent = "生成初稿";
   }
-});
+}
 
-document.getElementById("refresh-tasks").addEventListener("click", async () => {
-  try {
-    const result = await api("/api/refresh/tasks", { method: "POST" });
-    setResult("任务参考依据已刷新", result);
-    await loadDashboard();
-  } catch (error) {
-    setResult("刷新任务失败", { error: error.message });
+async function saveCurrentDraft(finalized) {
+  if (!state.currentTask?.path) {
+    throw new Error("请先完成一次新建写作并生成初稿。");
   }
-});
 
-document.getElementById("refresh-profile").addEventListener("click", async () => {
-  try {
-    const result = await api("/api/refresh/profile", { method: "POST" });
-    setResult("写作画像已刷新", result);
-    await loadDashboard();
-  } catch (error) {
-    setResult("刷新画像失败", { error: error.message });
-  }
-});
+  const draft = document.getElementById("draft-editor").value.trim();
+  const location = normalizeLocation(document.getElementById("feedback-location").value);
+  const reason = String(document.getElementById("feedback-reason").value || "").trim();
+  const version = `v${state.feedbackHistory.length + 1}`;
 
-loadDashboard().catch((error) => {
-  setResult("初始化失败", { error: error.message });
-});
-
-function bindFilterInput(id, key, eventName = "input") {
-  const element = document.getElementById(id);
-  element.addEventListener(eventName, () => {
-    state.filters[key] = element.value;
-    renderDashboard();
+  return api("/api/tasks/update-draft", {
+    method: "POST",
+    body: JSON.stringify({
+      path: state.currentTask.path,
+      draft,
+      location,
+      reason: reason || (finalized ? "直接定稿" : "手动保存"),
+      version,
+      finalized: finalized ? "true" : "false",
+    }),
   });
 }
 
-bindFilterInput("materials-search", "materials");
-bindFilterInput("tasks-search", "tasks");
-bindFilterInput("rules-search", "rules");
-bindFilterInput("rules-status-filter", "ruleStatus", "change");
-bindFilterInput("profiles-search", "profiles");
-bindFilterInput("feedback-search", "feedback");
+async function submitFeedbackAndRegenerate() {
+  if (!state.currentTask?.path || !state.currentTask?.id) {
+    throw new Error("请先完成一次新建写作并生成初稿。");
+  }
+
+  const draft = document.getElementById("draft-editor").value.trim();
+  const location = normalizeLocation(document.getElementById("feedback-location").value);
+  const reason = String(document.getElementById("feedback-reason").value || "").trim();
+  const comment = String(document.getElementById("feedback-comment").value || "").trim();
+
+  if (!reason && !comment) {
+    throw new Error("请至少填写“修改原因”或“批注说明”。");
+  }
+
+  await saveCurrentDraft(false);
+
+  const feedbackText = [
+    `位置：${location}`,
+    `修改原因：${reason || "未填写"}`,
+    `批注说明：${comment || "未填写"}`,
+    "",
+    "用户修改后正文：",
+    draft,
+  ].join("\n");
+
+  const feedback = await api("/api/feedback/create", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId: state.currentTask.id,
+      feedbackType: inferFeedbackType(`${location} ${reason} ${comment}`),
+      severity: "medium",
+      action: "rewrite",
+      rawFeedback: feedbackText,
+      affectedParagraph: location,
+      affectedSection: location,
+      affectsStructure: /结构|顺序|层次/.test(`${location} ${reason} ${comment}`) ? "是" : "否",
+    }),
+  });
+
+  await api("/api/feedback/learn", {
+    method: "POST",
+    body: JSON.stringify({ path: feedback.path }),
+  });
+
+  const generated = await api("/api/tasks/run", {
+    method: "POST",
+    body: JSON.stringify({
+      path: state.currentTask.path,
+      action: "draft",
+    }),
+  });
+
+  const latestDraft =
+    generated?.draft?.draft_markdown || (await getTaskDraftFromFile(state.currentTask.path)) || draft;
+  document.getElementById("draft-editor").value = latestDraft;
+
+  const entry = {
+    id: feedback.feedbackId,
+    taskId: state.currentTask.id,
+    location,
+    reason,
+    comment,
+    version: `v${state.feedbackHistory.length + 1}`,
+    createdAt: new Date().toISOString(),
+  };
+  state.feedbackHistory.push(entry);
+  state.latestFeedbackByLocation[location] = entry;
+  saveFeedbackHistoryToStorage(state.currentTask.id);
+  renderFeedbackHistory();
+}
+
+function bindTabs() {
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => toggleView(tab.dataset.view));
+  });
+}
+
+function bindWizard() {
+  document.getElementById("wizard-prev").addEventListener("click", () => {
+    if (state.wizardStep > 1) {
+      state.wizardStep -= 1;
+      updateWizardStep();
+    }
+  });
+
+  document.getElementById("wizard-next").addEventListener("click", () => {
+    if (state.wizardStep < MAX_WIZARD_STEP) {
+      state.wizardStep += 1;
+      updateWizardStep();
+    }
+  });
+
+  document.getElementById("wizard-form").addEventListener("input", () => {
+    if (state.wizardStep === MAX_WIZARD_STEP) {
+      updateWizardSummary();
+    }
+  });
+
+  document.getElementById("wizard-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (state.wizardStep !== MAX_WIZARD_STEP) {
+      setInfo("请先走完整个引导步骤再生成。", true);
+      return;
+    }
+    try {
+      await createAndRunTask();
+    } catch (error) {
+      setInfo(`生成失败：${error.message}`, true);
+      setTaskBadge("生成失败", true);
+    }
+  });
+}
+
+function bindEditorActions() {
+  document.getElementById("save-draft").addEventListener("click", async () => {
+    try {
+      await saveCurrentDraft(false);
+      setTaskBadge("正文已保存");
+      setInfo("已保存当前正文。");
+    } catch (error) {
+      setTaskBadge("保存失败", true);
+      setInfo(error.message, true);
+    }
+  });
+
+  document.getElementById("submit-feedback").addEventListener("click", async () => {
+    const button = document.getElementById("submit-feedback");
+    button.disabled = true;
+    button.textContent = "生成中...";
+    try {
+      await submitFeedbackAndRegenerate();
+      setTaskBadge("已按反馈再生成");
+      setInfo("反馈已学习并生成新稿。你可以继续改，也可以直接定稿。");
+    } catch (error) {
+      setTaskBadge("再生成失败", true);
+      setInfo(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = "提交反馈并再次生成";
+    }
+  });
+
+  document.getElementById("finalize-draft").addEventListener("click", async () => {
+    try {
+      await saveCurrentDraft(true);
+      setTaskBadge("已定稿");
+      setInfo("已定稿并写入任务文件。");
+      await loadDashboard();
+    } catch (error) {
+      setTaskBadge("定稿失败", true);
+      setInfo(error.message, true);
+    }
+  });
+}
+
+function bindMaterialImport() {
+  document.getElementById("material-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const mode = String(formData.get("mode") || "normal");
+    const uploadFile = formData.get("uploadFile");
+
+    const payload = {
+      mode,
+      isTemplate: mode === "template" ? "true" : "false",
+      title: String(formData.get("title") || "").trim(),
+      docType: String(formData.get("docType") || "").trim(),
+      audience: String(formData.get("audience") || "").trim(),
+      scenario: String(formData.get("scenario") || "").trim(),
+      source: String(formData.get("source") || "").trim(),
+      tags: String(formData.get("tags") || "").trim(),
+      sourceFile: String(formData.get("sourceFile") || "").trim(),
+      body: String(formData.get("body") || "").trim(),
+      quality: mode === "template" ? "high" : "medium",
+    };
+
+    if (uploadFile instanceof File && uploadFile.size > 0) {
+      payload.uploadName = uploadFile.name;
+      payload.uploadBase64 = await fileToBase64(uploadFile);
+    }
+
+    try {
+      await api("/api/materials/import", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      form.reset();
+      await loadDashboard();
+      setInfo(mode === "template" ? "模板材料已导入（高权重）。" : "历史材料导入完成。");
+      toggleView("settings");
+    } catch (error) {
+      setInfo(`材料导入失败：${error.message}`, true);
+    }
+  });
+}
+
+function bindLlmSettings() {
+  document.getElementById("llm-mode").addEventListener("change", (event) => {
+    toggleLlmMode(event.currentTarget.value);
+  });
+
+  document.getElementById("save-llm-settings").addEventListener("click", async () => {
+    const mode = document.getElementById("llm-mode").value;
+    const payload = {
+      provider: mode,
+      model: document.getElementById("llm-model-input").value,
+      bearerToken: document.getElementById("llm-token-input").value.trim(),
+      baseUrl: document.getElementById("llm-base-url-input").value.trim(),
+      authUrl: document.getElementById("llm-auth-url-input").value.trim(),
+    };
+
+    try {
+      await api("/api/settings/llm", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await loadDashboard();
+      setInfo(mode === "openai-codex-oauth" ? "OAuth 模式配置已保存。" : "API Key 模式配置已保存。");
+      toggleView("settings");
+    } catch (error) {
+      setInfo(`保存模型配置失败：${error.message}`, true);
+    }
+  });
+
+  document.getElementById("start-oauth-login").addEventListener("click", async () => {
+    const button = document.getElementById("start-oauth-login");
+    button.disabled = true;
+    button.textContent = "正在跳转授权...";
+    try {
+      const result = await api("/api/settings/llm/oauth/start", {
+        method: "POST",
+        body: JSON.stringify({ provider: "openai-codex-oauth" }),
+      });
+      const popup = window.open(result.authUrl, "gw-oauth", "width=680,height=820");
+      if (!popup) {
+        window.location.href = result.authUrl;
+      }
+    } catch (error) {
+      setInfo(`OAuth 发起失败：${error.message}`, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = "开始 OAuth 登录";
+    }
+  });
+}
 
 window.addEventListener("message", async (event) => {
-  const trustedOrigins = new Set([window.location.origin, window.location.origin.replace("127.0.0.1", "localhost"), window.location.origin.replace("localhost", "127.0.0.1")]);
   if (!trustedOrigins.has(event.origin)) {
     return;
   }
-
   if (event.data?.type === "oauth-complete" && event.data?.ok) {
     await loadDashboard();
-    setRichResult("OAuth 登录完成", [
-      `
-        <section class="result-card">
-          <h4>模型状态已刷新</h4>
-          <p>OpenAI Codex 登录成功，可直接调用模型的 token 已写入本地配置。</p>
-        </section>
-      `,
-    ]);
+    setInfo("OAuth 登录成功，模型状态已刷新。");
   }
+});
+
+bindTabs();
+bindWizard();
+bindEditorActions();
+bindMaterialImport();
+bindLlmSettings();
+updateWizardStep();
+setEditorVisible(false);
+
+loadDashboard().catch((error) => {
+  setInfo(`初始化失败：${error.message}`, true);
 });

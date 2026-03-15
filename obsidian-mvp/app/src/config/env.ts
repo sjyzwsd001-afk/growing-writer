@@ -11,6 +11,7 @@ import {
   OPENAI_CODEX_PROVIDER,
   OPENAI_CODEX_SCOPE,
   OPENAI_CODEX_TOKEN_URL,
+  OPENAI_KEY_PROVIDER,
 } from "./constants.js";
 
 export type LlmConfig = {
@@ -36,15 +37,24 @@ export type StoredLlmSettings = {
   updatedAt?: string;
 };
 
+function normalizeProvider(provider: unknown): string {
+  if (typeof provider !== "string" || !provider.trim()) {
+    return OPENAI_CODEX_PROVIDER;
+  }
+
+  if (provider === OPENAI_CODEX_PROVIDER || provider === OPENAI_KEY_PROVIDER) {
+    return provider;
+  }
+
+  return OPENAI_KEY_PROVIDER;
+}
+
 function getSettingsPath(vaultRoot: string): string {
   return join(vaultRoot, LLM_SETTINGS_FILE_NAME);
 }
 
 function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): StoredLlmSettings {
-  const provider =
-    typeof input?.provider === "string" && input.provider.trim()
-      ? input.provider
-      : OPENAI_CODEX_PROVIDER;
+  const provider = normalizeProvider(input?.provider);
   const isCodexProvider = provider === OPENAI_CODEX_PROVIDER;
 
   return {

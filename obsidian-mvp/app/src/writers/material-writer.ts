@@ -121,6 +121,7 @@ export async function importMaterial(input: {
   scenario?: string;
   source?: string;
   quality?: string;
+  tags?: string[];
   body?: string;
   sourceFile?: string;
   analysis?: MaterialAnalysis;
@@ -143,7 +144,7 @@ export async function importMaterial(input: {
     status: "active",
     audience: input.audience ?? "",
     scenario: input.scenario ?? "",
-    tags: [],
+    tags: input.tags ?? [],
     created_at: now,
     updated_at: now,
   };

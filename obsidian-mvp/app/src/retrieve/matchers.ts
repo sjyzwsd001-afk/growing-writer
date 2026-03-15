@@ -51,6 +51,9 @@ export function matchMaterials(task: Task, materials: Material[]): Material[] {
       if (material.quality === "high") {
         score += 2;
       }
+      if (material.tags.some((tag) => /template|模板/i.test(tag))) {
+        score += 6;
+      }
       return { material, score };
     })
     .sort((a, b) => b.score - a.score)

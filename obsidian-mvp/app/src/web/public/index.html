@@ -3,337 +3,231 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>写作助手控制台</title>
+    <title>Growing Writer</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
-    <div class="page-shell">
-      <aside class="sidebar">
+    <div class="app-shell">
+      <header class="topbar">
         <div class="brand">
-          <div class="brand-mark">GW</div>
+          <div class="logo">GW</div>
           <div>
-            <div class="eyebrow">Obsidian MVP</div>
-            <h1>写作助手控制台</h1>
+            <div class="subtitle">Growing Writer</div>
+            <h1>可学习写作助手</h1>
           </div>
         </div>
-        <div class="status-card">
-          <div class="status-row">
-            <span>模型接入</span>
-            <strong id="llm-status">检查中</strong>
-          </div>
-          <div class="status-row">
-            <span>配置来源</span>
-            <strong id="llm-source">-</strong>
-          </div>
-          <div class="status-row">
-            <span>Vault</span>
-            <code id="vault-root">-</code>
-          </div>
+        <div class="status-wrap">
+          <div class="status-item">模型：<strong id="llm-provider">加载中</strong></div>
+          <div class="status-item">状态：<strong id="llm-status">加载中</strong></div>
+          <div class="status-item">来源：<strong id="llm-source">-</strong></div>
+          <div class="status-item">Model：<strong id="llm-model-text">-</strong></div>
+          <div class="status-item">Vault：<code id="vault-root">-</code></div>
         </div>
-        <section class="settings-card">
-          <h2>模型登录</h2>
-          <p>当前固定使用 <strong id="llm-provider">OpenAI Codex OAuth</strong>。</p>
-          <div class="meta">
-            <div>Base URL：<code id="llm-base-url-text">https://api.openai.com/v1</code></div>
-            <div>默认模型：<code id="llm-model-text">gpt-5.2-codex</code></div>
-            <div>最近更新：<span id="llm-updated-at">未登录</span></div>
-          </div>
-          <button id="start-oauth-login" class="primary-button" type="button">开始 OAuth 登录</button>
-        </section>
-        <button id="reload-dashboard" class="ghost-button" type="button">刷新全局数据</button>
-        <button id="refresh-tasks" class="ghost-button" type="button">刷新任务参考依据</button>
-        <button id="refresh-profile" class="ghost-button" type="button">刷新写作画像</button>
-        <div class="help-card">
-          <h2>适合你的用法</h2>
-          <p>先导入历史材料，再选择任务跑诊断、提纲、初稿。规则和反馈也能在这里直接处理。</p>
-        </div>
-      </aside>
+      </header>
 
-      <main class="content-grid">
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Step 1</div>
-              <h2>导入材料</h2>
-            </div>
-          </div>
-          <form id="material-form" class="form-grid">
-            <label>
-              <span>标题</span>
-              <input name="title" placeholder="例如：某项目周报样稿" required />
-            </label>
-            <label>
-              <span>文档类型</span>
-              <input name="docType" placeholder="例如：工作汇报" required />
-            </label>
-            <label>
-              <span>面向对象</span>
-              <input name="audience" placeholder="例如：领导" />
-            </label>
-            <label>
-              <span>使用场景</span>
-              <input name="scenario" placeholder="例如：月度汇报" />
-            </label>
-            <label>
-              <span>来源说明</span>
-              <input name="source" placeholder="例如：个人旧稿" />
-            </label>
-            <label>
-              <span>质量标签</span>
-              <select name="quality">
-                <option value="high">high</option>
-                <option value="medium">medium</option>
-                <option value="low">low</option>
-              </select>
-            </label>
-            <label class="field-span">
-              <span>浏览器上传文件（推荐，支持 txt/md/docx/pdf）</span>
-              <input name="uploadFile" type="file" accept=".txt,.md,.docx,.pdf" />
-            </label>
-            <label class="field-span">
-              <span>本地文件路径（可选，支持 txt/md/docx/pdf）</span>
-              <input name="sourceFile" placeholder="/Users/zw/Documents/raw/example.docx" />
-            </label>
-            <label class="field-span">
-              <span>正文内容（和文件路径二选一即可）</span>
-              <textarea name="body" rows="8" placeholder="把历史材料粘贴到这里"></textarea>
-            </label>
-            <div class="field-span">
-              <button class="primary-button" type="submit">导入材料</button>
-            </div>
-          </form>
-        </section>
+      <nav class="tabs">
+        <button type="button" class="tab active" data-view="create">新建写作</button>
+        <button type="button" class="tab" data-view="settings">设置</button>
+      </nav>
 
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Step 2</div>
-              <h2>新建任务</h2>
+      <main class="main">
+        <section id="view-create" class="view active">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>引导式写作</h2>
+              <div class="step-indicator">步骤 <span id="wizard-step-index">1</span> / 4</div>
             </div>
-          </div>
-          <form id="task-form" class="form-grid">
-            <label>
-              <span>任务标题</span>
-              <input name="title" placeholder="例如：联调阶段风险汇报" required />
-            </label>
-            <label>
-              <span>文档类型</span>
-              <input name="docType" placeholder="例如：风险汇报" required />
-            </label>
-            <label>
-              <span>面向对象</span>
-              <input name="audience" placeholder="例如：领导" />
-            </label>
-            <label>
-              <span>使用场景</span>
-              <input name="scenario" placeholder="例如：项目阶段汇报" />
-            </label>
-            <label>
-              <span>优先级</span>
-              <select name="priority">
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="low">low</option>
-              </select>
-            </label>
-            <label>
-              <span>目标字数</span>
-              <input name="targetLength" placeholder="例如：1200" />
-            </label>
-            <label>
-              <span>截止日期</span>
-              <input name="deadline" placeholder="例如：2026-03-20" />
-            </label>
-            <label>
-              <span>写作目标</span>
-              <input name="goal" placeholder="这次要写什么" />
-            </label>
-            <label class="field-span">
-              <span>希望达到的效果</span>
-              <input name="targetEffect" placeholder="例如：让领导快速掌握风险并协调资源" />
-            </label>
-            <label class="field-span">
-              <span>背景（每行一条）</span>
-              <textarea name="background" rows="4" placeholder="项目已进入联调阶段"></textarea>
-            </label>
-            <label class="field-span">
-              <span>事实与数据（每行一条）</span>
-              <textarea name="facts" rows="5" placeholder="接口稳定性存在波动"></textarea>
-            </label>
-            <label class="field-span">
-              <span>必须包含的信息（每行一条）</span>
-              <textarea name="mustInclude" rows="4" placeholder="风险点&#10;影响&#10;措施"></textarea>
-            </label>
-            <label class="field-span">
-              <span>特殊要求（每行一条）</span>
-              <textarea name="specialRequirements" rows="4" placeholder="语气正式&#10;结构清晰"></textarea>
-            </label>
-            <fieldset class="field-span materials-selector">
-              <legend>关联历史材料</legend>
-              <div id="task-material-options" class="checkbox-grid"></div>
-            </fieldset>
-            <div class="field-span">
-              <button class="primary-button" type="submit">新建任务</button>
+
+            <form id="wizard-form" class="wizard-form">
+              <div class="wizard-step active" data-step="1">
+                <h3>Step 1. 写作任务基础信息</h3>
+                <div class="grid two">
+                  <label>任务标题<input name="title" required placeholder="例如：联调阶段风险汇报" /></label>
+                  <label>文档类型<input name="docType" required placeholder="例如：风险汇报" /></label>
+                  <label>面向对象<input name="audience" placeholder="例如：领导" /></label>
+                  <label>使用场景<input name="scenario" placeholder="例如：项目阶段汇报" /></label>
+                  <label>目标字数<input name="targetLength" placeholder="例如：1200" /></label>
+                  <label>截止日期<input name="deadline" placeholder="例如：2026-03-20" /></label>
+                </div>
+                <label>写作目标<input name="goal" placeholder="这次希望表达什么" /></label>
+                <label>预期效果<input name="targetEffect" placeholder="例如：让领导快速决策" /></label>
+              </div>
+
+              <div class="wizard-step" data-step="2">
+                <h3>Step 2. 选择模板与历史材料</h3>
+                <p class="hint">模板属于高权重材料，会优先影响结构和语气。</p>
+                <label>模板选择
+                  <select id="template-selector" name="templateId">
+                    <option value="">不使用模板</option>
+                  </select>
+                </label>
+                <fieldset>
+                  <legend>补充历史材料</legend>
+                  <div id="wizard-material-options" class="check-grid"></div>
+                </fieldset>
+              </div>
+
+              <div class="wizard-step" data-step="3">
+                <h3>Step 3. 输入本次背景素材</h3>
+                <p class="hint">可上传文件（txt/md/docx/pdf）或直接粘贴文字。上传内容会作为本次写作背景材料参与生成。</p>
+                <label>背景材料上传
+                  <input type="file" name="backgroundUpload" accept=".txt,.md,.docx,.pdf" />
+                </label>
+                <label>背景说明（每行一条）
+                  <textarea name="background" rows="4" placeholder="例如：项目已进入联调阶段"></textarea>
+                </label>
+                <label>事实与数据（每行一条）
+                  <textarea name="facts" rows="5" placeholder="例如：核心接口失败率 2.8%"></textarea>
+                </label>
+                <label>必须包含的信息（每行一条）
+                  <textarea name="mustInclude" rows="4" placeholder="例如：风险点、影响范围、应对措施"></textarea>
+                </label>
+                <label>特殊要求（每行一条）
+                  <textarea name="specialRequirements" rows="4" placeholder="例如：先写意义再写措施"></textarea>
+                </label>
+              </div>
+
+              <div class="wizard-step" data-step="4">
+                <h3>Step 4. 确认并生成</h3>
+                <div id="wizard-summary" class="summary-box">确认前 3 步后点击生成。</div>
+              </div>
+
+              <div class="wizard-actions">
+                <button type="button" id="wizard-prev" class="btn ghost">上一步</button>
+                <button type="button" id="wizard-next" class="btn ghost">下一步</button>
+                <button type="submit" id="wizard-submit" class="btn primary">生成初稿</button>
+              </div>
+            </form>
+          </section>
+
+          <section id="editor-panel" class="panel hidden">
+            <div class="panel-header">
+              <h2>修改反馈与迭代</h2>
+              <div id="task-badge" class="badge">任务未创建</div>
             </div>
-          </form>
+
+            <div class="grid one">
+              <label>文章正文（可直接修改）
+                <textarea id="draft-editor" rows="22" placeholder="生成后会显示在这里"></textarea>
+              </label>
+            </div>
+
+            <div class="feedback-card">
+              <h3>本轮修改反馈</h3>
+              <div class="grid two">
+                <label>修改位置
+                  <input id="feedback-location" placeholder="例如：第二段-风险分析" />
+                </label>
+                <label>修改原因
+                  <input id="feedback-reason" placeholder="例如：这段过于空泛，需要补事实" />
+                </label>
+              </div>
+              <label>批注说明
+                <textarea id="feedback-comment" rows="4" placeholder="可写修改意图、约束、希望强化的风格"></textarea>
+              </label>
+              <div class="editor-actions">
+                <button id="save-draft" type="button" class="btn ghost">仅保存当前正文</button>
+                <button id="submit-feedback" type="button" class="btn primary">提交反馈并再次生成</button>
+                <button id="finalize-draft" type="button" class="btn success">直接定稿</button>
+              </div>
+            </div>
+
+            <div class="panel-sub">
+              <h3>反馈记录（同位置最新权重最高）</h3>
+              <div id="feedback-history" class="history-list"></div>
+            </div>
+          </section>
         </section>
 
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Step 3</div>
-              <h2>新建反馈</h2>
+        <section id="view-settings" class="view">
+          <section class="panel">
+            <div class="panel-header"><h2>模型配置</h2></div>
+            <div class="grid two">
+              <label>接入方式
+                <select id="llm-mode">
+                  <option value="openai-api-key">API Key</option>
+                  <option value="openai-codex-oauth">OAuth (OpenAI Codex)</option>
+                </select>
+              </label>
+              <label>模型
+                <select id="llm-model-input">
+                  <option value="gpt-5.4">gpt-5.4</option>
+                  <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+                </select>
+              </label>
             </div>
-          </div>
-          <form id="feedback-form" class="form-grid">
-            <label>
-              <span>关联任务</span>
-              <select name="taskId" id="feedback-task-options">
-                <option value="">不关联任务</option>
-              </select>
-            </label>
-            <label>
-              <span>反馈类型</span>
-              <select name="feedbackType">
-                <option value="">先留空</option>
-                <option value="wording">wording</option>
-                <option value="structure">structure</option>
-                <option value="order">order</option>
-                <option value="logic">logic</option>
-                <option value="missing_info">missing_info</option>
-                <option value="scenario_mismatch">scenario_mismatch</option>
-                <option value="factual_fix">factual_fix</option>
-              </select>
-            </label>
-            <label>
-              <span>严重程度</span>
-              <select name="severity">
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="low">low</option>
-              </select>
-            </label>
-            <label>
-              <span>动作</span>
-              <select name="action">
-                <option value="review">review</option>
-                <option value="rewrite">rewrite</option>
-                <option value="archive">archive</option>
-              </select>
-            </label>
-            <label class="field-span">
-              <span>原始反馈</span>
-              <textarea name="rawFeedback" rows="6" placeholder="例如：这一段太虚了，必须把影响范围写具体。"></textarea>
-            </label>
-            <label>
-              <span>影响段落</span>
-              <input name="affectedParagraph" placeholder="例如：主体分析段" />
-            </label>
-            <label>
-              <span>影响章节</span>
-              <input name="affectedSection" placeholder="例如：主体内容" />
-            </label>
-            <label>
-              <span>影响整体结构</span>
-              <select name="affectsStructure">
-                <option value="">留空</option>
-                <option value="否">否</option>
-                <option value="是">是</option>
-              </select>
-            </label>
-            <div class="field-span">
-              <button class="primary-button" type="submit">新建反馈</button>
+            <div id="key-config">
+              <label>API Key / Bearer Token
+                <input id="llm-token-input" placeholder="sk-..." />
+              </label>
+              <div class="grid two">
+                <label>Base URL<input id="llm-base-url-input" value="https://api.openai.com/v1" /></label>
+                <label>Auth URL（可选）<input id="llm-auth-url-input" placeholder="可留空" /></label>
+              </div>
             </div>
-          </form>
-        </section>
+            <div id="oauth-config" class="hidden">
+              <p class="hint">点击按钮后会弹出 OpenAI OAuth 登录。登录完成会自动刷新状态。</p>
+              <button id="start-oauth-login" class="btn primary" type="button">开始 OAuth 登录</button>
+            </div>
+            <div class="editor-actions">
+              <button id="save-llm-settings" class="btn primary" type="button">保存模型配置</button>
+            </div>
+            <div class="meta">最近更新：<span id="llm-updated-at">-</span></div>
+          </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Materials</div>
-              <h2>材料库</h2>
-            </div>
-            <span class="panel-count" id="materials-count">0</span>
-          </div>
-          <div class="panel-toolbar">
-            <input id="materials-search" placeholder="搜索标题 / 类型 / 场景" />
-          </div>
-          <div id="materials-list" class="list"></div>
-        </section>
+          <section class="panel">
+            <div class="panel-header"><h2>材料导入</h2></div>
+            <form id="material-form" class="grid one">
+              <div class="grid two">
+                <label>导入模式
+                  <select name="mode">
+                    <option value="normal">历史材料</option>
+                    <option value="template">模板（高权重）</option>
+                  </select>
+                </label>
+                <label>文档类型<input name="docType" required placeholder="例如：汇报材料" /></label>
+              </div>
+              <label>标题<input name="title" required placeholder="例如：项目汇报模板V1" /></label>
+              <div class="grid two">
+                <label>面向对象<input name="audience" placeholder="例如：管理层" /></label>
+                <label>场景<input name="scenario" placeholder="例如：月度汇报" /></label>
+              </div>
+              <label>来源<input name="source" placeholder="例如：历史最佳稿" /></label>
+              <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
+              <label>上传文件<input name="uploadFile" type="file" accept=".txt,.md,.docx,.pdf" /></label>
+              <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx" /></label>
+              <label>正文<textarea name="body" rows="6" placeholder="可直接粘贴"></textarea></label>
+              <button class="btn primary" type="submit">导入材料</button>
+            </form>
+          </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Tasks</div>
-              <h2>任务</h2>
-            </div>
-            <span class="panel-count" id="tasks-count">0</span>
-          </div>
-          <div class="panel-toolbar">
-            <input id="tasks-search" placeholder="搜索标题 / 类型 / 对象" />
-          </div>
-          <div id="tasks-list" class="list"></div>
-        </section>
+          <section class="panel">
+            <div class="panel-header"><h2>规则库</h2></div>
+            <div id="settings-rules" class="simple-list"></div>
+          </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Rules</div>
-              <h2>规则库</h2>
-            </div>
-            <span class="panel-count" id="rules-count">0</span>
-          </div>
-          <div class="panel-toolbar panel-toolbar-double">
-            <input id="rules-search" placeholder="搜索规则标题 / 范围" />
-            <select id="rules-status-filter">
-              <option value="all">全部状态</option>
-              <option value="candidate">candidate</option>
-              <option value="confirmed">confirmed</option>
-              <option value="disabled">disabled</option>
-            </select>
-          </div>
-          <div id="rules-list" class="list"></div>
-        </section>
+          <section class="panel">
+            <div class="panel-header"><h2>写作画像</h2></div>
+            <div id="settings-profiles" class="simple-list"></div>
+          </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Profiles</div>
-              <h2>写作画像</h2>
-            </div>
-            <span class="panel-count" id="profiles-count">0</span>
-          </div>
-          <div class="panel-toolbar">
-            <input id="profiles-search" placeholder="搜索画像名称" />
-          </div>
-          <div id="profiles-list" class="list"></div>
-        </section>
+          <section class="panel">
+            <div class="panel-header"><h2>反馈记录</h2></div>
+            <div id="settings-feedback" class="simple-list"></div>
+          </section>
 
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Feedback</div>
-              <h2>反馈记录</h2>
-            </div>
-            <span class="panel-count" id="feedback-count">0</span>
-          </div>
-          <div class="panel-toolbar">
-            <input id="feedback-search" placeholder="搜索反馈 id / 类型 / 任务" />
-          </div>
-          <div id="feedback-list" class="list"></div>
-        </section>
+          <section class="panel">
+            <div class="panel-header"><h2>历史材料</h2></div>
+            <div id="settings-materials" class="simple-list"></div>
+          </section>
 
-        <section class="panel panel-wide">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Preview</div>
-              <h2>文件预览 / 运行结果</h2>
-            </div>
-          </div>
-          <div id="result-viewer" class="result-viewer">加载后会在这里显示文件内容或操作结果。</div>
+          <section class="panel">
+            <div class="panel-header"><h2>模板库（高权重）</h2></div>
+            <div id="settings-templates" class="simple-list"></div>
+          </section>
         </section>
       </main>
     </div>
     <script type="module" src="/assets/app.js"></script>
   </body>
-  </html>
+</html>

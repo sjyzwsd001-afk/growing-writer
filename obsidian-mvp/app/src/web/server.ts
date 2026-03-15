@@ -17,6 +17,8 @@ import {
   OPENAI_CODEX_PROVIDER_LABEL,
   OPENAI_CODEX_SCOPE,
   OPENAI_CODEX_TOKEN_URL,
+  OPENAI_KEY_PROVIDER,
+  OPENAI_KEY_PROVIDER_LABEL,
 } from "../config/constants.js";
 import {
   getLlmConfig,
@@ -58,6 +60,7 @@ import { writeTaskSections } from "../writers/task-writer.js";
 import { writeCandidateRule } from "../writers/rule-writer.js";
 import { createTask } from "../writers/task-create-writer.js";
 import { createFeedback } from "../writers/feedback-create-writer.js";
+import { replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -88,6 +91,34 @@ const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
 const pendingOauthRequests = new Map<string, PendingOauthRequest>();
 let oauthCallbackServerState: OauthCallbackServerState | null = null;
+
+function normalizeTagList(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+  }
+
+  if (typeof input === "string") {
+    return input
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function isTemplateMaterial(input: { tags?: string[]; source?: string; docType?: string }): boolean {
+  const tags = (input.tags ?? []).map((item) => item.toLowerCase());
+  if (tags.includes("template") || tags.includes("模板")) {
+    return true;
+  }
+
+  const source = (input.source ?? "").toLowerCase();
+  const docType = (input.docType ?? "").toLowerCase();
+  return source.includes("template") || source.includes("模板") || docType.includes("模板");
+}
 
 function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
@@ -518,30 +549,44 @@ async function buildDashboard(vaultRoot: string) {
 
   const llmConfig = getLlmConfig(vaultRoot);
   const stored = getStoredLlmSettings(vaultRoot);
+  const provider =
+    stored?.provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER : OPENAI_CODEX_PROVIDER;
+  const providerLabel =
+    provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER_LABEL : OPENAI_CODEX_PROVIDER_LABEL;
+  const materialItems = materials
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      docType: item.docType,
+      audience: item.audience,
+      scenario: item.scenario,
+      quality: item.quality,
+      source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+      tags: item.tags,
+      isTemplate: isTemplateMaterial({
+        tags: item.tags,
+        source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+        docType: item.docType,
+      }),
+      path: item.path,
+    }))
+    .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
 
   return {
     vaultRoot,
     llm: {
-      provider: OPENAI_CODEX_PROVIDER,
-      providerLabel: OPENAI_CODEX_PROVIDER_LABEL,
+      provider,
+      providerLabel,
       enabled: llmConfig.enabled,
       source: llmConfig.source,
       baseUrl: llmConfig.baseUrl,
       model: llmConfig.model,
       hasSavedSettings: Boolean(stored),
       updatedAt: stored?.updatedAt ?? null,
+      oauthReady: Boolean(stored?.oauthAccessToken && stored?.oauthIdToken),
     },
-    materials: materials
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        docType: item.docType,
-        audience: item.audience,
-        scenario: item.scenario,
-        quality: item.quality,
-        path: item.path,
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title, "zh-CN")),
+    materials: materialItems,
+    templates: materialItems.filter((item) => item.isTemplate || item.quality === "high"),
     tasks: tasks
       .map((item) => ({
         id: item.id,
@@ -751,14 +796,27 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
+        const provider =
+          body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
+        const existing = getStoredLlmSettings(vaultRoot);
+        const isCodex = provider === OPENAI_CODEX_PROVIDER;
+
         const settings = saveStoredLlmSettings(vaultRoot, {
-          bearerToken: body.bearerToken ?? "",
-          baseUrl: body.baseUrl ?? OPENAI_CODEX_BASE_URL,
+          provider,
+          bearerToken: body.bearerToken ?? existing?.bearerToken ?? "",
+          baseUrl:
+            isCodex
+              ? OPENAI_CODEX_BASE_URL
+              : body.baseUrl?.trim() || existing?.baseUrl || OPENAI_CODEX_BASE_URL,
           model: body.model ?? OPENAI_CODEX_MODEL,
-          authUrl: body.authUrl ?? "",
-          tokenUrl: body.tokenUrl ?? "",
-          clientId: body.clientId ?? "",
-          scope: body.scope ?? "",
+          authUrl: isCodex ? OPENAI_CODEX_AUTH_URL : body.authUrl?.trim() || existing?.authUrl || "",
+          tokenUrl:
+            isCodex ? OPENAI_CODEX_TOKEN_URL : body.tokenUrl?.trim() || existing?.tokenUrl || "",
+          clientId: isCodex ? OPENAI_CODEX_CLIENT_ID : body.clientId?.trim() || existing?.clientId || "",
+          scope: isCodex ? OPENAI_CODEX_SCOPE : body.scope?.trim() || existing?.scope || "",
+          oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
+          oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,
+          refreshToken: isCodex ? existing?.refreshToken : undefined,
         });
         const resolved = getLlmConfig(vaultRoot);
         sendJson(res, 200, { settings, resolved });
@@ -834,7 +892,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/import") {
-        const body = (await readBody(req)) as Record<string, string | undefined>;
+        const body = (await readBody(req)) as Record<string, string | string[] | undefined>;
         if (!body.title || !body.docType || (!body.body && !body.sourceFile && !body.uploadName)) {
           sendJson(res, 400, { error: "title、docType，以及正文/文件路径/浏览器上传文件至少要提供一项。" });
           return;
@@ -845,31 +903,37 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const uploadedBody =
           body.uploadName && body.uploadBase64
             ? await extractTextFromBuffer({
-                fileName: body.uploadName,
-                buffer: Buffer.from(body.uploadBase64, "base64"),
+                fileName: String(body.uploadName),
+                buffer: Buffer.from(String(body.uploadBase64), "base64"),
               })
             : "";
-        const rawBody = body.body || uploadedBody;
+        const rawBody = (typeof body.body === "string" ? body.body : "") || uploadedBody;
+        const tags = normalizeTagList(body.tags);
+        const isTemplate = body.isTemplate === "true" || body.mode === "template";
+        if (isTemplate) {
+          tags.push("template");
+        }
         const analysis = rawBody
           ? await analyzer({
-              title: body.title,
+              title: String(body.title),
               rawBody,
-              docType: body.docType,
-              audience: body.audience,
-              scenario: body.scenario,
+              docType: String(body.docType),
+              audience: typeof body.audience === "string" ? body.audience : "",
+              scenario: typeof body.scenario === "string" ? body.scenario : "",
             })
           : undefined;
 
         const result = await importMaterial({
           vaultRoot,
-          title: body.title,
-          docType: body.docType,
-          audience: body.audience,
-          scenario: body.scenario,
-          source: body.source,
-          quality: body.quality,
+          title: String(body.title),
+          docType: String(body.docType),
+          audience: typeof body.audience === "string" ? body.audience : "",
+          scenario: typeof body.scenario === "string" ? body.scenario : "",
+          source: typeof body.source === "string" ? body.source : "",
+          quality: isTemplate ? "high" : typeof body.quality === "string" ? body.quality : "high",
+          tags,
           body: rawBody,
-          sourceFile: body.sourceFile ? resolve(body.sourceFile) : undefined,
+          sourceFile: typeof body.sourceFile === "string" && body.sourceFile ? resolve(body.sourceFile) : undefined,
           analysis,
         });
 
@@ -941,6 +1005,45 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           action: body.action as "diagnose" | "outline" | "draft",
         });
         sendJson(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/tasks/update-draft") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        if (!body.path) {
+          sendJson(res, 400, { error: "Missing task path." });
+          return;
+        }
+
+        const taskPath = resolve(body.path);
+        const repo = new VaultRepository(vaultRoot);
+        const task = await repo.loadTask(taskPath);
+        const now = new Date().toISOString();
+        const draft = (body.draft ?? "").trim();
+        const reason = (body.reason ?? "").trim();
+        const location = (body.location ?? "").trim();
+        const finalized = body.finalized === "true";
+        const version = (body.version ?? "").trim();
+        const currentUpdated = typeof task.frontmatter.updated_at === "string" ? task.frontmatter.updated_at : "";
+        const logLine = `- ${now}${version ? ` [${version}]` : ""}${location ? ` [${location}]` : ""}${reason ? `：${reason}` : ""}`;
+        const historyBody = String(task.content.match(/# 修改记录\n\n([\s\S]*?)(?=\n# )/)?.[1] ?? "- v1：");
+        const mergedHistory = `${historyBody.trim()}\n${logLine}`.trim();
+
+        let nextContent = replaceSection(task.content, "初稿", draft || "在这里生成正文。");
+        nextContent = replaceSection(nextContent, "修改记录", mergedHistory);
+        if (finalized) {
+          const existingFinal = String(task.content.match(/# 定稿说明\n\n([\s\S]*?)(?=\n# )/)?.[1] ?? "- ");
+          const finalLine = `- ${now}：已在前端定稿。`;
+          nextContent = replaceSection(nextContent, "定稿说明", `${existingFinal.trim()}\n${finalLine}`.trim());
+        }
+
+        await writeMarkdownDocument(task.path, {
+          ...task.frontmatter,
+          status: finalized ? "finalized" : "draft",
+          updated_at: now || currentUpdated,
+        }, nextContent);
+
+        sendJson(res, 200, { path: task.path, updatedAt: now, finalized });
         return;
       }
 
