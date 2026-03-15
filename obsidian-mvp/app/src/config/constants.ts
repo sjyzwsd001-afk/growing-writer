@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 
 export const DEFAULT_VAULT_ROOT = resolve(process.cwd(), "..");
+export const LLM_SETTINGS_FILE_NAME = ".writer-llm-config.json";
 
 export const TASK_SECTIONS = [
   "写前诊断",

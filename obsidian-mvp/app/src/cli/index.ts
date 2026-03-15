@@ -45,8 +45,8 @@ program
   .description("Obsidian 写作助手 MVP CLI")
   .option("--vault <path>", "vault root path", DEFAULT_VAULT_ROOT);
 
-function createLlmClient(): OpenAiCompatibleClient {
-  return new OpenAiCompatibleClient(getLlmConfig());
+function createLlmClient(vaultRoot?: string): OpenAiCompatibleClient {
+  return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
 }
 
 async function applyRuleAction(input: {
@@ -105,7 +105,7 @@ program
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const analysis = client.isEnabled() ? await parseTaskWithLlm(client, task) : parseTask(task);
     console.log(JSON.stringify(analysis, null, 2));
   });
@@ -117,7 +117,7 @@ program
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const [materials, rules, profiles] = await Promise.all([
       repo.loadMaterials(),
       repo.loadRules(),
@@ -151,7 +151,7 @@ program
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const [materials, rules, profiles] = await Promise.all([
       repo.loadMaterials(),
       repo.loadRules(),
@@ -199,7 +199,7 @@ program
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const [materials, rules, profiles] = await Promise.all([
       repo.loadMaterials(),
       repo.loadRules(),
@@ -609,7 +609,7 @@ program
   .option("--source-file <path>", "read material body from a local text or markdown file")
   .action(async (options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const analyzer = createMaterialAnalyzer(client);
     const analysis = options.body
       ? await analyzer({
@@ -647,7 +647,7 @@ program
   .option("--json", "output JSON")
   .action(async (options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const results = await importMaterialsFromDirectory({
       vaultRoot,
       sourceDir: resolve(options.sourceDir),
@@ -675,8 +675,9 @@ program
 program
   .command("analyze-material")
   .argument("<material-file>", "path to imported material markdown file")
-  .action(async (materialFile) => {
-    const client = createLlmClient();
+  .action(async (materialFile, options, command) => {
+    const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
+    const client = createLlmClient(vaultRoot);
     await analyzeImportedMaterial(resolve(materialFile), {
       analyze: createMaterialAnalyzer(client),
     });
@@ -776,7 +777,7 @@ program
   .action(async (feedbackFile, options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const client = createLlmClient();
+    const client = createLlmClient(vaultRoot);
     const feedback = await repo.loadFeedback(resolve(feedbackFile));
     const task = await repo.findTaskById(feedback.taskId);
     const taskAnalysis = task

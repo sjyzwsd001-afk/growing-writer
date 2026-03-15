@@ -22,10 +22,30 @@
             <strong id="llm-status">检查中</strong>
           </div>
           <div class="status-row">
+            <span>配置来源</span>
+            <strong id="llm-source">-</strong>
+          </div>
+          <div class="status-row">
             <span>Vault</span>
             <code id="vault-root">-</code>
           </div>
         </div>
+        <form id="llm-settings-form" class="settings-card">
+          <h2>模型设置</h2>
+          <label>
+            <span>Bearer Token</span>
+            <input id="llm-bearer-token" name="bearerToken" type="password" placeholder="填入 API Key 或 OAuth token" />
+          </label>
+          <label>
+            <span>Base URL</span>
+            <input id="llm-base-url" name="baseUrl" placeholder="https://api.openai.com/v1" />
+          </label>
+          <label>
+            <span>Model</span>
+            <input id="llm-model" name="model" placeholder="gpt-4.1-mini" />
+          </label>
+          <button class="primary-button" type="submit">保存模型配置</button>
+        </form>
         <button id="reload-dashboard" class="ghost-button" type="button">刷新全局数据</button>
         <button id="refresh-tasks" class="ghost-button" type="button">刷新任务参考依据</button>
         <button id="refresh-profile" class="ghost-button" type="button">刷新写作画像</button>

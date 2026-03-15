@@ -2,3 +2,4 @@
 node_modules/
 dist/
 *.log
+**/.writer-llm-config.json

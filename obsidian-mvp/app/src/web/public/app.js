@@ -480,8 +480,12 @@ function renderFeedback(items) {
 async function loadDashboard() {
   const data = await api("/api/dashboard");
   state.dashboard = data;
-  document.getElementById("llm-status").textContent = data.llm_enabled ? "已启用" : "未配置，走本地回退";
+  document.getElementById("llm-status").textContent = data.llm.enabled ? "已启用" : "未配置，走本地回退";
+  document.getElementById("llm-source").textContent = data.llm.source;
   document.getElementById("vault-root").textContent = data.vaultRoot;
+  document.getElementById("llm-bearer-token").value = data.llm.bearerToken || "";
+  document.getElementById("llm-base-url").value = data.llm.baseUrl || "https://api.openai.com/v1";
+  document.getElementById("llm-model").value = data.llm.model || "gpt-4.1-mini";
   renderDashboard();
 }
 
@@ -722,6 +726,35 @@ document.getElementById("reload-dashboard").addEventListener("click", async () =
     setResult("全局数据已刷新", state.dashboard);
   } catch (error) {
     setResult("刷新失败", { error: error.message });
+  }
+});
+
+document.getElementById("llm-settings-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(event.currentTarget);
+  const payload = Object.fromEntries(formData.entries());
+
+  try {
+    const result = await api("/api/settings/llm", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setRichResult("模型配置已保存", [
+      `
+        <section class="result-card">
+          <h4>当前配置</h4>
+          <div class="result-grid">
+            <div><strong>是否启用</strong><div>${result.resolved.enabled ? "是" : "否"}</div></div>
+            <div><strong>配置来源</strong><div>${escapeHtml(result.resolved.source)}</div></div>
+            <div><strong>Base URL</strong><div>${escapeHtml(result.resolved.baseUrl)}</div></div>
+            <div><strong>Model</strong><div>${escapeHtml(result.resolved.model)}</div></div>
+          </div>
+        </section>
+      `,
+    ]);
+    await loadDashboard();
+  } catch (error) {
+    setResult("模型配置保存失败", { error: error.message });
   }
 });
 

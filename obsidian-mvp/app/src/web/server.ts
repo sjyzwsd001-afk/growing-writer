@@ -5,7 +5,11 @@ import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DEFAULT_VAULT_ROOT } from "../config/constants.js";
-import { getLlmConfig } from "../config/env.js";
+import {
+  getLlmConfig,
+  getStoredLlmSettings,
+  saveStoredLlmSettings,
+} from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRules } from "../retrieve/matchers.js";
 import { VaultRepository } from "../vault/repository.js";
@@ -53,8 +57,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
 
-function createLlmClient(): OpenAiCompatibleClient {
-  return new OpenAiCompatibleClient(getLlmConfig());
+function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
+  return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
 }
 
 function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
@@ -149,7 +153,7 @@ async function applyRuleAction(input: {
 
 async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   const repo = new VaultRepository(vaultRoot);
-  const client = createLlmClient();
+  const client = createLlmClient(vaultRoot);
   const task = await repo.loadTask(taskPath);
   const [materials, rules, profiles] = await Promise.all([
     repo.loadMaterials(),
@@ -266,9 +270,18 @@ async function buildDashboard(vaultRoot: string) {
     repo.loadProfiles(),
   ]);
 
+  const llmConfig = getLlmConfig(vaultRoot);
+
   return {
     vaultRoot,
-    llm_enabled: createLlmClient().isEnabled(),
+    llm: {
+      enabled: llmConfig.enabled,
+      source: llmConfig.source,
+      baseUrl: llmConfig.baseUrl,
+      model: llmConfig.model,
+      bearerToken: llmConfig.bearerToken ?? "",
+      hasSavedSettings: Boolean(getStoredLlmSettings(vaultRoot)),
+    },
     materials: materials
       .map((item) => ({
         id: item.id,
@@ -349,6 +362,18 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         return;
       }
 
+      if (req.method === "POST" && url.pathname === "/api/settings/llm") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        const settings = saveStoredLlmSettings(vaultRoot, {
+          bearerToken: body.bearerToken ?? "",
+          baseUrl: body.baseUrl ?? "https://api.openai.com/v1",
+          model: body.model ?? "gpt-4.1-mini",
+        });
+        const resolved = getLlmConfig(vaultRoot);
+        sendJson(res, 200, { settings, resolved });
+        return;
+      }
+
       if (req.method === "GET" && url.pathname === "/api/document") {
         const targetPath = url.searchParams.get("path");
         if (!targetPath) {
@@ -366,7 +391,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           return;
         }
 
-        const client = createLlmClient();
+        const client = createLlmClient(vaultRoot);
         const analyzer = createMaterialAnalyzer(client);
         const uploadedBody =
           body.uploadName && body.uploadBase64
@@ -448,7 +473,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         }
 
         await analyzeImportedMaterial(resolve(body.path), {
-          analyze: createMaterialAnalyzer(createLlmClient()),
+          analyze: createMaterialAnalyzer(createLlmClient(vaultRoot)),
         });
         sendJson(res, 200, { path: resolve(body.path), status: "analyzed" });
         return;
@@ -478,7 +503,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         }
 
         const repo = new VaultRepository(vaultRoot);
-        const client = createLlmClient();
+        const client = createLlmClient(vaultRoot);
         const feedback = await repo.loadFeedback(resolve(body.path));
         const task = await repo.findTaskById(feedback.taskId);
         const taskAnalysis = task
