@@ -49,6 +49,7 @@ import {
   transitionWorkflowRun,
   type WorkflowRun,
 } from "../workflows/orchestration.js";
+import { loadWorkflowDefinition } from "../workflows/definition.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
 import {
   analyzeImportedMaterial,
@@ -705,6 +706,7 @@ async function startWorkflowRunForTask(input: {
   vaultRoot: string;
   request: TaskCreateRequest;
 }) {
+  const workflowDefinition = await loadWorkflowDefinition(input.vaultRoot);
   const { created, selectedMaterials } = await createTaskFromRequest({
     vaultRoot: input.vaultRoot,
     request: input.request,
@@ -714,6 +716,7 @@ async function startWorkflowRunForTask(input: {
     taskId: created.taskId,
     taskPath: created.path,
     title: input.request.title,
+    definition: workflowDefinition.definition,
   });
 
   const hasBackground = Boolean(input.request.background.trim());
@@ -729,6 +732,7 @@ async function startWorkflowRunForTask(input: {
     toStage: "INTAKE_MATERIALS",
     summary: "Entered material intake stage.",
     details: { selectedMaterials: selectedMaterials.length },
+    definition: workflowDefinition.definition,
   });
 
   run = await appendWorkflowEvent(input.vaultRoot, {
@@ -743,6 +747,7 @@ async function startWorkflowRunForTask(input: {
     runId: run.runId,
     toStage: "SELECT_TEMPLATE",
     summary: "Entered template selection stage.",
+    definition: workflowDefinition.definition,
   });
 
   const hasTemplate = selectedMaterials.some((item) =>
@@ -763,6 +768,7 @@ async function startWorkflowRunForTask(input: {
     runId: run.runId,
     toStage: "GENERATE_DRAFT",
     summary: "Entered draft generation stage.",
+    definition: workflowDefinition.definition,
   });
 
   const generated = await runTaskAction({
@@ -787,6 +793,7 @@ async function startWorkflowRunForTask(input: {
     runId: run.runId,
     toStage: "REVIEW_DIAGNOSE",
     summary: "Entered review/diagnose stage.",
+    definition: workflowDefinition.definition,
   });
 
   run = await appendWorkflowEvent(input.vaultRoot, {
@@ -805,12 +812,14 @@ async function startWorkflowRunForTask(input: {
     runId: run.runId,
     toStage: "USER_CONFIRM_OR_EDIT",
     summary: "Waiting for user confirmation or feedback edits.",
+    definition: workflowDefinition.definition,
   });
 
   return {
     run,
     created,
     generated,
+    workflowDefinition,
   };
 }
 
@@ -823,7 +832,9 @@ async function advanceWorkflowRunForAction(input: {
   run: WorkflowRun;
   generated?: Awaited<ReturnType<typeof runTaskAction>>;
   profilePath?: string;
+  workflowDefinition: Awaited<ReturnType<typeof loadWorkflowDefinition>>;
 }> {
+  const workflowDefinition = await loadWorkflowDefinition(input.vaultRoot);
   const existing = await loadWorkflowRun(input.vaultRoot, input.runId);
   const taskPath = input.taskPath ? resolve(input.taskPath) : existing.taskPath;
 
@@ -838,6 +849,7 @@ async function advanceWorkflowRunForAction(input: {
       runId: input.runId,
       toStage: "GENERATE_DRAFT",
       summary: "Feedback accepted, regenerate draft.",
+      definition: workflowDefinition.definition,
     });
 
     const generated = await runTaskAction({
@@ -862,6 +874,7 @@ async function advanceWorkflowRunForAction(input: {
       runId: input.runId,
       toStage: "REVIEW_DIAGNOSE",
       summary: "Entered review/diagnose stage after regeneration.",
+      definition: workflowDefinition.definition,
     });
 
     run = await appendWorkflowEvent(input.vaultRoot, {
@@ -880,9 +893,10 @@ async function advanceWorkflowRunForAction(input: {
       runId: input.runId,
       toStage: "USER_CONFIRM_OR_EDIT",
       summary: "Returned to user confirmation/edit stage.",
+      definition: workflowDefinition.definition,
     });
 
-    return { run, generated };
+    return { run, generated, workflowDefinition };
   }
 
   if (existing.currentStage !== "USER_CONFIRM_OR_EDIT") {
@@ -895,6 +909,7 @@ async function advanceWorkflowRunForAction(input: {
     runId: input.runId,
     toStage: "FINALIZE_AND_LEARN",
     summary: "User finalized draft, entering finalize/learn stage.",
+    definition: workflowDefinition.definition,
   });
 
   const repo = new VaultRepository(input.vaultRoot);
@@ -927,21 +942,24 @@ async function advanceWorkflowRunForAction(input: {
     toStage: "FINALIZE_AND_LEARN",
     summary: "Workflow completed.",
     status: "completed",
+    definition: workflowDefinition.definition,
   });
 
-  return { run, profilePath };
+  return { run, profilePath, workflowDefinition };
 }
 
 async function buildDashboard(vaultRoot: string) {
   const repo = new VaultRepository(vaultRoot);
-  const [materials, tasks, rules, feedbackEntries, profiles, workflowRuns] = await Promise.all([
+  const [materials, tasks, rules, feedbackEntries, profiles, workflowRuns, workflowDefinition] =
+    await Promise.all([
     repo.loadMaterials(),
     repo.loadTasks(),
     repo.loadRules(),
     repo.loadFeedbackEntries(),
     repo.loadProfiles(),
     listWorkflowRuns(vaultRoot),
-  ]);
+    loadWorkflowDefinition(vaultRoot),
+    ]);
 
   const llmConfig = getLlmConfig(vaultRoot);
   const stored = getStoredLlmSettings(vaultRoot);
@@ -1028,6 +1046,14 @@ async function buildDashboard(vaultRoot: string) {
       currentStage: item.currentStage,
       updatedAt: item.updatedAt,
     })),
+    workflowDefinition: {
+      id: workflowDefinition.definition.id,
+      version: workflowDefinition.definition.version,
+      source: workflowDefinition.source,
+      path: workflowDefinition.path,
+      initialStage: workflowDefinition.definition.initialStage,
+      stageCount: workflowDefinition.definition.stages.length,
+    },
   };
 }
 
@@ -1357,6 +1383,12 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
         const run = await loadWorkflowRun(vaultRoot, runId);
         sendJson(res, 200, { run });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/workflow/definition") {
+        const workflowDefinition = await loadWorkflowDefinition(vaultRoot);
+        sendJson(res, 200, workflowDefinition);
         return;
       }
 

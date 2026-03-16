@@ -305,6 +305,21 @@ function renderSettingsLists() {
       <button type="button" class="mini-btn" data-action="view-workflow" data-runid="${escapeHtml(item.runId)}" data-title="${escapeHtml(item.title || item.runId)}">查看事件</button>
     </div>`;
   });
+
+  const workflowMeta = data.workflowDefinition;
+  if (workflowMeta) {
+    const container = document.getElementById("settings-workflows");
+    const summary = document.createElement("div");
+    summary.className = "row-item";
+    summary.innerHTML = `<div class="row-main">
+      <strong>DSL：${escapeHtml(workflowMeta.id || "-")} v${escapeHtml(String(workflowMeta.version || "-"))}</strong>
+      <div class="mini">source=${escapeHtml(workflowMeta.source || "-")} / stage=${escapeHtml(String(workflowMeta.stageCount || 0))} / initial=${escapeHtml(workflowMeta.initialStage || "-")}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-workflow-definition">查看 DSL</button>
+    </div>`;
+    container.prepend(summary);
+  }
 }
 
 function toggleLlmMode(mode) {
@@ -804,6 +819,12 @@ async function runSettingsAction(action, button) {
     }
     const data = await api(`/api/workflow/run?runId=${encodeURIComponent(runId)}`);
     setSettingsResult(`${title || runId} - 编排事件`, data.run);
+    return;
+  }
+
+  if (action === "view-workflow-definition") {
+    const data = await api("/api/workflow/definition");
+    setSettingsResult("Workflow DSL", data);
     return;
   }
 

@@ -1,18 +1,13 @@
 import fg from "fast-glob";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  DEFAULT_WORKFLOW_DEFINITION,
+  resolveStageDefinition,
+  type WorkflowDefinition,
+} from "./definition.js";
 
-export const WORKFLOW_STAGES = [
-  "INTAKE_BACKGROUND",
-  "INTAKE_MATERIALS",
-  "SELECT_TEMPLATE",
-  "GENERATE_DRAFT",
-  "REVIEW_DIAGNOSE",
-  "USER_CONFIRM_OR_EDIT",
-  "FINALIZE_AND_LEARN",
-] as const;
-
-export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
+export type WorkflowStage = string;
 export type WorkflowStatus = "running" | "completed" | "failed";
 export type WorkflowEventType = "entered" | "completed" | "failed" | "action";
 
@@ -30,6 +25,8 @@ export type WorkflowRun = {
   taskId: string;
   taskPath: string;
   title: string;
+  definitionId: string;
+  definitionVersion: number;
   status: WorkflowStatus;
   currentStage: WorkflowStage;
   createdAt: string;
@@ -49,24 +46,20 @@ function workflowRunPath(vaultRoot: string, runId: string): string {
   return join(workflowRunsDir(vaultRoot), `${runId}.json`);
 }
 
-function stageIndex(stage: WorkflowStage): number {
-  return WORKFLOW_STAGES.indexOf(stage);
-}
-
-function isForwardTransition(from: WorkflowStage, to: WorkflowStage): boolean {
-  return stageIndex(to) === stageIndex(from) + 1;
-}
-
-function isAllowedTransition(from: WorkflowStage, to: WorkflowStage): boolean {
+function isAllowedTransition(definition: WorkflowDefinition, from: WorkflowStage, to: WorkflowStage): boolean {
   if (from === to) {
     return true;
   }
 
-  if (from === "USER_CONFIRM_OR_EDIT" && to === "GENERATE_DRAFT") {
+  const stage = resolveStageDefinition(definition, from);
+  if (!stage) {
+    return false;
+  }
+  if (stage.next.includes(to)) {
     return true;
   }
-
-  return isForwardTransition(from, to);
+  const actionTargets = Object.values(stage.actions ?? {});
+  return actionTargets.includes(to);
 }
 
 function eventId(runId: string, seq: number): string {
@@ -99,17 +92,24 @@ export async function createWorkflowRun(
     taskPath: string;
     title: string;
     initialStage?: WorkflowStage;
+    definition?: WorkflowDefinition;
   },
 ): Promise<WorkflowRun> {
+  const definition = input.definition ?? DEFAULT_WORKFLOW_DEFINITION;
   const now = new Date().toISOString();
   const runId = `wf-${safeTimestampId(now)}-${Math.random().toString(36).slice(2, 8)}`;
-  const initialStage = input.initialStage ?? "INTAKE_BACKGROUND";
+  const initialStage = input.initialStage ?? definition.initialStage;
+  if (!resolveStageDefinition(definition, initialStage)) {
+    throw new Error(`Initial workflow stage "${initialStage}" is not defined in workflow definition.`);
+  }
 
   const run: WorkflowRun = {
     runId,
     taskId: input.taskId,
     taskPath: input.taskPath,
     title: input.title,
+    definitionId: definition.id,
+    definitionVersion: definition.version,
     status: "running",
     currentStage: initialStage,
     createdAt: now,
@@ -173,12 +173,14 @@ export async function transitionWorkflowRun(
     details?: Record<string, unknown>;
     status?: WorkflowStatus;
     force?: boolean;
+    definition?: WorkflowDefinition;
   },
 ): Promise<WorkflowRun> {
   const run = await loadWorkflowRun(vaultRoot, input.runId);
-  if (!input.force && !isAllowedTransition(run.currentStage, input.toStage)) {
+  const definition = input.definition ?? DEFAULT_WORKFLOW_DEFINITION;
+  if (!input.force && !isAllowedTransition(definition, run.currentStage, input.toStage)) {
     throw new Error(
-      `Illegal workflow transition: ${run.currentStage} -> ${input.toStage}. Use force=true for manual override.`,
+      `Illegal workflow transition: ${run.currentStage} -> ${input.toStage} under definition ${definition.id}@${definition.version}. Use force=true for manual override.`,
     );
   }
 
@@ -202,4 +204,3 @@ export async function transitionWorkflowRun(
   await saveWorkflowRun(vaultRoot, next);
   return next;
 }
-
