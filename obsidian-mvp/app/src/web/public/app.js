@@ -295,6 +295,16 @@ function renderSettingsLists() {
       <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
     </div>`;
   });
+
+  renderSimpleList("settings-workflows", data.workflowRuns || [], (item) => {
+    return `<div class="row-main">
+      <strong>${escapeHtml(item.title || item.taskId || item.runId)}</strong>
+      <div class="mini">Run ${escapeHtml(item.runId)} / ${escapeHtml(item.status)} / ${escapeHtml(item.currentStage)} / ${escapeHtml(item.updatedAt || "-")}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-workflow" data-runid="${escapeHtml(item.runId)}" data-title="${escapeHtml(item.title || item.runId)}">查看事件</button>
+    </div>`;
+  });
 }
 
 function toggleLlmMode(mode) {
@@ -787,6 +797,16 @@ async function runSettingsAction(action, button) {
     return;
   }
 
+  if (action === "view-workflow") {
+    const runId = button.dataset.runid || "";
+    if (!runId) {
+      throw new Error("缺少 workflow runId。");
+    }
+    const data = await api(`/api/workflow/run?runId=${encodeURIComponent(runId)}`);
+    setSettingsResult(`${title || runId} - 编排事件`, data.run);
+    return;
+  }
+
   if (action === "analyze-material") {
     const result = await api("/api/materials/analyze", {
       method: "POST",
@@ -826,6 +846,7 @@ function bindSettingsActions() {
     "settings-rules",
     "settings-profiles",
     "settings-feedback",
+    "settings-workflows",
   ];
 
   for (const id of containers) {
