@@ -424,6 +424,71 @@ legend {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.workflow-preview {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-graph {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-node {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fffefb;
+  padding: 9px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-node-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-node-id {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.workflow-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workflow-link-chip {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--muted);
+  padding: 2px 8px;
+}
+
+.workflow-link-chip.action {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+}
+
+.workflow-graph-hints {
+  display: grid;
+  gap: 6px;
+}
+
 .empty {
   color: var(--muted);
   font-size: 13px;

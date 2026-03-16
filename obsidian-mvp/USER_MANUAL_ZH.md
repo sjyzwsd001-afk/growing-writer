@@ -32,6 +32,7 @@
 10. 同一位置多次修改时，后端会持久化“位置反馈信号”，并按 latest-first 参与后续规则匹配
 11. 工作流改为 DSL 驱动，定义文件在 `workflow/workflow-definition.json`
 12. 设置页提供 DSL 图形化编辑入口，保存后实时生效（热更新）
+13. DSL 编辑区下方提供实时流程图预览和结构校验提示（next/action 目标有效性、重复 stage id 等）
 
 一句话理解：
 

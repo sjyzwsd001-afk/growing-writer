@@ -373,6 +373,113 @@ function setEditorVisible(visible) {
   document.getElementById("editor-panel").classList.toggle("hidden", !visible);
 }
 
+function normalizeWorkflowDefinitionLite(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const definition = {
+    id: String(raw.id || ""),
+    version: Number(raw.version || 0),
+    initialStage: String(raw.initialStage || ""),
+    stages: Array.isArray(raw.stages)
+      ? raw.stages.map((item) => ({
+          id: String(item?.id || ""),
+          label: String(item?.label || ""),
+          description: String(item?.description || ""),
+          next: Array.isArray(item?.next) ? item.next.map(String) : [],
+          actions:
+            item?.actions && typeof item.actions === "object" && !Array.isArray(item.actions)
+              ? Object.fromEntries(Object.entries(item.actions).map(([k, v]) => [String(k), String(v)]))
+              : {},
+        }))
+      : [],
+  };
+  return definition;
+}
+
+function renderWorkflowGraph(definition, parseError = "") {
+  const graph = document.getElementById("workflow-graph");
+  const hints = document.getElementById("workflow-graph-hints");
+  if (!graph || !hints) {
+    return;
+  }
+
+  if (parseError) {
+    graph.innerHTML = `<div class="empty">DSL 解析失败，无法预览。</div>`;
+    hints.innerHTML = `<div class="msg error">${escapeHtml(parseError)}</div>`;
+    return;
+  }
+
+  const normalized = normalizeWorkflowDefinitionLite(definition);
+  if (!normalized || !normalized.stages.length) {
+    graph.innerHTML = `<div class="empty">暂无可用阶段定义。</div>`;
+    hints.innerHTML = `<div class="mini">请在 DSL 中提供 stages。</div>`;
+    return;
+  }
+
+  const stageIds = new Set(normalized.stages.map((stage) => stage.id).filter(Boolean));
+  const duplicateIds = normalized.stages
+    .map((stage) => stage.id)
+    .filter((id, index, arr) => id && arr.indexOf(id) !== index);
+
+  graph.innerHTML = normalized.stages
+    .map((stage, index) => {
+      const nextChips = (stage.next || [])
+        .map(
+          (target) =>
+            `<span class="workflow-link-chip">${escapeHtml(stage.id)} → ${escapeHtml(target)}</span>`,
+        )
+        .join("");
+      const actionChips = Object.entries(stage.actions || {})
+        .map(
+          ([action, target]) =>
+            `<span class="workflow-link-chip action">${escapeHtml(action)} ⇒ ${escapeHtml(target)}</span>`,
+        )
+        .join("");
+      return `<div class="workflow-node">
+        <div class="workflow-node-head">
+          <strong>${index + 1}. ${escapeHtml(stage.label || stage.id || "未命名阶段")}</strong>
+          <span class="workflow-node-id">${escapeHtml(stage.id || "-")}</span>
+        </div>
+        <div class="mini">${escapeHtml(stage.description || "无描述")}</div>
+        <div class="workflow-links">${nextChips || `<span class="workflow-link-chip">无 next</span>`}</div>
+        ${actionChips ? `<div class="workflow-links">${actionChips}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+
+  const hintItems = [];
+  if (!normalized.id) {
+    hintItems.push("缺少 definition.id。");
+  }
+  if (!normalized.initialStage) {
+    hintItems.push("缺少 initialStage。");
+  }
+  if (normalized.initialStage && !stageIds.has(normalized.initialStage)) {
+    hintItems.push(`initialStage=${normalized.initialStage} 未在 stages 中定义。`);
+  }
+  if (duplicateIds.length) {
+    hintItems.push(`存在重复 stage id：${[...new Set(duplicateIds)].join(", ")}`);
+  }
+
+  normalized.stages.forEach((stage) => {
+    stage.next.forEach((target) => {
+      if (!stageIds.has(target)) {
+        hintItems.push(`阶段 ${stage.id} 的 next 目标 ${target} 不存在。`);
+      }
+    });
+    Object.entries(stage.actions || {}).forEach(([action, target]) => {
+      if (!stageIds.has(target)) {
+        hintItems.push(`阶段 ${stage.id} 的 action(${action}) 目标 ${target} 不存在。`);
+      }
+    });
+  });
+
+  hints.innerHTML = hintItems.length
+    ? hintItems.map((item) => `<div class="msg error">${escapeHtml(item)}</div>`).join("")
+    : `<div class="msg">DSL 结构检查通过。初始阶段：${escapeHtml(normalized.initialStage)}</div>`;
+}
+
 function updateTopStatus(data) {
   document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
   document.getElementById("llm-status").textContent = data.llm.enabled ? "已可调用" : "未就绪";
@@ -401,6 +508,7 @@ async function loadWorkflowDefinitionEditor() {
   if (editor) {
     editor.value = JSON.stringify(payload.definition || {}, null, 2);
   }
+  renderWorkflowGraph(payload.definition || {});
 }
 
 async function loadDashboard() {
@@ -810,6 +918,20 @@ function bindLlmSettings() {
 }
 
 function bindWorkflowDefinitionEditor() {
+  document.getElementById("workflow-definition-editor").addEventListener("input", (event) => {
+    const raw = String(event.currentTarget.value || "");
+    if (!raw.trim()) {
+      renderWorkflowGraph(null, "DSL 为空。");
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      renderWorkflowGraph(parsed);
+    } catch (error) {
+      renderWorkflowGraph(null, error.message || "JSON 解析失败。");
+    }
+  });
+
   document.getElementById("reload-workflow-definition").addEventListener("click", async () => {
     const button = document.getElementById("reload-workflow-definition");
     const original = button.textContent;
@@ -840,6 +962,7 @@ function bindWorkflowDefinitionEditor() {
         body: JSON.stringify({ definition: parsed }),
       });
       state.workflowDefinition = result.reloaded || result.saved || null;
+      renderWorkflowGraph((result.reloaded && result.reloaded.definition) || parsed);
       setSettingsResult("Workflow DSL 已保存", result);
       setInfo("Workflow DSL 保存成功，后续流程已按新定义生效。");
       await loadDashboard();
