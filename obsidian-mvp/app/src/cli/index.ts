@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { DEFAULT_VAULT_ROOT } from "../config/constants.js";
 import { getLlmConfig } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
-import { matchMaterials, matchRules } from "../retrieve/matchers.js";
+import { matchMaterials, matchRulesWithPolicy } from "../retrieve/matchers.js";
 import { VaultRepository } from "../vault/repository.js";
 import {
   buildOutline,
@@ -127,16 +127,24 @@ program
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
     const client = createLlmClient(vaultRoot);
-    const [materials, rules, profiles] = await Promise.all([
+    const [materials, rules, profiles, feedbackEntries] = await Promise.all([
       repo.loadMaterials(),
       repo.loadRules(),
       repo.loadProfiles(),
+      repo.loadFeedbackEntries(),
     ]);
     const analysis = client.isEnabled() ? await parseTaskWithLlm(client, task) : parseTask(task);
+    const ruleMatch = matchRulesWithPolicy({
+      task,
+      rules,
+      materials,
+      profiles,
+      feedbackEntries,
+    });
     const diagnosisInput = {
       task,
       analysis,
-      matchedRules: matchRules(task, rules),
+      matchedRules: ruleMatch.matchedRules,
       matchedMaterials: matchMaterials(task, materials),
       profiles,
     };
@@ -149,6 +157,7 @@ program
       diagnosis,
       matchedRules: diagnosisInput.matchedRules,
       matchedMaterials: diagnosisInput.matchedMaterials,
+      decisionLog: ruleMatch.decisionLog,
     });
     console.log(JSON.stringify(diagnosis, null, 2));
   });
@@ -161,13 +170,21 @@ program
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
     const client = createLlmClient(vaultRoot);
-    const [materials, rules, profiles] = await Promise.all([
+    const [materials, rules, profiles, feedbackEntries] = await Promise.all([
       repo.loadMaterials(),
       repo.loadRules(),
       repo.loadProfiles(),
+      repo.loadFeedbackEntries(),
     ]);
     const analysis = client.isEnabled() ? await parseTaskWithLlm(client, task) : parseTask(task);
-    const matchedRules = matchRules(task, rules);
+    const ruleMatch = matchRulesWithPolicy({
+      task,
+      rules,
+      materials,
+      profiles,
+      feedbackEntries,
+    });
+    const matchedRules = ruleMatch.matchedRules;
     const matchedMaterials = matchMaterials(task, materials);
     const diagnosisInput = {
       task,
@@ -197,6 +214,7 @@ program
       outline,
       matchedRules,
       matchedMaterials,
+      decisionLog: ruleMatch.decisionLog,
     });
     console.log(JSON.stringify(outline, null, 2));
   });
@@ -209,13 +227,21 @@ program
     const repo = new VaultRepository(vaultRoot);
     const task = await repo.loadTask(resolve(taskFile));
     const client = createLlmClient(vaultRoot);
-    const [materials, rules, profiles] = await Promise.all([
+    const [materials, rules, profiles, feedbackEntries] = await Promise.all([
       repo.loadMaterials(),
       repo.loadRules(),
       repo.loadProfiles(),
+      repo.loadFeedbackEntries(),
     ]);
     const analysis = client.isEnabled() ? await parseTaskWithLlm(client, task) : parseTask(task);
-    const matchedRules = matchRules(task, rules);
+    const ruleMatch = matchRulesWithPolicy({
+      task,
+      rules,
+      materials,
+      profiles,
+      feedbackEntries,
+    });
+    const matchedRules = ruleMatch.matchedRules;
     const matchedMaterials = matchMaterials(task, materials);
     const diagnosisInput = {
       task,
@@ -257,6 +283,7 @@ program
       draft,
       matchedRules,
       matchedMaterials,
+      decisionLog: ruleMatch.decisionLog,
     });
     console.log(JSON.stringify(draft, null, 2));
   });
@@ -724,10 +751,12 @@ program
   .action(async (options, command) => {
     const vaultRoot = resolve(command.parent?.opts().vault ?? DEFAULT_VAULT_ROOT);
     const repo = new VaultRepository(vaultRoot);
-    const [tasks, materials, rules] = await Promise.all([
+    const [tasks, materials, rules, profiles, feedbackEntries] = await Promise.all([
       repo.loadTasks(),
       repo.loadMaterials(),
       repo.loadRules(),
+      repo.loadProfiles(),
+      repo.loadFeedbackEntries(),
     ]);
 
     const results: Array<{
@@ -738,7 +767,14 @@ program
     }> = [];
 
     for (const task of tasks) {
-      const matchedRules = matchRules(task, rules);
+      const ruleMatch = matchRulesWithPolicy({
+        task,
+        rules,
+        materials,
+        profiles,
+        feedbackEntries,
+      });
+      const matchedRules = ruleMatch.matchedRules;
       const matchedMaterials = matchMaterials(task, materials);
       await refreshTaskReferences({
         task,

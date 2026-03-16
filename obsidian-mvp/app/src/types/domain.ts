@@ -23,6 +23,7 @@ export type Rule = MarkdownDocument & {
   scope: string;
   docTypes: string[];
   audiences: string[];
+  sourceMaterials: string[];
   confidence: number;
 };
 
@@ -64,4 +65,7 @@ export type MatchedRule = {
   title: string;
   priority: number;
   reason: string;
+  source?: "template" | "confirmed_rule" | "candidate_rule" | "profile";
+  effective_score?: number;
+  overridden_by?: string;
 };

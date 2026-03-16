@@ -43,6 +43,7 @@ export class VaultRepository {
       scope: normalizeString(doc.frontmatter.scope),
       docTypes: normalizeStringArray(doc.frontmatter.doc_types),
       audiences: normalizeStringArray(doc.frontmatter.audiences),
+      sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
       confidence: normalizeNumber(doc.frontmatter.confidence, 0),
     }));
   }
@@ -143,6 +144,7 @@ export class VaultRepository {
       scope: normalizeString(doc.frontmatter.scope),
       docTypes: normalizeStringArray(doc.frontmatter.doc_types),
       audiences: normalizeStringArray(doc.frontmatter.audiences),
+      sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
       confidence: normalizeNumber(doc.frontmatter.confidence, 0),
     };
   }

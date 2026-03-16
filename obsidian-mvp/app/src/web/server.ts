@@ -27,7 +27,7 @@ import {
   saveStoredLlmSettings,
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
-import { matchMaterials, matchRules } from "../retrieve/matchers.js";
+import { matchMaterials, matchRules, matchRulesWithPolicy } from "../retrieve/matchers.js";
 import { VaultRepository } from "../vault/repository.js";
 import {
   buildOutline,
@@ -497,13 +497,21 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   const repo = new VaultRepository(vaultRoot);
   const client = createLlmClient(vaultRoot);
   const task = await repo.loadTask(taskPath);
-  const [materials, rules, profiles] = await Promise.all([
+  const [materials, rules, profiles, feedbackEntries] = await Promise.all([
     repo.loadMaterials(),
     repo.loadRules(),
     repo.loadProfiles(),
+    repo.loadFeedbackEntries(),
   ]);
   const analysis = client.isEnabled() ? await parseTaskWithLlm(client, task) : parseTask(task);
-  const matchedRules = matchRules(task, rules);
+  const ruleMatch = matchRulesWithPolicy({
+    task,
+    rules,
+    materials,
+    profiles,
+    feedbackEntries,
+  });
+  const matchedRules = ruleMatch.matchedRules;
   const matchedMaterials = matchMaterials(task, materials);
 
   return {
@@ -514,6 +522,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     analysis,
     matchedRules,
     matchedMaterials,
+    ruleDecisionLog: ruleMatch.decisionLog,
   };
 }
 
@@ -522,10 +531,11 @@ async function runTaskAction(input: {
   taskPath: string;
   action: "diagnose" | "outline" | "draft";
 }) {
-  const { client, task, profiles, analysis, matchedRules, matchedMaterials } = await buildTaskSnapshot(
+  const { client, task, profiles, analysis, matchedRules, matchedMaterials, ruleDecisionLog } =
+    await buildTaskSnapshot(
     input.vaultRoot,
     input.taskPath,
-  );
+    );
 
   const diagnosisInput = {
     task,
@@ -545,8 +555,9 @@ async function runTaskAction(input: {
       diagnosis,
       matchedRules,
       matchedMaterials,
+      decisionLog: ruleDecisionLog,
     });
-    return { analysis, diagnosis };
+    return { analysis, diagnosis, ruleDecisionLog };
   }
 
   const outlineInput = {
@@ -569,8 +580,9 @@ async function runTaskAction(input: {
       outline,
       matchedRules,
       matchedMaterials,
+      decisionLog: ruleDecisionLog,
     });
-    return { analysis, diagnosis, outline };
+    return { analysis, diagnosis, outline, ruleDecisionLog };
   }
 
   const draft = client.isEnabled()
@@ -597,9 +609,10 @@ async function runTaskAction(input: {
     draft,
     matchedRules,
     matchedMaterials,
+    decisionLog: ruleDecisionLog,
   });
 
-  return { analysis, diagnosis, outline, draft };
+  return { analysis, diagnosis, outline, draft, ruleDecisionLog };
 }
 
 async function createTaskFromRequest(input: {
@@ -718,6 +731,7 @@ async function startWorkflowRunForTask(input: {
     details: {
       diagnosisReadiness: generated.diagnosis?.readiness ?? "unknown",
       outlineSections: generated.outline?.sections?.length ?? 0,
+      ruleDecisionLog: generated.ruleDecisionLog ?? [],
     },
   });
 
@@ -735,6 +749,7 @@ async function startWorkflowRunForTask(input: {
     details: {
       missingInfo: generated.diagnosis?.missing_info ?? [],
       risks: generated.diagnosis?.writing_risks ?? [],
+      ruleDecisionLog: generated.ruleDecisionLog ?? [],
     },
   });
 
@@ -791,6 +806,7 @@ async function advanceWorkflowRunForAction(input: {
       details: {
         diagnosisReadiness: generated.diagnosis?.readiness ?? "unknown",
         outlineSections: generated.outline?.sections?.length ?? 0,
+        ruleDecisionLog: generated.ruleDecisionLog ?? [],
       },
     });
 
@@ -808,6 +824,7 @@ async function advanceWorkflowRunForAction(input: {
       details: {
         missingInfo: generated.diagnosis?.missing_info ?? [],
         risks: generated.diagnosis?.writing_risks ?? [],
+        ruleDecisionLog: generated.ruleDecisionLog ?? [],
       },
     });
 
@@ -1514,15 +1531,24 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/refresh/tasks") {
         const repo = new VaultRepository(vaultRoot);
-        const [tasks, materials, rules] = await Promise.all([
+        const [tasks, materials, rules, profiles, feedbackEntries] = await Promise.all([
           repo.loadTasks(),
           repo.loadMaterials(),
           repo.loadRules(),
+          repo.loadProfiles(),
+          repo.loadFeedbackEntries(),
         ]);
 
         const results = [];
         for (const task of tasks) {
-          const matchedRules = matchRules(task, rules);
+          const ruleMatch = matchRulesWithPolicy({
+            task,
+            rules,
+            materials,
+            profiles,
+            feedbackEntries,
+          });
+          const matchedRules = ruleMatch.matchedRules;
           const matchedMaterials = matchMaterials(task, materials);
           await refreshTaskReferences({
             task,
@@ -1533,6 +1559,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
             taskId: task.id,
             matchedRules: matchedRules.map((rule) => rule.rule_id),
             matchedMaterials: matchedMaterials.map((material) => material.id),
+            decisionLog: ruleMatch.decisionLog,
           });
         }
 

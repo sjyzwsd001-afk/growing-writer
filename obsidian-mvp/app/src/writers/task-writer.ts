@@ -38,13 +38,22 @@ function renderOutline(result: OutlineResult): string {
 function renderReferences(input: {
   matchedRules: MatchedRule[];
   matchedMaterials: Material[];
+  decisionLog: string[];
 }): string {
   const materialLines =
     input.matchedMaterials.map((material) => `- ${material.title || material.id}`).join("\n") || "- 无";
   const ruleLines =
     input.matchedRules
-      .map((rule) => `- ${rule.title}${rule.reason ? `（${rule.reason}）` : ""}`)
+      .map((rule) => {
+        const source = rule.source ? `来源:${rule.source}` : "";
+        const score =
+          typeof rule.effective_score === "number" ? `score:${rule.effective_score}` : "";
+        const overriddenBy = rule.overridden_by ? `被「${rule.overridden_by}」降权` : "";
+        const detail = [rule.reason, source, score, overriddenBy].filter(Boolean).join("；");
+        return `- ${rule.title}${detail ? `（${detail}）` : ""}`;
+      })
       .join("\n") || "- 无";
+  const decisionLines = input.decisionLog.map((line) => `- ${line}`).join("\n") || "- 无";
 
   return `## 相似历史材料
 
@@ -52,7 +61,11 @@ ${materialLines}
 
 ## 已匹配规则
 
-${ruleLines}`;
+${ruleLines}
+
+## 策略裁决
+
+${decisionLines}`;
 }
 
 function renderDraft(result: DraftResult): string {
@@ -66,6 +79,7 @@ export async function writeTaskSections(input: {
   draft?: DraftResult;
   matchedRules?: MatchedRule[];
   matchedMaterials?: Material[];
+  decisionLog?: string[];
 }): Promise<void> {
   let nextContent = input.task.content;
 
@@ -85,6 +99,7 @@ export async function writeTaskSections(input: {
       renderReferences({
         matchedRules: input.matchedRules ?? [],
         matchedMaterials: input.matchedMaterials ?? [],
+        decisionLog: input.decisionLog ?? [],
       }),
     );
   }
