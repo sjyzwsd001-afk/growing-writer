@@ -71,6 +71,12 @@ export class VaultRepository {
       taskId: normalizeString(doc.frontmatter.task_id),
       relatedRuleIds: normalizeStringArray(doc.frontmatter.related_rule_ids),
       feedbackType: normalizeString(doc.frontmatter.feedback_type),
+      severity: normalizeString(doc.frontmatter.severity, "medium"),
+      action: normalizeString(doc.frontmatter.action, "review"),
+      affectedParagraph: normalizeString(doc.frontmatter.affected_paragraph),
+      affectedSection: normalizeString(doc.frontmatter.affected_section),
+      affectsStructure: normalizeString(doc.frontmatter.affects_structure),
+      createdAt: normalizeString(doc.frontmatter.created_at),
     };
   }
 
@@ -82,6 +88,12 @@ export class VaultRepository {
       taskId: normalizeString(doc.frontmatter.task_id),
       relatedRuleIds: normalizeStringArray(doc.frontmatter.related_rule_ids),
       feedbackType: normalizeString(doc.frontmatter.feedback_type),
+      severity: normalizeString(doc.frontmatter.severity, "medium"),
+      action: normalizeString(doc.frontmatter.action, "review"),
+      affectedParagraph: normalizeString(doc.frontmatter.affected_paragraph),
+      affectedSection: normalizeString(doc.frontmatter.affected_section),
+      affectsStructure: normalizeString(doc.frontmatter.affects_structure),
+      createdAt: normalizeString(doc.frontmatter.created_at),
     }));
   }
 

@@ -43,6 +43,12 @@ export type Feedback = MarkdownDocument & {
   taskId: string;
   relatedRuleIds: string[];
   feedbackType: string;
+  severity: string;
+  action: string;
+  affectedParagraph: string;
+  affectedSection: string;
+  affectsStructure: string;
+  createdAt: string;
 };
 
 export type Profile = MarkdownDocument & {

@@ -35,6 +35,9 @@ export async function createFeedback(input: {
     feedback_type: input.feedbackType ?? "",
     severity: input.severity ?? "medium",
     action: input.action ?? "review",
+    affected_paragraph: input.affectedParagraph ?? "",
+    affected_section: input.affectedSection ?? "",
+    affects_structure: input.affectsStructure ?? "",
     created_at: now,
   };
 
