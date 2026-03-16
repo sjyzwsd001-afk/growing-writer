@@ -41,6 +41,14 @@ import {
   parseTask,
   parseTaskWithLlm,
 } from "../workflows/stubs.js";
+import {
+  appendWorkflowEvent,
+  createWorkflowRun,
+  listWorkflowRuns,
+  loadWorkflowRun,
+  transitionWorkflowRun,
+  type WorkflowRun,
+} from "../workflows/orchestration.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
 import {
   analyzeImportedMaterial,
@@ -69,6 +77,7 @@ type ServerOptions = {
 };
 
 type RuleAction = "confirm" | "disable" | "reject";
+type WorkflowAdvanceAction = "regenerate" | "finalize";
 type PendingOauthRequest = {
   state: string;
   codeVerifier: string;
@@ -129,6 +138,45 @@ function isTemplateMaterial(input: { tags?: string[]; source?: string; docType?:
   const source = (input.source ?? "").toLowerCase();
   const docType = (input.docType ?? "").toLowerCase();
   return source.includes("template") || source.includes("模板") || docType.includes("模板");
+}
+
+type TaskCreateRequest = {
+  title: string;
+  docType: string;
+  audience: string;
+  scenario: string;
+  priority: string;
+  targetLength: string;
+  deadline: string;
+  goal: string;
+  targetEffect: string;
+  background: string;
+  facts: string;
+  mustInclude: string;
+  specialRequirements: string;
+  sourceMaterialIds: string[];
+};
+
+function toTaskCreateRequest(body: Record<string, unknown>): TaskCreateRequest {
+  return {
+    title: typeof body.title === "string" ? body.title.trim() : "",
+    docType: typeof body.docType === "string" ? body.docType.trim() : "",
+    audience: typeof body.audience === "string" ? body.audience.trim() : "",
+    scenario: typeof body.scenario === "string" ? body.scenario.trim() : "",
+    priority: typeof body.priority === "string" ? body.priority : "medium",
+    targetLength: typeof body.targetLength === "string" ? body.targetLength : "",
+    deadline: typeof body.deadline === "string" ? body.deadline : "",
+    goal: typeof body.goal === "string" ? body.goal : "",
+    targetEffect: typeof body.targetEffect === "string" ? body.targetEffect : "",
+    background: typeof body.background === "string" ? body.background : "",
+    facts: typeof body.facts === "string" ? body.facts : "",
+    mustInclude: typeof body.mustInclude === "string" ? body.mustInclude : "",
+    specialRequirements:
+      typeof body.specialRequirements === "string" ? body.specialRequirements : "",
+    sourceMaterialIds: Array.isArray(body.sourceMaterialIds)
+      ? body.sourceMaterialIds.filter((item): item is string => typeof item === "string")
+      : [],
+  };
 }
 
 function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
@@ -554,14 +602,280 @@ async function runTaskAction(input: {
   return { analysis, diagnosis, outline, draft };
 }
 
+async function createTaskFromRequest(input: {
+  vaultRoot: string;
+  request: TaskCreateRequest;
+}) {
+  if (!input.request.title || !input.request.docType) {
+    throw new Error("title 和 docType 是必填项。");
+  }
+
+  const repo = new VaultRepository(input.vaultRoot);
+  const materials = await repo.loadMaterials();
+  const selectedMaterials = materials.filter((item) =>
+    input.request.sourceMaterialIds.includes(item.id),
+  );
+
+  const created = await createTask({
+    vaultRoot: input.vaultRoot,
+    title: input.request.title,
+    docType: input.request.docType,
+    audience: input.request.audience,
+    scenario: input.request.scenario,
+    priority: input.request.priority,
+    targetLength: input.request.targetLength,
+    deadline: input.request.deadline,
+    goal: input.request.goal,
+    targetEffect: input.request.targetEffect,
+    background: input.request.background,
+    facts: input.request.facts,
+    mustInclude: input.request.mustInclude,
+    specialRequirements: input.request.specialRequirements,
+    sourceMaterials: selectedMaterials,
+  });
+
+  return {
+    created,
+    selectedMaterials,
+  };
+}
+
+async function startWorkflowRunForTask(input: {
+  vaultRoot: string;
+  request: TaskCreateRequest;
+}) {
+  const { created, selectedMaterials } = await createTaskFromRequest({
+    vaultRoot: input.vaultRoot,
+    request: input.request,
+  });
+
+  let run = await createWorkflowRun(input.vaultRoot, {
+    taskId: created.taskId,
+    taskPath: created.path,
+    title: input.request.title,
+  });
+
+  const hasBackground = Boolean(input.request.background.trim());
+  run = await appendWorkflowEvent(input.vaultRoot, {
+    runId: run.runId,
+    stage: "INTAKE_BACKGROUND",
+    type: hasBackground ? "completed" : "action",
+    summary: hasBackground ? "Background captured." : "Background is partially empty.",
+  });
+
+  run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: run.runId,
+    toStage: "INTAKE_MATERIALS",
+    summary: "Entered material intake stage.",
+    details: { selectedMaterials: selectedMaterials.length },
+  });
+
+  run = await appendWorkflowEvent(input.vaultRoot, {
+    runId: run.runId,
+    stage: "INTAKE_MATERIALS",
+    type: "completed",
+    summary: `Selected ${selectedMaterials.length} materials.`,
+    details: { selectedMaterialIds: selectedMaterials.map((item) => item.id) },
+  });
+
+  run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: run.runId,
+    toStage: "SELECT_TEMPLATE",
+    summary: "Entered template selection stage.",
+  });
+
+  const hasTemplate = selectedMaterials.some((item) =>
+    isTemplateMaterial({
+      tags: item.tags,
+      source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+      docType: item.docType,
+    }),
+  );
+  run = await appendWorkflowEvent(input.vaultRoot, {
+    runId: run.runId,
+    stage: "SELECT_TEMPLATE",
+    type: "completed",
+    summary: hasTemplate ? "Template selected." : "No template selected.",
+  });
+
+  run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: run.runId,
+    toStage: "GENERATE_DRAFT",
+    summary: "Entered draft generation stage.",
+  });
+
+  const generated = await runTaskAction({
+    vaultRoot: input.vaultRoot,
+    taskPath: created.path,
+    action: "draft",
+  });
+
+  run = await appendWorkflowEvent(input.vaultRoot, {
+    runId: run.runId,
+    stage: "GENERATE_DRAFT",
+    type: "completed",
+    summary: "Draft generated.",
+    details: {
+      diagnosisReadiness: generated.diagnosis?.readiness ?? "unknown",
+      outlineSections: generated.outline?.sections?.length ?? 0,
+    },
+  });
+
+  run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: run.runId,
+    toStage: "REVIEW_DIAGNOSE",
+    summary: "Entered review/diagnose stage.",
+  });
+
+  run = await appendWorkflowEvent(input.vaultRoot, {
+    runId: run.runId,
+    stage: "REVIEW_DIAGNOSE",
+    type: "completed",
+    summary: "Pre-write diagnosis reviewed.",
+    details: {
+      missingInfo: generated.diagnosis?.missing_info ?? [],
+      risks: generated.diagnosis?.writing_risks ?? [],
+    },
+  });
+
+  run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: run.runId,
+    toStage: "USER_CONFIRM_OR_EDIT",
+    summary: "Waiting for user confirmation or feedback edits.",
+  });
+
+  return {
+    run,
+    created,
+    generated,
+  };
+}
+
+async function advanceWorkflowRunForAction(input: {
+  vaultRoot: string;
+  runId: string;
+  action: WorkflowAdvanceAction;
+  taskPath?: string;
+}): Promise<{
+  run: WorkflowRun;
+  generated?: Awaited<ReturnType<typeof runTaskAction>>;
+  profilePath?: string;
+}> {
+  const existing = await loadWorkflowRun(input.vaultRoot, input.runId);
+  const taskPath = input.taskPath ? resolve(input.taskPath) : existing.taskPath;
+
+  if (input.action === "regenerate") {
+    if (existing.currentStage !== "USER_CONFIRM_OR_EDIT") {
+      throw new Error(
+        `Workflow can regenerate only in USER_CONFIRM_OR_EDIT stage. Current: ${existing.currentStage}`,
+      );
+    }
+
+    let run = await transitionWorkflowRun(input.vaultRoot, {
+      runId: input.runId,
+      toStage: "GENERATE_DRAFT",
+      summary: "Feedback accepted, regenerate draft.",
+    });
+
+    const generated = await runTaskAction({
+      vaultRoot: input.vaultRoot,
+      taskPath,
+      action: "draft",
+    });
+
+    run = await appendWorkflowEvent(input.vaultRoot, {
+      runId: input.runId,
+      stage: "GENERATE_DRAFT",
+      type: "completed",
+      summary: "Regenerated draft.",
+      details: {
+        diagnosisReadiness: generated.diagnosis?.readiness ?? "unknown",
+        outlineSections: generated.outline?.sections?.length ?? 0,
+      },
+    });
+
+    run = await transitionWorkflowRun(input.vaultRoot, {
+      runId: input.runId,
+      toStage: "REVIEW_DIAGNOSE",
+      summary: "Entered review/diagnose stage after regeneration.",
+    });
+
+    run = await appendWorkflowEvent(input.vaultRoot, {
+      runId: input.runId,
+      stage: "REVIEW_DIAGNOSE",
+      type: "completed",
+      summary: "Regenerated diagnosis reviewed.",
+      details: {
+        missingInfo: generated.diagnosis?.missing_info ?? [],
+        risks: generated.diagnosis?.writing_risks ?? [],
+      },
+    });
+
+    run = await transitionWorkflowRun(input.vaultRoot, {
+      runId: input.runId,
+      toStage: "USER_CONFIRM_OR_EDIT",
+      summary: "Returned to user confirmation/edit stage.",
+    });
+
+    return { run, generated };
+  }
+
+  if (existing.currentStage !== "USER_CONFIRM_OR_EDIT") {
+    throw new Error(
+      `Workflow can finalize only in USER_CONFIRM_OR_EDIT stage. Current: ${existing.currentStage}`,
+    );
+  }
+
+  let run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: input.runId,
+    toStage: "FINALIZE_AND_LEARN",
+    summary: "User finalized draft, entering finalize/learn stage.",
+  });
+
+  const repo = new VaultRepository(input.vaultRoot);
+  const client = createLlmClient(input.vaultRoot);
+  const [profiles, rules, materials, feedbackEntries] = await Promise.all([
+    repo.loadProfiles(),
+    repo.loadRules(),
+    repo.loadMaterials(),
+    repo.loadFeedbackEntries(),
+  ]);
+  const profilePath = await refreshDefaultProfile({
+    vaultRoot: input.vaultRoot,
+    profiles,
+    rules,
+    materials,
+    feedbackEntries,
+    client,
+  });
+
+  run = await appendWorkflowEvent(input.vaultRoot, {
+    runId: input.runId,
+    stage: "FINALIZE_AND_LEARN",
+    type: "completed",
+    summary: "Finalize/learn completed.",
+    details: { profilePath },
+  });
+
+  run = await transitionWorkflowRun(input.vaultRoot, {
+    runId: input.runId,
+    toStage: "FINALIZE_AND_LEARN",
+    summary: "Workflow completed.",
+    status: "completed",
+  });
+
+  return { run, profilePath };
+}
+
 async function buildDashboard(vaultRoot: string) {
   const repo = new VaultRepository(vaultRoot);
-  const [materials, tasks, rules, feedbackEntries, profiles] = await Promise.all([
+  const [materials, tasks, rules, feedbackEntries, profiles, workflowRuns] = await Promise.all([
     repo.loadMaterials(),
     repo.loadTasks(),
     repo.loadRules(),
     repo.loadFeedbackEntries(),
     repo.loadProfiles(),
+    listWorkflowRuns(vaultRoot),
   ]);
 
   const llmConfig = getLlmConfig(vaultRoot);
@@ -640,6 +954,14 @@ async function buildDashboard(vaultRoot: string) {
       name: item.name,
       version: item.version,
       path: item.path,
+    })),
+    workflowRuns: workflowRuns.slice(0, 30).map((item) => ({
+      runId: item.runId,
+      taskId: item.taskId,
+      title: item.title,
+      status: item.status,
+      currentStage: item.currentStage,
+      updatedAt: item.updatedAt,
     })),
   };
 }
@@ -961,40 +1283,74 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         return;
       }
 
-      if (req.method === "POST" && url.pathname === "/api/tasks/create") {
-        const body = (await readBody(req)) as Record<string, string | string[] | undefined>;
-        if (!body.title || !body.docType) {
+      if (req.method === "GET" && url.pathname === "/api/workflow/run") {
+        const runId = url.searchParams.get("runId");
+        if (!runId) {
+          sendJson(res, 400, { error: "Missing runId parameter." });
+          return;
+        }
+
+        const run = await loadWorkflowRun(vaultRoot, runId);
+        sendJson(res, 200, { run });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/workflow/start") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const request = toTaskCreateRequest(body);
+        if (!request.title || !request.docType) {
           sendJson(res, 400, { error: "title 和 docType 是必填项。" });
           return;
         }
 
-        const repo = new VaultRepository(vaultRoot);
-        const materials = await repo.loadMaterials();
-        const selectedMaterialIds = Array.isArray(body.sourceMaterialIds)
-          ? body.sourceMaterialIds.filter((item): item is string => typeof item === "string")
-          : [];
-        const selectedMaterials = materials.filter((item) => selectedMaterialIds.includes(item.id));
-
-        const result = await createTask({
+        const result = await startWorkflowRunForTask({
           vaultRoot,
-          title: String(body.title),
-          docType: String(body.docType),
-          audience: typeof body.audience === "string" ? body.audience : "",
-          scenario: typeof body.scenario === "string" ? body.scenario : "",
-          priority: typeof body.priority === "string" ? body.priority : "medium",
-          targetLength: typeof body.targetLength === "string" ? body.targetLength : "",
-          deadline: typeof body.deadline === "string" ? body.deadline : "",
-          goal: typeof body.goal === "string" ? body.goal : "",
-          targetEffect: typeof body.targetEffect === "string" ? body.targetEffect : "",
-          background: typeof body.background === "string" ? body.background : "",
-          facts: typeof body.facts === "string" ? body.facts : "",
-          mustInclude: typeof body.mustInclude === "string" ? body.mustInclude : "",
-          specialRequirements:
-            typeof body.specialRequirements === "string" ? body.specialRequirements : "",
-          sourceMaterials: selectedMaterials,
+          request,
+        });
+        sendJson(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/workflow/advance") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const runId = typeof body.runId === "string" ? body.runId : "";
+        const action = typeof body.action === "string" ? body.action : "";
+        const taskPath = typeof body.taskPath === "string" ? body.taskPath : undefined;
+
+        if (!runId || !action) {
+          sendJson(res, 400, { error: "Missing runId or action." });
+          return;
+        }
+
+        if (action !== "regenerate" && action !== "finalize") {
+          sendJson(res, 400, { error: "Unsupported workflow action." });
+          return;
+        }
+
+        const result = await advanceWorkflowRunForAction({
+          vaultRoot,
+          runId,
+          action,
+          taskPath,
+        });
+        sendJson(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/tasks/create") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const request = toTaskCreateRequest(body);
+        if (!request.title || !request.docType) {
+          sendJson(res, 400, { error: "title 和 docType 是必填项。" });
+          return;
+        }
+
+        const { created } = await createTaskFromRequest({
+          vaultRoot,
+          request,
         });
 
-        sendJson(res, 200, result);
+        sendJson(res, 200, created);
         return;
       }
 

@@ -445,18 +445,13 @@ async function createAndRunTask() {
       throw new Error("任务标题和文档类型是必填项。");
     }
 
-    const created = await api("/api/tasks/create", {
+    const workflow = await api("/api/workflow/start", {
       method: "POST",
       body: JSON.stringify(taskPayload),
     });
-
-    const generated = await api("/api/tasks/run", {
-      method: "POST",
-      body: JSON.stringify({
-        path: created.path,
-        action: "draft",
-      }),
-    });
+    const created = workflow.created;
+    const generated = workflow.generated;
+    const run = workflow.run;
 
     const draftText =
       generated?.draft?.draft_markdown || (await getTaskDraftFromFile(created.path)) || "生成完成，但未找到正文。";
@@ -466,6 +461,7 @@ async function createAndRunTask() {
       id: created.taskId,
       path: created.path,
       title: taskPayload.title,
+      runId: run?.runId || "",
     };
 
     loadFeedbackHistoryFromStorage(created.taskId);
@@ -547,16 +543,28 @@ async function submitFeedbackAndRegenerate() {
     body: JSON.stringify({ path: feedback.path }),
   });
 
-  const generated = await api("/api/tasks/run", {
-    method: "POST",
-    body: JSON.stringify({
-      path: state.currentTask.path,
-      action: "draft",
-    }),
-  });
+  const generated = state.currentTask.runId
+    ? await api("/api/workflow/advance", {
+        method: "POST",
+        body: JSON.stringify({
+          runId: state.currentTask.runId,
+          action: "regenerate",
+          taskPath: state.currentTask.path,
+        }),
+      })
+    : await api("/api/tasks/run", {
+        method: "POST",
+        body: JSON.stringify({
+          path: state.currentTask.path,
+          action: "draft",
+        }),
+      });
 
   const latestDraft =
-    generated?.draft?.draft_markdown || (await getTaskDraftFromFile(state.currentTask.path)) || draft;
+    generated?.generated?.draft?.draft_markdown ||
+    generated?.draft?.draft_markdown ||
+    (await getTaskDraftFromFile(state.currentTask.path)) ||
+    draft;
   document.getElementById("draft-editor").value = latestDraft;
 
   const entry = {
@@ -648,6 +656,16 @@ function bindEditorActions() {
   document.getElementById("finalize-draft").addEventListener("click", async () => {
     try {
       await saveCurrentDraft(true);
+      if (state.currentTask?.runId) {
+        await api("/api/workflow/advance", {
+          method: "POST",
+          body: JSON.stringify({
+            runId: state.currentTask.runId,
+            action: "finalize",
+            taskPath: state.currentTask.path,
+          }),
+        });
+      }
       setTaskBadge("已定稿");
       setInfo("已定稿并写入任务文件。");
       await loadDashboard();
