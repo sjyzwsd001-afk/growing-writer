@@ -5,6 +5,7 @@ const state = {
   currentTask: null,
   feedbackHistory: [],
   latestFeedbackByLocation: {},
+  workflowDefinition: null,
 };
 
 const MAX_WIZARD_STEP = 4;
@@ -393,6 +394,15 @@ function hydrateLlmSettings(data) {
   toggleLlmMode(mode);
 }
 
+async function loadWorkflowDefinitionEditor() {
+  const payload = await api("/api/workflow/definition");
+  state.workflowDefinition = payload;
+  const editor = document.getElementById("workflow-definition-editor");
+  if (editor) {
+    editor.value = JSON.stringify(payload.definition || {}, null, 2);
+  }
+}
+
 async function loadDashboard() {
   const data = await api("/api/dashboard");
   state.dashboard = data;
@@ -401,6 +411,7 @@ async function loadDashboard() {
   renderTemplateSelector(data.templates || []);
   renderCheckOptions("wizard-material-options", data.materials || [], "sourceMaterialIds");
   renderSettingsLists();
+  await loadWorkflowDefinitionEditor();
   updateWizardSummary();
 }
 
@@ -798,6 +809,49 @@ function bindLlmSettings() {
   });
 }
 
+function bindWorkflowDefinitionEditor() {
+  document.getElementById("reload-workflow-definition").addEventListener("click", async () => {
+    const button = document.getElementById("reload-workflow-definition");
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "加载中...";
+    try {
+      await loadWorkflowDefinitionEditor();
+      setInfo("已加载最新 Workflow DSL。");
+      await loadDashboard();
+    } catch (error) {
+      setInfo(`加载 Workflow DSL 失败：${error.message}`, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+
+  document.getElementById("save-workflow-definition").addEventListener("click", async () => {
+    const button = document.getElementById("save-workflow-definition");
+    const original = button.textContent;
+    const editor = document.getElementById("workflow-definition-editor");
+    button.disabled = true;
+    button.textContent = "保存中...";
+    try {
+      const parsed = JSON.parse(editor.value || "{}");
+      const result = await api("/api/workflow/definition", {
+        method: "POST",
+        body: JSON.stringify({ definition: parsed }),
+      });
+      state.workflowDefinition = result.reloaded || result.saved || null;
+      setSettingsResult("Workflow DSL 已保存", result);
+      setInfo("Workflow DSL 保存成功，后续流程已按新定义生效。");
+      await loadDashboard();
+    } catch (error) {
+      setInfo(`保存 Workflow DSL 失败：${error.message}`, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+}
+
 async function runSettingsAction(action, button) {
   const path = button.dataset.path || "";
   const title = button.dataset.title || "";
@@ -926,6 +980,7 @@ bindWizard();
 bindEditorActions();
 bindMaterialImport();
 bindLlmSettings();
+bindWorkflowDefinitionEditor();
 bindSettingsActions();
 updateWizardStep();
 setEditorVisible(false);

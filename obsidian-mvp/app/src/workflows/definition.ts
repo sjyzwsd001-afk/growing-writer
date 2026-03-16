@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export const WORKFLOW_DEFINITION_RELATIVE_PATH = "workflow/workflow-definition.json";
@@ -74,6 +74,15 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
 
 function normalizeStage(input: unknown): WorkflowStageDefinition {
   const value = input as Record<string, unknown>;
+  const actions =
+    value.actions && typeof value.actions === "object" && !Array.isArray(value.actions)
+      ? Object.fromEntries(
+          Object.entries(value.actions).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[0] === "string" && typeof entry[1] === "string",
+          ),
+        )
+      : {};
   return {
     id: typeof value.id === "string" ? value.id : "",
     label: typeof value.label === "string" ? value.label : "",
@@ -81,19 +90,11 @@ function normalizeStage(input: unknown): WorkflowStageDefinition {
     next: Array.isArray(value.next)
       ? value.next.filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
       : [],
-    actions:
-      value.actions && typeof value.actions === "object" && !Array.isArray(value.actions)
-        ? Object.fromEntries(
-            Object.entries(value.actions).filter(
-              (entry): entry is [string, string] =>
-                typeof entry[0] === "string" && typeof entry[1] === "string",
-            ),
-          )
-        : {},
+    ...(Object.keys(actions).length ? { actions } : {}),
   };
 }
 
-function normalizeWorkflowDefinition(raw: unknown): WorkflowDefinition | null {
+export function normalizeWorkflowDefinition(raw: unknown): WorkflowDefinition | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return null;
   }
@@ -117,9 +118,13 @@ function normalizeWorkflowDefinition(raw: unknown): WorkflowDefinition | null {
   const sanitizedStages = stages.map((stage) => ({
     ...stage,
     next: stage.next.filter((id) => stageIds.has(id)),
-    actions: Object.fromEntries(
-      Object.entries(stage.actions ?? {}).filter((entry) => stageIds.has(entry[1])),
-    ),
+    ...(Object.keys(stage.actions ?? {}).length
+      ? {
+          actions: Object.fromEntries(
+            Object.entries(stage.actions ?? {}).filter((entry) => stageIds.has(entry[1])),
+          ),
+        }
+      : {}),
   }));
 
   return {
@@ -133,12 +138,38 @@ function normalizeWorkflowDefinition(raw: unknown): WorkflowDefinition | null {
   };
 }
 
+export function workflowDefinitionPath(vaultRoot: string): string {
+  return join(vaultRoot, WORKFLOW_DEFINITION_RELATIVE_PATH);
+}
+
+export function parseWorkflowDefinitionOrThrow(raw: unknown): WorkflowDefinition {
+  const normalized = normalizeWorkflowDefinition(raw);
+  if (!normalized) {
+    throw new Error(
+      "Invalid workflow definition. Ensure id/version/initialStage/stages are provided with valid stage ids.",
+    );
+  }
+
+  const ids = normalized.stages.map((stage) => stage.id);
+  const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+  if (duplicates.length) {
+    throw new Error(`Workflow stages contain duplicate ids: ${[...new Set(duplicates)].join(", ")}`);
+  }
+
+  const invalidStages = normalized.stages.filter((stage) => !stage.id || !stage.label);
+  if (invalidStages.length) {
+    throw new Error("Each workflow stage must include non-empty id and label.");
+  }
+
+  return normalized;
+}
+
 export async function loadWorkflowDefinition(vaultRoot: string): Promise<{
   definition: WorkflowDefinition;
   source: "file" | "default";
   path: string;
 }> {
-  const path = join(vaultRoot, WORKFLOW_DEFINITION_RELATIVE_PATH);
+  const path = workflowDefinitionPath(vaultRoot);
   try {
     await access(path);
     const raw = await readFile(path, "utf8");
@@ -157,10 +188,20 @@ export async function loadWorkflowDefinition(vaultRoot: string): Promise<{
   };
 }
 
+export async function saveWorkflowDefinition(vaultRoot: string, raw: unknown): Promise<{
+  definition: WorkflowDefinition;
+  path: string;
+}> {
+  const definition = parseWorkflowDefinitionOrThrow(raw);
+  const path = workflowDefinitionPath(vaultRoot);
+  await mkdir(join(vaultRoot, "workflow"), { recursive: true });
+  await writeFile(path, `${JSON.stringify(definition, null, 2)}\n`, "utf8");
+  return { definition, path };
+}
+
 export function resolveStageDefinition(
   definition: WorkflowDefinition,
   stageId: string,
 ): WorkflowStageDefinition | null {
   return definition.stages.find((stage) => stage.id === stageId) ?? null;
 }
-

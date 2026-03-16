@@ -241,6 +241,20 @@
             <div class="panel-header"><h2>编排运行记录</h2></div>
             <div id="settings-workflows" class="simple-list"></div>
           </section>
+
+          <section class="panel">
+            <div class="panel-header"><h2>Workflow DSL 编辑</h2></div>
+            <div class="panel-sub">
+              <p class="hint">编辑后保存即生效。服务端按最新 DSL 校验后续流转，无需重启。</p>
+              <label>DSL JSON
+                <textarea id="workflow-definition-editor" rows="14" placeholder='{"id":"...","version":1,"initialStage":"...","stages":[]}'></textarea>
+              </label>
+              <div class="editor-actions">
+                <button id="reload-workflow-definition" type="button" class="btn ghost">重新加载 DSL</button>
+                <button id="save-workflow-definition" type="button" class="btn primary">保存 DSL</button>
+              </div>
+            </div>
+          </section>
         </section>
       </main>
     </div>

@@ -49,7 +49,7 @@ import {
   transitionWorkflowRun,
   type WorkflowRun,
 } from "../workflows/orchestration.js";
-import { loadWorkflowDefinition } from "../workflows/definition.js";
+import { loadWorkflowDefinition, saveWorkflowDefinition } from "../workflows/definition.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
 import {
   analyzeImportedMaterial,
@@ -1389,6 +1389,18 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       if (req.method === "GET" && url.pathname === "/api/workflow/definition") {
         const workflowDefinition = await loadWorkflowDefinition(vaultRoot);
         sendJson(res, 200, workflowDefinition);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/workflow/definition") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const rawDefinition = body.definition ?? body;
+        const saved = await saveWorkflowDefinition(vaultRoot, rawDefinition);
+        const reloaded = await loadWorkflowDefinition(vaultRoot);
+        sendJson(res, 200, {
+          saved,
+          reloaded,
+        });
         return;
       }
 
