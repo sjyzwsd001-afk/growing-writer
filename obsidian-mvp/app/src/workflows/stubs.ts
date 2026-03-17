@@ -5,7 +5,7 @@ import type {
   OutlineResult,
   TaskAnalysis,
 } from "../types/schemas.js";
-import type { Feedback, Material, MatchedRule, Profile, Task } from "../types/domain.js";
+import type { EvidenceCard, Feedback, Material, MatchedRule, Profile, Task } from "../types/domain.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { buildOutlinePrompt } from "../prompts/build-outline.js";
 import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
@@ -53,6 +53,7 @@ export function diagnoseTask(input: {
   analysis: TaskAnalysis;
   matchedRules: MatchedRule[];
   matchedMaterials: Material[];
+  evidenceCards?: EvidenceCard[];
   profiles: Profile[];
 }): DiagnosisResult {
   return {
@@ -85,6 +86,7 @@ export async function diagnoseTaskWithLlm(
     analysis: TaskAnalysis;
     matchedRules: MatchedRule[];
     matchedMaterials: Material[];
+    evidenceCards?: EvidenceCard[];
     profiles: Profile[];
   },
 ): Promise<DiagnosisResult> {
@@ -94,6 +96,7 @@ export async function diagnoseTaskWithLlm(
       taskAnalysis: input.analysis,
       matchedRules: input.matchedRules,
       materialSummaries: input.matchedMaterials.map(summarizeMaterial),
+      evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
     }),
     schema: diagnosisResultSchema,
@@ -106,6 +109,7 @@ export function buildOutline(input: {
   diagnosis: DiagnosisResult;
   matchedRules: MatchedRule[];
   matchedMaterials: Material[];
+  evidenceCards?: EvidenceCard[];
   profiles?: Profile[];
 }): OutlineResult {
   return {
@@ -132,6 +136,7 @@ export async function buildOutlineWithLlm(
     diagnosis: DiagnosisResult;
     matchedRules: MatchedRule[];
     matchedMaterials: Material[];
+    evidenceCards?: EvidenceCard[];
     profiles: Profile[];
   },
 ): Promise<OutlineResult> {
@@ -142,6 +147,7 @@ export async function buildOutlineWithLlm(
       diagnosis: input.diagnosis,
       matchedRules: input.matchedRules,
       materialSummaries: input.matchedMaterials.map(summarizeMaterial),
+      evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
     }),
     schema: outlineResultSchema,
@@ -153,9 +159,13 @@ export function generateDraft(input: {
   analysis?: TaskAnalysis;
   diagnosis?: DiagnosisResult;
   outline: OutlineResult;
+  evidenceCards?: EvidenceCard[];
 }): DraftResult {
   const paragraphs = input.outline.sections.map(
-    (section) => `### ${section.heading}\n\n${section.purpose}。这里将根据后续接入的模型生成正式内容。`,
+    (section, index) => {
+      const evidenceId = input.evidenceCards?.[index]?.card_id;
+      return `### ${section.heading}\n\n${section.purpose}。这里将根据后续接入的模型生成正式内容。${evidenceId ? ` [证据卡:${evidenceId}]` : ""}`;
+    },
   );
 
   return {
@@ -179,6 +189,7 @@ export async function generateDraftWithLlm(
     outline: OutlineResult;
     matchedRules: MatchedRule[];
     matchedMaterials: Material[];
+    evidenceCards?: EvidenceCard[];
     profiles: Profile[];
   },
 ): Promise<DraftResult> {
@@ -190,6 +201,7 @@ export async function generateDraftWithLlm(
       outline: input.outline,
       matchedRules: input.matchedRules,
       materialSummaries: input.matchedMaterials.map(summarizeMaterial),
+      evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
     }),
     schema: draftResultSchema,

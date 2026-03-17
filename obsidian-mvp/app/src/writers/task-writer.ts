@@ -1,6 +1,6 @@
 import { replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 import type { DiagnosisResult, DraftResult, OutlineResult } from "../types/schemas.js";
-import type { Material, MatchedRule, Task } from "../types/domain.js";
+import type { EvidenceCard, Material, MatchedRule, Task } from "../types/domain.js";
 
 function renderDiagnosis(result: DiagnosisResult): string {
   const structure = result.recommended_structure
@@ -38,6 +38,7 @@ function renderOutline(result: OutlineResult): string {
 function renderReferences(input: {
   matchedRules: MatchedRule[];
   matchedMaterials: Material[];
+  evidenceCards: EvidenceCard[];
   decisionLog: string[];
 }): string {
   const materialLines =
@@ -54,6 +55,13 @@ function renderReferences(input: {
       })
       .join("\n") || "- 无";
   const decisionLines = input.decisionLog.map((line) => `- ${line}`).join("\n") || "- 无";
+  const evidenceLines =
+    input.evidenceCards
+      .map(
+        (card) =>
+          `- [${card.card_id}] ${card.material_title}：${card.excerpt}（${card.relevance}）`,
+      )
+      .join("\n") || "- 无";
 
   return `## 相似历史材料
 
@@ -62,6 +70,10 @@ ${materialLines}
 ## 已匹配规则
 
 ${ruleLines}
+
+## 证据卡片
+
+${evidenceLines}
 
 ## 策略裁决
 
@@ -79,6 +91,7 @@ export async function writeTaskSections(input: {
   draft?: DraftResult;
   matchedRules?: MatchedRule[];
   matchedMaterials?: Material[];
+  evidenceCards?: EvidenceCard[];
   decisionLog?: string[];
 }): Promise<void> {
   let nextContent = input.task.content;
@@ -99,6 +112,7 @@ export async function writeTaskSections(input: {
       renderReferences({
         matchedRules: input.matchedRules ?? [],
         matchedMaterials: input.matchedMaterials ?? [],
+        evidenceCards: input.evidenceCards ?? [],
         decisionLog: input.decisionLog ?? [],
       }),
     );

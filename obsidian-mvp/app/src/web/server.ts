@@ -28,6 +28,7 @@ import {
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRules, matchRulesWithPolicy } from "../retrieve/matchers.js";
+import { buildEvidenceCards } from "../retrieve/summaries.js";
 import { VaultRepository } from "../vault/repository.js";
 import {
   buildOutline,
@@ -935,12 +936,18 @@ async function runTaskAction(input: {
     input.vaultRoot,
     input.taskPath,
     );
+  const evidenceCards = buildEvidenceCards({
+    task,
+    materials: matchedMaterials,
+    maxCards: 8,
+  });
 
   const diagnosisInput = {
     task,
     analysis,
     matchedRules,
     matchedMaterials,
+    evidenceCards,
     profiles,
   };
 
@@ -954,9 +961,10 @@ async function runTaskAction(input: {
       diagnosis,
       matchedRules,
       matchedMaterials,
+      evidenceCards,
       decisionLog: ruleDecisionLog,
     });
-    return { analysis, diagnosis, ruleDecisionLog };
+    return { analysis, diagnosis, evidenceCards, ruleDecisionLog };
   }
 
   const outlineInput = {
@@ -965,6 +973,7 @@ async function runTaskAction(input: {
     diagnosis,
     matchedRules,
     matchedMaterials,
+    evidenceCards,
     profiles,
   };
 
@@ -979,9 +988,10 @@ async function runTaskAction(input: {
       outline,
       matchedRules,
       matchedMaterials,
+      evidenceCards,
       decisionLog: ruleDecisionLog,
     });
-    return { analysis, diagnosis, outline, ruleDecisionLog };
+    return { analysis, diagnosis, outline, evidenceCards, ruleDecisionLog };
   }
 
   const draft = client.isEnabled()
@@ -992,6 +1002,7 @@ async function runTaskAction(input: {
         outline,
         matchedRules,
         matchedMaterials,
+        evidenceCards,
         profiles,
       })
     : generateDraft({
@@ -999,6 +1010,7 @@ async function runTaskAction(input: {
         analysis,
         diagnosis,
         outline,
+        evidenceCards,
       });
 
   await writeTaskSections({
@@ -1008,10 +1020,11 @@ async function runTaskAction(input: {
     draft,
     matchedRules,
     matchedMaterials,
+    evidenceCards,
     decisionLog: ruleDecisionLog,
   });
 
-  return { analysis, diagnosis, outline, draft, ruleDecisionLog };
+  return { analysis, diagnosis, outline, draft, evidenceCards, ruleDecisionLog };
 }
 
 async function createTaskFromRequest(input: {

@@ -69,6 +69,14 @@ export type MaterialSummary = {
   useful_phrases: string[];
 };
 
+export type EvidenceCard = {
+  card_id: string;
+  material_id: string;
+  material_title: string;
+  excerpt: string;
+  relevance: string;
+};
+
 export type MatchedRule = {
   rule_id: string;
   title: string;

@@ -1,4 +1,4 @@
-import type { MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
+import type { EvidenceCard, MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
 import type { DiagnosisResult, OutlineResult, TaskAnalysis } from "../types/schemas.js";
 
 export function buildGenerateDraftPrompt(input: {
@@ -7,6 +7,7 @@ export function buildGenerateDraftPrompt(input: {
   outline: OutlineResult;
   matchedRules: MatchedRule[];
   materialSummaries: MaterialSummary[];
+  evidenceCards: EvidenceCard[];
   profiles: Profile[];
 }): string {
   const profileSummary = input.profiles.map((profile) => ({
@@ -23,6 +24,7 @@ export function buildGenerateDraftPrompt(input: {
 3. 尽量符合已确认规则
 4. 风格保持正式、稳定、可交付
 5. draft_markdown 只写正文，不要包含额外解释
+6. 关键事实句尽量引用证据卡片编号，如 [证据卡:E01]
 
 然后做一轮自检：
 - 哪些地方写得比较稳
@@ -46,6 +48,9 @@ ${JSON.stringify(input.matchedRules, null, 2)}
 
 相似材料摘要:
 ${JSON.stringify(input.materialSummaries, null, 2)}
+
+证据卡片:
+${JSON.stringify(input.evidenceCards, null, 2)}
 
 写作画像:
 ${JSON.stringify(profileSummary, null, 2)}`;

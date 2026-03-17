@@ -1,4 +1,4 @@
-import type { MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
+import type { EvidenceCard, MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
 import type { DiagnosisResult, TaskAnalysis } from "../types/schemas.js";
 
 export function buildOutlinePrompt(input: {
@@ -6,6 +6,7 @@ export function buildOutlinePrompt(input: {
   diagnosis: DiagnosisResult;
   matchedRules: MatchedRule[];
   materialSummaries: MaterialSummary[];
+  evidenceCards: EvidenceCard[];
   profiles: Profile[];
 }): string {
   const profileSummary = input.profiles.map((profile) => ({
@@ -38,6 +39,9 @@ ${JSON.stringify(input.matchedRules, null, 2)}
 
 相似材料摘要:
 ${JSON.stringify(input.materialSummaries, null, 2)}
+
+证据卡片:
+${JSON.stringify(input.evidenceCards, null, 2)}
 
 写作画像:
 ${JSON.stringify(profileSummary, null, 2)}`;
