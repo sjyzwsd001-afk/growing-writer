@@ -139,6 +139,15 @@ http://127.0.0.1:4318
 - 接口：`POST /api/feedback/create` 创建反馈记录
 - 接口：`POST /api/feedback/learn` 分析反馈并可产出候选规则
 - 接口：`POST /api/rules/action` 人工确认/停用/拒绝
+- 接口：`POST /api/rules/scope` 调整规则作用域（scope/doc_types/audiences）
+- 接口：`GET /api/rules/versions` 查看规则版本快照历史
+- 接口：`POST /api/rules/rollback` 按版本回滚规则，并自动同步任务与画像
+
+规则闭环补充：
+
+1. 每次规则状态变更或作用域变更前，系统自动做版本快照（`rule-versions/`）
+2. 可在设置页查看版本列表并执行回滚
+3. 回滚后会自动重算 task 规则匹配并刷新画像
 
 ### 4.4 画像刷新
 

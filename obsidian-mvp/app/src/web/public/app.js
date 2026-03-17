@@ -461,12 +461,17 @@ function renderSettingsLists() {
   });
 
   renderSimpleList("settings-rules", data.rules || [], (item) => {
+    const docTypes = Array.isArray(item.docTypes) ? item.docTypes.join(", ") : "";
+    const audiences = Array.isArray(item.audiences) ? item.audiences.join(", ") : "";
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
-      <div class="mini">${escapeHtml(item.status)} / ${escapeHtml(item.scope || "-")} / 置信度 ${escapeHtml(String(item.confidence ?? 0))}</div>
+      <div class="mini">${escapeHtml(item.status)} / scope=${escapeHtml(item.scope || "-")} / 文体=${escapeHtml(docTypes || "-")} / 受众=${escapeHtml(audiences || "-")} / 版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))}</div>
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-rule" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+      <button type="button" class="mini-btn" data-action="rule-set-scope" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">设范围</button>
+      <button type="button" class="mini-btn" data-action="rule-view-versions" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">版本</button>
+      <button type="button" class="mini-btn" data-action="rule-rollback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">回滚</button>
       <button type="button" class="mini-btn" data-action="rule-confirm" data-path="${escapeHtml(item.path)}">确认</button>
       <button type="button" class="mini-btn" data-action="rule-disable" data-path="${escapeHtml(item.path)}">停用</button>
       <button type="button" class="mini-btn" data-action="rule-reject" data-path="${escapeHtml(item.path)}">拒绝</button>
@@ -1582,6 +1587,67 @@ async function runSettingsAction(action, button) {
       body: JSON.stringify({ path, action: mappedAction, reason: "通过设置页操作" }),
     });
     setSettingsResult(`规则操作完成：${mappedAction}`, result);
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "rule-view-versions") {
+    const result = await api(`/api/rules/versions?path=${encodeURIComponent(path)}`);
+    setSettingsResult(`${title || "规则"} - 版本历史`, result);
+    return;
+  }
+
+  if (action === "rule-set-scope") {
+    const scope = window.prompt("请输入规则适用范围（scope）：", "") || "";
+    const docTypesRaw = window.prompt("请输入适用文体（逗号分隔，可留空）：", "") || "";
+    const audiencesRaw = window.prompt("请输入适用受众（逗号分隔，可留空）：", "") || "";
+    const reason = window.prompt("请输入本次范围调整原因：", "通过设置页调整适用范围") || "";
+    const docTypes = docTypesRaw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const audiences = audiencesRaw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const result = await api("/api/rules/scope", {
+      method: "POST",
+      body: JSON.stringify({ path, scope, docTypes, audiences, reason }),
+    });
+    setSettingsResult(`${title || "规则"} - 范围更新完成`, result);
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "rule-rollback") {
+    const versions = await api(`/api/rules/versions?path=${encodeURIComponent(path)}`);
+    if (!versions.versions?.length) {
+      throw new Error("暂无可回滚版本。");
+    }
+
+    const top = versions.versions.slice(0, 12);
+    const hint = top
+      .map((item, index) => `${index + 1}. ${item.versionId} / ${item.action} / ${item.createdAt}`)
+      .join("\n");
+    const picked = window.prompt(`请输入要回滚的版本编号或 versionId：\n${hint}`, "1") || "";
+    let versionId = picked.trim();
+    if (/^\d+$/.test(versionId)) {
+      const index = Number(versionId) - 1;
+      versionId = top[index]?.versionId || "";
+    }
+    if (!versionId) {
+      throw new Error("未选择有效版本。");
+    }
+    const reason =
+      window.prompt("请输入回滚原因：", `通过设置页回滚到 ${versionId}`) ||
+      `通过设置页回滚到 ${versionId}`;
+
+    const result = await api("/api/rules/rollback", {
+      method: "POST",
+      body: JSON.stringify({ path, versionId, reason }),
+    });
+    setSettingsResult(`${title || "规则"} - 回滚完成`, result);
     await loadDashboard();
     return;
   }

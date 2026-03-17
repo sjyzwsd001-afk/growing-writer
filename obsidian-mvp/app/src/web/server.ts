@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -78,6 +78,13 @@ type ServerOptions = {
 };
 
 type RuleAction = "confirm" | "disable" | "reject";
+type RuleVersionAction =
+  | "confirm"
+  | "disable"
+  | "reject"
+  | "update_scope"
+  | "rollback"
+  | "pre_rollback";
 type WorkflowAdvanceAction = "regenerate" | "finalize";
 type PendingOauthRequest = {
   state: string;
@@ -95,6 +102,16 @@ type PendingOauthRequest = {
 type OauthCallbackServerState = {
   port: number;
   close: () => Promise<void>;
+};
+
+type RuleVersionMeta = {
+  versionId: string;
+  ruleId: string;
+  action: RuleVersionAction;
+  reason: string;
+  createdAt: string;
+  snapshotPath: string;
+  metadataPath: string;
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -496,16 +513,96 @@ async function serveStatic(res: ServerResponse, requestPath: string) {
   createReadStream(localPath).pipe(res);
 }
 
-async function applyRuleAction(input: {
-  action: RuleAction;
+function replaceBulletLine(content: string, prefix: string, value: string): string {
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^- ${escaped}.*$`, "m");
+  const nextLine = `- ${prefix}${value}`;
+  if (pattern.test(content)) {
+    return content.replace(pattern, nextLine);
+  }
+  return `${content.trim()}\n${nextLine}\n`;
+}
+
+function ruleVersionDir(vaultRoot: string, ruleId: string): string {
+  return join(vaultRoot, "rule-versions", toSafeId(ruleId));
+}
+
+function versionTimestampId(): string {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+async function snapshotRuleVersion(input: {
   vaultRoot: string;
+  ruleId: string;
   rulePath: string;
+  action: RuleVersionAction;
   reason?: string;
+}): Promise<RuleVersionMeta> {
+  const createdAt = new Date().toISOString();
+  const versionId = `${versionTimestampId()}-${Math.random().toString(36).slice(2, 8)}`;
+  const dir = ruleVersionDir(input.vaultRoot, input.ruleId);
+  await mkdir(dir, { recursive: true });
+
+  const snapshotPath = join(dir, `${versionId}.md`);
+  const metadataPath = join(dir, `${versionId}.json`);
+  const raw = await readFile(input.rulePath, "utf8");
+  await writeFile(snapshotPath, raw, "utf8");
+
+  const metadata: RuleVersionMeta = {
+    versionId,
+    ruleId: input.ruleId,
+    action: input.action,
+    reason: input.reason || "",
+    createdAt,
+    snapshotPath,
+    metadataPath,
+  };
+  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+  return metadata;
+}
+
+async function listRuleVersions(vaultRoot: string, ruleId: string): Promise<RuleVersionMeta[]> {
+  const dir = ruleVersionDir(vaultRoot, ruleId);
+  let entries: string[] = [];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const metas: RuleVersionMeta[] = [];
+  for (const entry of entries.filter((item) => item.endsWith(".json"))) {
+    try {
+      const raw = await readFile(join(dir, entry), "utf8");
+      const parsed = JSON.parse(raw) as Partial<RuleVersionMeta>;
+      if (!parsed.versionId || !parsed.ruleId || !parsed.snapshotPath || !parsed.metadataPath) {
+        continue;
+      }
+      metas.push({
+        versionId: parsed.versionId,
+        ruleId: parsed.ruleId,
+        action: (parsed.action as RuleVersionAction) || "update_scope",
+        reason: parsed.reason || "",
+        createdAt: parsed.createdAt || "",
+        snapshotPath: parsed.snapshotPath,
+        metadataPath: parsed.metadataPath,
+      });
+    } catch {
+      // ignore broken metadata entry
+    }
+  }
+
+  return metas.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+async function syncAfterRuleMutation(input: {
+  vaultRoot: string;
+  updatedRuleId: string;
+  updatedRuleStatus: string;
 }) {
   const repo = new VaultRepository(input.vaultRoot);
   const client = createLlmClient(input.vaultRoot);
-  const [rule, rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
-    repo.loadRule(input.rulePath),
+  const [rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
     repo.loadRules(),
     repo.loadProfiles(),
     repo.loadTasks(),
@@ -513,6 +610,39 @@ async function applyRuleAction(input: {
     repo.loadFeedbackEntries(),
   ]);
 
+  const updatedTasks = await syncRuleInTasks({
+    tasks,
+    ruleId: input.updatedRuleId,
+    enabled: input.updatedRuleStatus === "confirmed",
+  });
+
+  const profilePath = await refreshDefaultProfile({
+    vaultRoot: input.vaultRoot,
+    profiles,
+    rules,
+    materials,
+    feedbackEntries,
+    client,
+  });
+
+  return { updatedTasks, profilePath };
+}
+
+async function applyRuleAction(input: {
+  action: RuleAction;
+  vaultRoot: string;
+  rulePath: string;
+  reason?: string;
+}) {
+  const repo = new VaultRepository(input.vaultRoot);
+  const rule = await repo.loadRule(input.rulePath);
+  const snapshot = await snapshotRuleVersion({
+    vaultRoot: input.vaultRoot,
+    ruleId: rule.id,
+    rulePath: rule.path,
+    action: input.action,
+    reason: input.reason,
+  });
   const updatedRule =
     input.action === "confirm"
       ? await confirmRule(rule, input.reason)
@@ -520,25 +650,112 @@ async function applyRuleAction(input: {
         ? await disableRule(rule, input.reason)
         : await rejectRule(rule, input.reason);
 
-  const updatedTasks = await syncRuleInTasks({
-    tasks,
-    ruleId: updatedRule.id,
-    enabled: input.action === "confirm",
-  });
-
-  const profilePath = await refreshDefaultProfile({
+  const sync = await syncAfterRuleMutation({
     vaultRoot: input.vaultRoot,
-    profiles,
-    rules: rules.map((item) => (item.id === updatedRule.id ? updatedRule : item)),
-    materials,
-    feedbackEntries,
-    client,
+    updatedRuleId: updatedRule.id,
+    updatedRuleStatus: updatedRule.status,
   });
 
   return {
     rule: updatedRule,
-    updatedTasks,
-    profilePath,
+    updatedTasks: sync.updatedTasks,
+    profilePath: sync.profilePath,
+    snapshot,
+  };
+}
+
+async function applyRuleScopeUpdate(input: {
+  vaultRoot: string;
+  rulePath: string;
+  scope?: string;
+  docTypes?: string[];
+  audiences?: string[];
+  reason?: string;
+}) {
+  const repo = new VaultRepository(input.vaultRoot);
+  const rule = await repo.loadRule(input.rulePath);
+  const snapshot = await snapshotRuleVersion({
+    vaultRoot: input.vaultRoot,
+    ruleId: rule.id,
+    rulePath: rule.path,
+    action: "update_scope",
+    reason: input.reason,
+  });
+
+  const nextFrontmatter = {
+    ...rule.frontmatter,
+    scope: typeof input.scope === "string" ? input.scope : rule.scope,
+    doc_types: Array.isArray(input.docTypes) ? input.docTypes : rule.docTypes,
+    audiences: Array.isArray(input.audiences) ? input.audiences : rule.audiences,
+    updated_at: new Date().toISOString(),
+    scope_reason: input.reason || rule.frontmatter.scope_reason,
+  };
+  const nextScope = String(nextFrontmatter.scope || "");
+  const nextContent = replaceBulletLine(rule.content, "适用范围：", nextScope || "待补充");
+  await writeMarkdownDocument(rule.path, nextFrontmatter, nextContent);
+
+  const updatedRule = await repo.loadRule(rule.path);
+  const sync = await syncAfterRuleMutation({
+    vaultRoot: input.vaultRoot,
+    updatedRuleId: updatedRule.id,
+    updatedRuleStatus: updatedRule.status,
+  });
+
+  return {
+    rule: updatedRule,
+    updatedTasks: sync.updatedTasks,
+    profilePath: sync.profilePath,
+    snapshot,
+  };
+}
+
+async function rollbackRuleVersion(input: {
+  vaultRoot: string;
+  rulePath: string;
+  versionId: string;
+  reason?: string;
+}) {
+  const repo = new VaultRepository(input.vaultRoot);
+  const rule = await repo.loadRule(input.rulePath);
+  const versions = await listRuleVersions(input.vaultRoot, rule.id);
+  const target = versions.find((item) => item.versionId === input.versionId);
+  if (!target) {
+    throw new Error(`Rule version ${input.versionId} not found.`);
+  }
+
+  const snapshot = await snapshotRuleVersion({
+    vaultRoot: input.vaultRoot,
+    ruleId: rule.id,
+    rulePath: rule.path,
+    action: "pre_rollback",
+    reason: input.reason || `before rollback to ${input.versionId}`,
+  });
+
+  const rawSnapshot = await readFile(target.snapshotPath, "utf8");
+  await writeFile(rule.path, rawSnapshot, "utf8");
+
+  const updatedRule = await repo.loadRule(rule.path);
+  const sync = await syncAfterRuleMutation({
+    vaultRoot: input.vaultRoot,
+    updatedRuleId: updatedRule.id,
+    updatedRuleStatus: updatedRule.status,
+  });
+
+  const rollbackLog = await snapshotRuleVersion({
+    vaultRoot: input.vaultRoot,
+    ruleId: updatedRule.id,
+    rulePath: updatedRule.path,
+    action: "rollback",
+    reason: input.reason || `rollback to ${input.versionId}`,
+  });
+
+  return {
+    rule: updatedRule,
+    updatedTasks: sync.updatedTasks,
+    profilePath: sync.profilePath,
+    rollbackTo: target,
+    snapshot,
+    rollbackLog,
   };
 }
 
@@ -986,6 +1203,24 @@ async function buildDashboard(vaultRoot: string) {
     }))
     .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
 
+  const ruleItems = await Promise.all(
+    rules.map(async (item) => {
+      const versions = await listRuleVersions(vaultRoot, item.id);
+      return {
+        id: item.id,
+        title: item.title,
+        status: item.status,
+        scope: item.scope,
+        docTypes: item.docTypes,
+        audiences: item.audiences,
+        confidence: item.confidence,
+        versionCount: versions.length,
+        latestVersionAt: versions[0]?.createdAt || "",
+        path: item.path,
+      };
+    }),
+  );
+
   return {
     vaultRoot,
     llm: {
@@ -1013,15 +1248,7 @@ async function buildDashboard(vaultRoot: string) {
         path: item.path,
       }))
       .sort((a, b) => a.title.localeCompare(b.title, "zh-CN")),
-    rules: rules
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        status: item.status,
-        scope: item.scope,
-        confidence: item.confidence,
-        path: item.path,
-      }))
+    rules: ruleItems
       .sort((a, b) => a.title.localeCompare(b.title, "zh-CN")),
     feedback: feedbackEntries
       .map((item) => ({
@@ -1646,6 +1873,81 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           status: result.rule.status,
           profilePath: result.profilePath,
           updatedTasks: result.updatedTasks,
+          snapshot: result.snapshot,
+        });
+        return;
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/rules/versions") {
+        const path = url.searchParams.get("path");
+        if (!path) {
+          sendJson(res, 400, { error: "Missing rule path." });
+          return;
+        }
+        const repo = new VaultRepository(vaultRoot);
+        const rule = await repo.loadRule(resolve(path));
+        const versions = await listRuleVersions(vaultRoot, rule.id);
+        sendJson(res, 200, {
+          ruleId: rule.id,
+          ruleTitle: rule.title,
+          versions,
+        });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/rules/scope") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        if (typeof body.path !== "string" || !body.path.trim()) {
+          sendJson(res, 400, { error: "Missing rule path." });
+          return;
+        }
+
+        const docTypes = normalizeTagList(body.docTypes);
+        const audiences = normalizeTagList(body.audiences);
+        const result = await applyRuleScopeUpdate({
+          vaultRoot,
+          rulePath: resolve(body.path),
+          scope: typeof body.scope === "string" ? body.scope.trim() : "",
+          docTypes,
+          audiences,
+          reason: typeof body.reason === "string" ? body.reason : "",
+        });
+        sendJson(res, 200, {
+          ruleId: result.rule.id,
+          scope: result.rule.scope,
+          docTypes: result.rule.docTypes,
+          audiences: result.rule.audiences,
+          profilePath: result.profilePath,
+          updatedTasks: result.updatedTasks,
+          snapshot: result.snapshot,
+        });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/rules/rollback") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        if (!body.path || !body.versionId) {
+          sendJson(res, 400, { error: "Missing rule path or versionId." });
+          return;
+        }
+
+        const result = await rollbackRuleVersion({
+          vaultRoot,
+          rulePath: resolve(body.path),
+          versionId: body.versionId,
+          reason: body.reason,
+        });
+        sendJson(res, 200, {
+          ruleId: result.rule.id,
+          status: result.rule.status,
+          scope: result.rule.scope,
+          docTypes: result.rule.docTypes,
+          audiences: result.rule.audiences,
+          profilePath: result.profilePath,
+          updatedTasks: result.updatedTasks,
+          rollbackTo: result.rollbackTo,
+          snapshot: result.snapshot,
+          rollbackLog: result.rollbackLog,
         });
         return;
       }
