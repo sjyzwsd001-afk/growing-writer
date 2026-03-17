@@ -322,6 +322,26 @@ function createPkcePair(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
+function buildCodexAuthorizeUrl(input: {
+  redirectUri: string;
+  state: string;
+  challenge: string;
+  originator: string;
+}): string {
+  const authUrl = new URL(OPENAI_CODEX_AUTH_URL);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", OPENAI_CODEX_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", input.redirectUri);
+  authUrl.searchParams.set("state", input.state);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("code_challenge", input.challenge);
+  authUrl.searchParams.set("scope", OPENAI_CODEX_SCOPE);
+  authUrl.searchParams.set("id_token_add_organizations", "true");
+  authUrl.searchParams.set("codex_cli_simplified_flow", "true");
+  authUrl.searchParams.set("originator", input.originator);
+  return authUrl.toString();
+}
+
 function buildOauthSuccessPage(frontendOrigin: string): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1774,9 +1794,17 @@ async function handleOauthCallbackRequest(input: {
   const code = input.url.searchParams.get("code");
   const state = input.url.searchParams.get("state");
   const oauthError = input.url.searchParams.get("error");
+  const oauthErrorDescription = input.url.searchParams.get("error_description");
 
   if (oauthError) {
-    sendText(input.res, 400, `OAuth failed: ${oauthError}`);
+    input.res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+    input.res.end(
+      buildOauthErrorPage({
+        title: "OAuth 登录失败",
+        message: `OAuth failed: ${oauthError}`,
+        details: oauthErrorDescription || "No error_description returned from OAuth callback.",
+      }),
+    );
     return;
   }
   if (!code || !state) {
@@ -2049,21 +2077,23 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           createdAt: Date.now(),
         });
 
-        const authUrl = new URL(OPENAI_CODEX_AUTH_URL);
-        authUrl.searchParams.set("response_type", "code");
-        authUrl.searchParams.set("client_id", OPENAI_CODEX_CLIENT_ID);
-        authUrl.searchParams.set("redirect_uri", redirectUri);
-        authUrl.searchParams.set("state", state);
-        authUrl.searchParams.set("code_challenge_method", "S256");
-        authUrl.searchParams.set("code_challenge", challenge);
-        authUrl.searchParams.set("scope", OPENAI_CODEX_SCOPE);
-        authUrl.searchParams.set("prompt", "select_account");
-        authUrl.searchParams.set("id_token_add_organizations", "true");
-        authUrl.searchParams.set("codex_cli_simplified_flow", "true");
-        authUrl.searchParams.set("originator", OPENAI_CODEX_ORIGINATOR);
+        const authUrl = buildCodexAuthorizeUrl({
+          redirectUri,
+          state,
+          challenge,
+          originator: OPENAI_CODEX_ORIGINATOR,
+        });
+        const fallbackOriginator = OPENAI_CODEX_ORIGINATOR === "pi" ? "codex_cli_rs" : "pi";
+        const fallbackAuthUrl = buildCodexAuthorizeUrl({
+          redirectUri,
+          state,
+          challenge,
+          originator: fallbackOriginator,
+        });
 
         sendJson(res, 200, {
-          authUrl: authUrl.toString(),
+          authUrl,
+          fallbackAuthUrl,
           redirectUri,
           state,
           provider: OPENAI_CODEX_PROVIDER_LABEL,

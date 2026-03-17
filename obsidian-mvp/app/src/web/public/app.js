@@ -11,6 +11,7 @@ const state = {
   latestFeedbackByLocation: {},
   workflowDefinition: null,
   workflowEditorDefinition: null,
+  oauthStartAttempt: 0,
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -1439,9 +1440,17 @@ function bindLlmSettings() {
         method: "POST",
         body: JSON.stringify({ provider: "openai-codex-oauth", model }),
       });
-      const popup = window.open(result.authUrl, "gw-oauth", "width=680,height=820");
+      const useFallback = state.oauthStartAttempt % 2 === 1 && result.fallbackAuthUrl;
+      const authTarget = useFallback ? result.fallbackAuthUrl : result.authUrl;
+      state.oauthStartAttempt += 1;
+      const popup = window.open(authTarget, "gw-oauth", "width=680,height=820");
       if (!popup) {
-        window.location.href = result.authUrl;
+        window.location.href = authTarget;
+      }
+      if (!useFallback) {
+        setInfo("已发起 OAuth 登录。如仍报 invalid_request，再点一次会自动切换兼容参数重试。");
+      } else {
+        setInfo("已使用兼容参数重试 OAuth 登录。");
       }
     } catch (error) {
       setInfo(`OAuth 发起失败：${error.message}`, true);
@@ -1848,6 +1857,7 @@ window.addEventListener("message", async (event) => {
     return;
   }
   if (event.data?.type === "oauth-complete" && event.data?.ok) {
+    state.oauthStartAttempt = 0;
     await loadDashboard();
     setInfo("OAuth 登录成功，模型状态已刷新。");
   }
