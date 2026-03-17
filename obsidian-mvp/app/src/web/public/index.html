@@ -191,38 +191,54 @@
         <section id="view-settings" class="view">
           <section class="panel">
             <div class="panel-header"><h2>模型配置</h2></div>
-            <div class="grid two">
-              <label>接入方式
-                <select id="llm-mode">
-                  <option value="openai-api-key">API Key</option>
-                  <option value="openai-codex-oauth">OAuth (OpenAI Codex)</option>
-                </select>
-              </label>
-              <label id="llm-model-oauth-wrap">OAuth 模型
-                <select id="llm-model-oauth-select">
-                  <option value="gpt-5.4">gpt-5.4</option>
-                  <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-                </select>
-              </label>
-              <label id="llm-model-key-wrap">API Key 模型（可自定义）
-                <input id="llm-model-key-input" placeholder="例如：gpt-5.4 / gpt-4.1 / 自定义兼容模型名" />
-              </label>
-            </div>
-            <div id="key-config">
-              <label>API Key / Bearer Token
-                <input id="llm-token-input" placeholder="sk-..." />
-              </label>
-              <div class="grid two">
-                <label>Base URL<input id="llm-base-url-input" value="https://api.openai.com/v1" /></label>
-                <label>Auth URL（可选）<input id="llm-auth-url-input" placeholder="可留空" /></label>
+            <div class="panel-sub">
+              <div class="section-meta">
+                <strong>模型卡片</strong>
+                <button id="new-llm-card" class="mini-btn" type="button">新建卡片</button>
               </div>
+              <div id="llm-card-list" class="llm-card-list"></div>
             </div>
-            <div id="oauth-config" class="hidden">
-              <p class="hint">点击按钮后会弹出 OpenAI OAuth 登录。登录完成会自动刷新状态。</p>
-              <button id="start-oauth-login" class="btn primary" type="button">开始 OAuth 登录</button>
-            </div>
-            <div class="editor-actions">
-              <button id="save-llm-settings" class="btn primary" type="button">保存模型配置</button>
+            <div class="panel-sub llm-form-shell">
+              <div class="section-meta">
+                <strong id="llm-form-title">新建模型卡片</strong>
+                <span class="mini" id="llm-editing-meta">未选择卡片</span>
+              </div>
+              <div class="grid two">
+                <label>卡片名称
+                  <input id="llm-card-name-input" placeholder="例如：生产 OpenAI Key / Codex OAuth / 备用模型" />
+                </label>
+                <label>接入方式
+                  <select id="llm-mode">
+                    <option value="openai-api-key">API Key</option>
+                    <option value="openai-codex-oauth">OAuth (OpenAI Codex)</option>
+                  </select>
+                </label>
+                <label id="llm-model-oauth-wrap">OAuth 模型
+                  <select id="llm-model-oauth-select">
+                    <option value="gpt-5.4">gpt-5.4</option>
+                    <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+                  </select>
+                </label>
+                <label id="llm-model-key-wrap">API Key 模型（可自定义）
+                  <input id="llm-model-key-input" placeholder="例如：gpt-5.4 / gpt-4.1 / 自定义兼容模型名" />
+                </label>
+              </div>
+              <div id="key-config">
+                <label>API Key / Bearer Token
+                  <input id="llm-token-input" placeholder="留空则保留当前卡片已存 token；新卡片则为空" />
+                </label>
+                <div class="grid two">
+                  <label>Base URL<input id="llm-base-url-input" value="https://api.openai.com/v1" /></label>
+                  <label>Auth URL（可选）<input id="llm-auth-url-input" placeholder="可留空" /></label>
+                </div>
+              </div>
+              <div id="oauth-config" class="hidden">
+                <p class="hint">先保存卡片，再点击登录；也可以直接点下面按钮开始 OAuth，登录结果会写回当前编辑卡片。</p>
+                <button id="start-oauth-login" class="btn primary" type="button">开始 OAuth 登录</button>
+              </div>
+              <div class="editor-actions">
+                <button id="save-llm-settings" class="btn primary" type="button">保存为模型卡片</button>
+              </div>
             </div>
             <div class="panel-sub">
               <h3>模型路由与降级</h3>

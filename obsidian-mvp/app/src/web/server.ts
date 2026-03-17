@@ -22,9 +22,12 @@ import {
   OPENAI_KEY_PROVIDER_LABEL,
 } from "../config/constants.js";
 import {
+  activateStoredLlmProfile,
+  deleteStoredLlmProfile,
   getLlmConfig,
+  listStoredLlmProfiles,
   getStoredLlmSettings,
-  saveStoredLlmSettings,
+  upsertStoredLlmProfile,
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRules, matchRulesWithPolicy } from "../retrieve/matchers.js";
@@ -89,6 +92,7 @@ type RuleVersionAction =
 type WorkflowAdvanceAction = "regenerate" | "finalize";
 type PendingOauthRequest = {
   state: string;
+  profileId: string;
   codeVerifier: string;
   redirectUri: string;
   tokenUrl: string;
@@ -1678,6 +1682,7 @@ async function buildDashboard(vaultRoot: string) {
 
   const llmConfig = getLlmConfig(vaultRoot);
   const stored = getStoredLlmSettings(vaultRoot);
+  const llmProfiles = listStoredLlmProfiles(vaultRoot);
   const provider =
     stored?.provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER : OPENAI_CODEX_PROVIDER;
   const providerLabel =
@@ -1722,6 +1727,8 @@ async function buildDashboard(vaultRoot: string) {
   return {
     vaultRoot,
     llm: {
+      activeProfileId: llmProfiles.activeProfileId,
+      activeProfileName: stored?.name || "",
       provider,
       providerLabel,
       enabled: llmConfig.enabled,
@@ -1735,6 +1742,28 @@ async function buildDashboard(vaultRoot: string) {
       fastModel: stored?.fastModel || llmConfig.model,
       strongModel: stored?.strongModel || llmConfig.model,
       fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels : [],
+      cards: llmProfiles.profiles.map((profile) => ({
+        id: profile.id,
+        name: profile.name,
+        provider: profile.provider,
+        providerLabel:
+          profile.provider === OPENAI_KEY_PROVIDER
+            ? OPENAI_KEY_PROVIDER_LABEL
+            : OPENAI_CODEX_PROVIDER_LABEL,
+        model: profile.model,
+        baseUrl: profile.baseUrl,
+        authUrl: profile.authUrl,
+        routingEnabled: Boolean(profile.routingEnabled),
+        fastModel: profile.fastModel || profile.model,
+        strongModel: profile.strongModel || profile.model,
+        fallbackModels: Array.isArray(profile.fallbackModels) ? profile.fallbackModels : [],
+        enabled: Boolean(profile.bearerToken?.trim()),
+        hasBearerToken: Boolean(profile.bearerToken?.trim()),
+        oauthReady: Boolean(profile.oauthAccessToken && profile.oauthIdToken),
+        updatedAt: profile.updatedAt ?? null,
+        createdAt: profile.createdAt ?? null,
+        isActive: profile.id === llmProfiles.activeProfileId,
+      })),
     },
     materials: materialItems,
     templates: materialItems.filter((item) => item.isTemplate || item.quality === "high"),
@@ -1850,7 +1879,8 @@ async function handleOauthCallbackRequest(input: {
       return;
     }
 
-    saveStoredLlmSettings(input.vaultRoot, {
+    upsertStoredLlmProfile(input.vaultRoot, {
+      id: pending.profileId,
       provider: OPENAI_CODEX_PROVIDER,
       bearerToken: apiKey,
       baseUrl: pending.baseUrl,
@@ -1966,7 +1996,12 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const body = (await readBody(req)) as Record<string, unknown>;
         const provider =
           body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
-        const existing = getStoredLlmSettings(vaultRoot);
+        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
+        const profiles = listStoredLlmProfiles(vaultRoot);
+        const existing =
+          profiles.profiles.find((profile) => profile.id === profileId) ??
+          getStoredLlmSettings(vaultRoot);
+        const profileName = typeof body.name === "string" ? body.name.trim() : "";
         const isCodex = provider === OPENAI_CODEX_PROVIDER;
         const model = isCodex
           ? normalizeCodexModel(body.model ?? existing?.model)
@@ -1986,12 +2021,23 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
                   .filter(Boolean)
               : existing?.fallbackModels || [];
 
-        const settings = saveStoredLlmSettings(vaultRoot, {
+        const tokenInput = typeof body.bearerToken === "string" ? body.bearerToken : "";
+        const preserveExistingToken =
+          Boolean(profileId) &&
+          !tokenInput &&
+          provider === OPENAI_KEY_PROVIDER &&
+          existing?.id === profileId;
+
+        const shouldActivate =
+          !profiles.activeProfileId || !profileId || profiles.activeProfileId === profileId;
+        const settings = upsertStoredLlmProfile(vaultRoot, {
+          id: profileId || undefined,
+          name: profileName || undefined,
           provider,
           bearerToken:
-            typeof body.bearerToken === "string"
-              ? body.bearerToken
-              : existing?.bearerToken ?? "",
+            preserveExistingToken
+              ? existing?.bearerToken ?? ""
+              : tokenInput,
           baseUrl:
             isCodex
               ? OPENAI_CODEX_BASE_URL
@@ -2039,9 +2085,36 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
               ? body.strongModel.trim()
               : existing?.strongModel || model,
           fallbackModels,
-        });
+        }, { activate: shouldActivate }).profile;
         const resolved = getLlmConfig(vaultRoot);
         sendJson(res, 200, { settings, resolved });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/settings/llm/select") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
+        if (!profileId) {
+          sendJson(res, 400, { error: "Missing profileId." });
+          return;
+        }
+        const store = activateStoredLlmProfile(vaultRoot, profileId);
+        sendJson(res, 200, { activeProfileId: store.activeProfileId });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/settings/llm/delete") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
+        if (!profileId) {
+          sendJson(res, 400, { error: "Missing profileId." });
+          return;
+        }
+        const store = deleteStoredLlmProfile(vaultRoot, profileId);
+        sendJson(res, 200, {
+          activeProfileId: store.activeProfileId,
+          remaining: store.profiles.length,
+        });
         return;
       }
 
@@ -2050,11 +2123,18 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const frontendOrigin = req.headers.host
           ? `http://${req.headers.host}`
           : `http://127.0.0.1:${port}`;
-        const existing = getStoredLlmSettings(vaultRoot);
+        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
+        const profiles = listStoredLlmProfiles(vaultRoot);
+        const existing =
+          profiles.profiles.find((profile) => profile.id === profileId) ??
+          getStoredLlmSettings(vaultRoot);
         await ensureOauthCallbackServer(vaultRoot);
         const selectedModel = normalizeCodexModel(body.model ?? existing?.model);
+        const profileName = typeof body.name === "string" ? body.name.trim() : "";
 
-        const settings = saveStoredLlmSettings(vaultRoot, {
+        const settings = upsertStoredLlmProfile(vaultRoot, {
+          id: profileId || undefined,
+          name: profileName || undefined,
           provider: OPENAI_CODEX_PROVIDER,
           bearerToken: existing?.bearerToken ?? "",
           baseUrl: OPENAI_CODEX_BASE_URL,
@@ -2066,13 +2146,14 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           oauthAccessToken: existing?.oauthAccessToken,
           oauthIdToken: existing?.oauthIdToken,
           refreshToken: existing?.refreshToken,
-        });
+        }, { activate: profiles.activeProfileId === profileId || !profiles.activeProfileId || !profileId }).profile;
 
         const { verifier, challenge } = createPkcePair();
         const state = toBase64Url(randomBytes(18));
         const redirectUri = `http://localhost:${OPENAI_CODEX_CALLBACK_PORT}/auth/callback`;
         pendingOauthRequests.set(state, {
           state,
+          profileId: settings.id,
           codeVerifier: verifier,
           redirectUri,
           tokenUrl: settings.tokenUrl,
@@ -2103,6 +2184,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           fallbackAuthUrl,
           redirectUri,
           state,
+          profileId: settings.id,
           provider: OPENAI_CODEX_PROVIDER_LABEL,
         });
         return;

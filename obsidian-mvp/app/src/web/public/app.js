@@ -12,6 +12,7 @@ const state = {
   workflowDefinition: null,
   workflowEditorDefinition: null,
   oauthStartAttempt: 0,
+  editingLlmProfileId: "",
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -572,6 +573,31 @@ function toggleLlmMode(mode) {
   }
 }
 
+function getLlmFormPayload() {
+  const mode = document.getElementById("llm-mode").value;
+  const model =
+    mode === "openai-codex-oauth"
+      ? document.getElementById("llm-model-oauth-select").value
+      : document.getElementById("llm-model-key-input").value.trim();
+  return {
+    profileId: state.editingLlmProfileId || undefined,
+    name: document.getElementById("llm-card-name-input").value.trim(),
+    provider: mode,
+    model,
+    bearerToken: document.getElementById("llm-token-input").value.trim(),
+    baseUrl: document.getElementById("llm-base-url-input").value.trim(),
+    authUrl: document.getElementById("llm-auth-url-input").value.trim(),
+    routingEnabled: document.getElementById("routing-enabled").checked,
+    fastModel: document.getElementById("routing-fast-model").value.trim(),
+    strongModel: document.getElementById("routing-strong-model").value.trim(),
+    fallbackModels: document
+      .getElementById("routing-fallback-models")
+      .value.split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  };
+}
+
 function renderFeedbackHistory() {
   const container = document.getElementById("feedback-history");
   if (!state.feedbackHistory.length) {
@@ -917,29 +943,87 @@ function updateWorkflowDefinitionFromUi(mutator) {
 
 function updateTopStatus(data) {
   document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
-  document.getElementById("llm-status").textContent = data.llm.enabled ? "已可调用" : "未就绪";
+  document.getElementById("llm-status").textContent = data.llm.enabled
+    ? `已可调用${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`
+    : "未就绪";
   document.getElementById("llm-source").textContent = data.llm.source || "-";
   document.getElementById("llm-model-text").textContent = data.llm.model || "-";
   document.getElementById("vault-root").textContent = data.vaultRoot || "-";
   document.getElementById("llm-updated-at").textContent = data.llm.updatedAt || "未更新";
 }
 
-function hydrateLlmSettings(data) {
+function getLlmCards() {
+  return Array.isArray(state.dashboard?.llm?.cards) ? state.dashboard.llm.cards : [];
+}
+
+function getLlmCardById(profileId) {
+  return getLlmCards().find((card) => card.id === profileId) || null;
+}
+
+function renderLlmCards(data) {
   const llm = data.llm || {};
-  const mode = llm.provider || "openai-api-key";
+  const cards = Array.isArray(llm.cards) ? llm.cards : [];
+  const container = document.getElementById("llm-card-list");
+  if (!cards.length) {
+    container.innerHTML = `<div class="empty">还没有模型卡片。先在下方新建一个。</div>`;
+    return;
+  }
+
+  container.innerHTML = cards
+    .map((card) => {
+      const statusText = card.enabled ? "可调用" : card.oauthReady ? "OAuth 已就绪" : "未就绪";
+      return `<div class="llm-card ${card.isActive ? "active" : ""}">
+        <div class="llm-card-head">
+          <div>
+            <strong>${escapeHtml(card.name || card.id)}</strong>
+            <div class="mini">${escapeHtml((card.providerLabel || card.provider || "-") + " / " + (card.model || "-") + " / " + statusText)}</div>
+          </div>
+          <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用卡片"}</span>
+        </div>
+        <div class="mini">更新时间：${escapeHtml(card.updatedAt || "-")}</div>
+        <div class="row-actions llm-card-actions">
+          <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
+          <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
+          <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+function fillLlmForm(card) {
+  const mode = card?.provider || "openai-api-key";
+  const model = card?.model || "gpt-5.4";
   const oauthModels = new Set(["gpt-5.4", "gpt-5.3-codex"]);
-  const oauthModel = oauthModels.has(llm.model) ? llm.model : "gpt-5.4";
+  const oauthModel = oauthModels.has(model) ? model : "gpt-5.4";
+  document.getElementById("llm-card-name-input").value = card?.name || "";
   document.getElementById("llm-mode").value = mode;
   document.getElementById("llm-model-oauth-select").value = oauthModel;
-  document.getElementById("llm-model-key-input").value = llm.model || "gpt-5.4";
-  document.getElementById("llm-base-url-input").value = llm.baseUrl || "https://api.openai.com/v1";
-  document.getElementById("routing-enabled").checked = Boolean(llm.routingEnabled);
-  document.getElementById("routing-fast-model").value = llm.fastModel || llm.model || "gpt-5.3-codex";
-  document.getElementById("routing-strong-model").value = llm.strongModel || llm.model || "gpt-5.4";
-  document.getElementById("routing-fallback-models").value = Array.isArray(llm.fallbackModels)
-    ? llm.fallbackModels.join(",")
+  document.getElementById("llm-model-key-input").value = model;
+  document.getElementById("llm-token-input").value = "";
+  document.getElementById("llm-base-url-input").value = card?.baseUrl || "https://api.openai.com/v1";
+  document.getElementById("llm-auth-url-input").value = card?.authUrl || "";
+  document.getElementById("routing-enabled").checked = Boolean(card?.routingEnabled);
+  document.getElementById("routing-fast-model").value = card?.fastModel || model || "gpt-5.3-codex";
+  document.getElementById("routing-strong-model").value = card?.strongModel || model || "gpt-5.4";
+  document.getElementById("routing-fallback-models").value = Array.isArray(card?.fallbackModels)
+    ? card.fallbackModels.join(",")
     : "";
+  document.getElementById("llm-form-title").textContent = card ? "编辑模型卡片" : "新建模型卡片";
+  document.getElementById("llm-editing-meta").textContent = card
+    ? `当前编辑：${card.name || card.id}`
+    : "未选择卡片";
+  document.getElementById("save-llm-settings").textContent = card ? "保存卡片修改" : "保存为模型卡片";
   toggleLlmMode(mode);
+}
+
+function hydrateLlmSettings(data) {
+  renderLlmCards(data);
+  const activeProfileId = data.llm?.activeProfileId || "";
+  const editingProfileId = state.editingLlmProfileId || activeProfileId;
+  const card = getLlmCardById(editingProfileId) || getLlmCardById(activeProfileId);
+  state.editingLlmProfileId = card?.id || "";
+  fillLlmForm(card);
 }
 
 async function loadWorkflowDefinitionEditor() {
@@ -1414,35 +1498,77 @@ function bindLlmSettings() {
     toggleLlmMode(event.currentTarget.value);
   });
 
-  document.getElementById("save-llm-settings").addEventListener("click", async () => {
-    const mode = document.getElementById("llm-mode").value;
-    const model =
-      mode === "openai-codex-oauth"
-        ? document.getElementById("llm-model-oauth-select").value
-        : document.getElementById("llm-model-key-input").value.trim();
-    const payload = {
-      provider: mode,
-      model,
-      bearerToken: document.getElementById("llm-token-input").value.trim(),
-      baseUrl: document.getElementById("llm-base-url-input").value.trim(),
-      authUrl: document.getElementById("llm-auth-url-input").value.trim(),
-      routingEnabled: document.getElementById("routing-enabled").checked,
-      fastModel: document.getElementById("routing-fast-model").value.trim(),
-      strongModel: document.getElementById("routing-strong-model").value.trim(),
-      fallbackModels: document
-        .getElementById("routing-fallback-models")
-        .value.split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-    };
+  document.getElementById("new-llm-card").addEventListener("click", () => {
+    state.editingLlmProfileId = "";
+    fillLlmForm(null);
+    setInfo("已切换到新建模型卡片。");
+  });
+
+  document.getElementById("llm-card-list").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+
+    const action = button.dataset.action;
+    const profileId = button.dataset.profileId || "";
+    if (!profileId) {
+      return;
+    }
 
     try {
-      await api("/api/settings/llm", {
+      if (action === "llm-edit") {
+        state.editingLlmProfileId = profileId;
+        fillLlmForm(getLlmCardById(profileId));
+        return;
+      }
+
+      if (action === "llm-activate") {
+        await api("/api/settings/llm/select", {
+          method: "POST",
+          body: JSON.stringify({ profileId }),
+        });
+        state.editingLlmProfileId = profileId;
+        await loadDashboard();
+        setInfo("模型卡片已切换为当前启用。");
+        return;
+      }
+
+      if (action === "llm-delete") {
+        await api("/api/settings/llm/delete", {
+          method: "POST",
+          body: JSON.stringify({ profileId }),
+        });
+        if (state.editingLlmProfileId === profileId) {
+          state.editingLlmProfileId = "";
+        }
+        await loadDashboard();
+        setInfo("模型卡片已删除。");
+      }
+    } catch (error) {
+      setInfo(`模型卡片操作失败：${error.message}`, true);
+    }
+  });
+
+  document.getElementById("save-llm-settings").addEventListener("click", async () => {
+    const payload = getLlmFormPayload();
+    if (!payload.name) {
+      setInfo("请先填写卡片名称。", true);
+      return;
+    }
+
+    try {
+      const result = await api("/api/settings/llm", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      state.editingLlmProfileId = result.settings?.id || state.editingLlmProfileId;
       await loadDashboard();
-      setInfo(mode === "openai-codex-oauth" ? "OAuth 模式配置已保存。" : "API Key 模式配置已保存。");
+      setInfo(
+        payload.provider === "openai-codex-oauth"
+          ? "OAuth 模型卡片已保存。是否生效以“当前启用”标记为准。"
+          : "API Key 模型卡片已保存。是否生效以“当前启用”标记为准。",
+      );
       toggleView("settings");
     } catch (error) {
       setInfo(`保存模型配置失败：${error.message}`, true);
@@ -1454,11 +1580,20 @@ function bindLlmSettings() {
     button.disabled = true;
     button.textContent = "正在跳转授权...";
     try {
-      const model = document.getElementById("llm-model-oauth-select").value;
+      const payload = getLlmFormPayload();
+      if (!payload.name) {
+        throw new Error("请先填写卡片名称。");
+      }
       const result = await api("/api/settings/llm/oauth/start", {
         method: "POST",
-        body: JSON.stringify({ provider: "openai-codex-oauth", model }),
+        body: JSON.stringify({
+          profileId: payload.profileId,
+          name: payload.name,
+          provider: "openai-codex-oauth",
+          model: payload.model,
+        }),
       });
+      state.editingLlmProfileId = result.profileId || state.editingLlmProfileId;
       const useFallback = state.oauthStartAttempt % 2 === 1 && result.fallbackAuthUrl;
       const authTarget = useFallback ? result.fallbackAuthUrl : result.authUrl;
       state.oauthStartAttempt += 1;
