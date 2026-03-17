@@ -1833,22 +1833,35 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/feedback/create") {
-        const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.rawFeedback) {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        if (typeof body.rawFeedback !== "string" || !body.rawFeedback.trim()) {
           sendJson(res, 400, { error: "rawFeedback 是必填项。" });
           return;
         }
 
         const result = await createFeedback({
           vaultRoot,
-          taskId: body.taskId,
-          feedbackType: body.feedbackType,
-          severity: body.severity,
-          action: body.action,
+          taskId: typeof body.taskId === "string" ? body.taskId : "",
+          feedbackType: typeof body.feedbackType === "string" ? body.feedbackType : "",
+          severity: typeof body.severity === "string" ? body.severity : "medium",
+          action: typeof body.action === "string" ? body.action : "review",
           rawFeedback: body.rawFeedback,
-          affectedParagraph: body.affectedParagraph,
-          affectedSection: body.affectedSection,
-          affectsStructure: body.affectsStructure,
+          affectedParagraph: typeof body.affectedParagraph === "string" ? body.affectedParagraph : "",
+          affectedSection: typeof body.affectedSection === "string" ? body.affectedSection : "",
+          affectsStructure: typeof body.affectsStructure === "string" ? body.affectsStructure : "",
+          selectedText: typeof body.selectedText === "string" ? body.selectedText : "",
+          selectionStart:
+            typeof body.selectionStart === "number"
+              ? body.selectionStart
+              : Number.isFinite(Number(body.selectionStart))
+                ? Number(body.selectionStart)
+                : undefined,
+          selectionEnd:
+            typeof body.selectionEnd === "number"
+              ? body.selectionEnd
+              : Number.isFinite(Number(body.selectionEnd))
+                ? Number(body.selectionEnd)
+                : undefined,
         });
 
         sendJson(res, 200, result);

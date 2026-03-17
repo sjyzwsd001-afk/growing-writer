@@ -21,6 +21,9 @@ export async function createFeedback(input: {
   affectedParagraph?: string;
   affectedSection?: string;
   affectsStructure?: string;
+  selectedText?: string;
+  selectionStart?: number;
+  selectionEnd?: number;
 }): Promise<{ path: string; feedbackId: string }> {
   const now = new Date().toISOString();
   const timestamp = now.replace(/[:.]/g, "-");
@@ -38,6 +41,9 @@ export async function createFeedback(input: {
     affected_paragraph: input.affectedParagraph ?? "",
     affected_section: input.affectedSection ?? "",
     affects_structure: input.affectsStructure ?? "",
+    selected_text: input.selectedText ?? "",
+    selection_start: typeof input.selectionStart === "number" ? input.selectionStart : null,
+    selection_end: typeof input.selectionEnd === "number" ? input.selectionEnd : null,
     created_at: now,
   };
 
@@ -55,6 +61,8 @@ ${input.rawFeedback.trim()}
 - 影响段落：${input.affectedParagraph ?? ""}
 - 影响章节：${input.affectedSection ?? ""}
 - 影响整体结构：${input.affectsStructure ?? ""}
+- 选区偏移：${typeof input.selectionStart === "number" && typeof input.selectionEnd === "number" ? `${input.selectionStart}-${input.selectionEnd}` : ""}
+- 选区原文：${input.selectedText ?? ""}
 
 # 系统建议提炼
 

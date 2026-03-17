@@ -422,6 +422,14 @@ legend {
   font-size: 13px;
 }
 
+#selection-preview {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 6px 9px;
+  background: #fff;
+  flex: 1;
+}
+
 .simple-list {
   display: grid;
   gap: 8px;

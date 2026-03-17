@@ -6,6 +6,7 @@ const state = {
   wizardCheckReport: null,
   currentTask: null,
   currentWorkflowRun: null,
+  feedbackSelection: null,
   feedbackHistory: [],
   latestFeedbackByLocation: {},
   workflowDefinition: null,
@@ -575,6 +576,44 @@ function setEditorVisible(visible) {
   document.getElementById("editor-panel").classList.toggle("hidden", !visible);
 }
 
+function updateSelectionPreview(selection) {
+  const preview = document.getElementById("selection-preview");
+  if (!preview) {
+    return;
+  }
+  if (!selection || !selection.text) {
+    preview.textContent = "当前未选择正文片段。";
+    return;
+  }
+  const compact = selection.text.replace(/\s+/g, " ").trim();
+  const text = compact.length > 120 ? `${compact.slice(0, 120)}...` : compact;
+  preview.textContent = `已选区 [${selection.start}-${selection.end}]：${text}`;
+}
+
+function captureDraftSelection(options = { strict: false }) {
+  const editor = document.getElementById("draft-editor");
+  const start = Number(editor?.selectionStart ?? 0);
+  const end = Number(editor?.selectionEnd ?? 0);
+  const selected = String(editor?.value || "").slice(start, end).trim();
+  if (!selected) {
+    if (options.strict) {
+      throw new Error("请先在正文中选中需要批注的句子或段落。");
+    }
+    state.feedbackSelection = null;
+    updateSelectionPreview(null);
+    return null;
+  }
+
+  const selection = { start, end, text: selected };
+  state.feedbackSelection = selection;
+  const locationInput = document.getElementById("feedback-location");
+  if (locationInput && !String(locationInput.value || "").trim()) {
+    locationInput.value = `正文[${start}-${end}]`;
+  }
+  updateSelectionPreview(selection);
+  return selection;
+}
+
 function normalizeWorkflowDefinitionLite(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return null;
@@ -955,6 +994,8 @@ async function createAndRunTask() {
     const draftText =
       generated?.draft?.draft_markdown || (await getTaskDraftFromFile(created.path)) || "生成完成，但未找到正文。";
     document.getElementById("draft-editor").value = draftText;
+    state.feedbackSelection = null;
+    updateSelectionPreview(null);
 
     state.currentTask = {
       id: created.taskId,
@@ -1011,6 +1052,7 @@ async function submitFeedbackAndRegenerate() {
   const location = normalizeLocation(document.getElementById("feedback-location").value);
   const reason = String(document.getElementById("feedback-reason").value || "").trim();
   const comment = String(document.getElementById("feedback-comment").value || "").trim();
+  const selection = captureDraftSelection({ strict: false });
 
   if (!reason && !comment) {
     throw new Error("请至少填写“修改原因”或“批注说明”。");
@@ -1022,6 +1064,8 @@ async function submitFeedbackAndRegenerate() {
     `位置：${location}`,
     `修改原因：${reason || "未填写"}`,
     `批注说明：${comment || "未填写"}`,
+    `选区范围：${selection ? `${selection.start}-${selection.end}` : "未选择"}`,
+    `选区原文：${selection?.text || "未选择"}`,
     "",
     "用户修改后正文：",
     draft,
@@ -1036,8 +1080,11 @@ async function submitFeedbackAndRegenerate() {
       action: "rewrite",
       rawFeedback: feedbackText,
       affectedParagraph: location,
-      affectedSection: location,
+      affectedSection: selection ? `正文偏移 ${selection.start}-${selection.end}` : location,
       affectsStructure: /结构|顺序|层次/.test(`${location} ${reason} ${comment}`) ? "是" : "否",
+      selectedText: selection?.text || "",
+      selectionStart: selection?.start,
+      selectionEnd: selection?.end,
     }),
   });
 
@@ -1181,6 +1228,19 @@ function bindWizard() {
 }
 
 function bindEditorActions() {
+  document.getElementById("capture-selection").addEventListener("click", () => {
+    try {
+      captureDraftSelection({ strict: true });
+      setInfo("已从正文选区自动定位。");
+    } catch (error) {
+      setInfo(error.message, true);
+    }
+  });
+
+  document.getElementById("draft-editor").addEventListener("mouseup", () => {
+    captureDraftSelection({ strict: false });
+  });
+
   document.getElementById("save-draft").addEventListener("click", async () => {
     try {
       await saveCurrentDraft(false);

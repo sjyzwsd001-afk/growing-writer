@@ -65,6 +65,8 @@ export class VaultRepository {
 
   async loadFeedback(feedbackFile: string): Promise<Feedback> {
     const doc = await readMarkdownDocument(feedbackFile);
+    const selectionStartRaw = doc.frontmatter.selection_start;
+    const selectionEndRaw = doc.frontmatter.selection_end;
     return {
       ...doc,
       id: normalizeString(doc.frontmatter.id, feedbackFile),
@@ -76,6 +78,23 @@ export class VaultRepository {
       affectedParagraph: normalizeString(doc.frontmatter.affected_paragraph),
       affectedSection: normalizeString(doc.frontmatter.affected_section),
       affectsStructure: normalizeString(doc.frontmatter.affects_structure),
+      selectedText: normalizeString(doc.frontmatter.selected_text),
+      selectionStart:
+        typeof selectionStartRaw === "number"
+          ? selectionStartRaw
+          : selectionStartRaw === null
+            ? null
+            : Number.isFinite(Number(selectionStartRaw))
+              ? Number(selectionStartRaw)
+              : null,
+      selectionEnd:
+        typeof selectionEndRaw === "number"
+          ? selectionEndRaw
+          : selectionEndRaw === null
+            ? null
+            : Number.isFinite(Number(selectionEndRaw))
+              ? Number(selectionEndRaw)
+              : null,
       createdAt: normalizeString(doc.frontmatter.created_at),
     };
   }
@@ -93,6 +112,23 @@ export class VaultRepository {
       affectedParagraph: normalizeString(doc.frontmatter.affected_paragraph),
       affectedSection: normalizeString(doc.frontmatter.affected_section),
       affectsStructure: normalizeString(doc.frontmatter.affects_structure),
+      selectedText: normalizeString(doc.frontmatter.selected_text),
+      selectionStart:
+        typeof doc.frontmatter.selection_start === "number"
+          ? doc.frontmatter.selection_start
+          : doc.frontmatter.selection_start === null
+            ? null
+            : Number.isFinite(Number(doc.frontmatter.selection_start))
+              ? Number(doc.frontmatter.selection_start)
+              : null,
+      selectionEnd:
+        typeof doc.frontmatter.selection_end === "number"
+          ? doc.frontmatter.selection_end
+          : doc.frontmatter.selection_end === null
+            ? null
+            : Number.isFinite(Number(doc.frontmatter.selection_end))
+              ? Number(doc.frontmatter.selection_end)
+              : null,
       createdAt: normalizeString(doc.frontmatter.created_at),
     }));
   }

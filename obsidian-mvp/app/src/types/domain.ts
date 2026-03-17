@@ -48,6 +48,9 @@ export type Feedback = MarkdownDocument & {
   affectedParagraph: string;
   affectedSection: string;
   affectsStructure: string;
+  selectedText?: string;
+  selectionStart?: number | null;
+  selectionEnd?: number | null;
   createdAt: string;
 };
 
