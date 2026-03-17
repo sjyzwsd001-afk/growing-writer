@@ -566,11 +566,16 @@ function toggleLlmMode(mode) {
   const isOauth = mode === "openai-codex-oauth";
   document.getElementById("oauth-config").classList.toggle("hidden", !isOauth);
   document.getElementById("key-config").classList.toggle("hidden", isOauth);
+  document.getElementById("llm-api-type-wrap").classList.toggle("hidden", isOauth);
   document.getElementById("llm-model-oauth-wrap").classList.toggle("hidden", !isOauth);
   document.getElementById("llm-model-key-wrap").classList.toggle("hidden", isOauth);
   if (isOauth && !document.getElementById("llm-model-oauth-select").value) {
     document.getElementById("llm-model-oauth-select").value = "gpt-5.4";
   }
+}
+
+function setLlmModalOpen(open) {
+  document.getElementById("llm-editor-modal").classList.toggle("hidden", !open);
 }
 
 function getLlmFormPayload() {
@@ -583,6 +588,10 @@ function getLlmFormPayload() {
     profileId: state.editingLlmProfileId || undefined,
     name: document.getElementById("llm-card-name-input").value.trim(),
     provider: mode,
+    apiType:
+      mode === "openai-codex-oauth"
+        ? "openai-completions"
+        : document.getElementById("llm-api-type-select").value,
     model,
     bearerToken: document.getElementById("llm-token-input").value.trim(),
     baseUrl: document.getElementById("llm-base-url-input").value.trim(),
@@ -976,11 +985,10 @@ function renderLlmCards(data) {
         <div class="llm-card-head">
           <div>
             <strong>${escapeHtml(card.name || card.id)}</strong>
-            <div class="mini">${escapeHtml((card.providerLabel || card.provider || "-") + " / " + (card.model || "-") + " / " + statusText)}</div>
+            <div class="mini">${escapeHtml(card.model || "-")} / ${escapeHtml(statusText)}</div>
           </div>
           <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用卡片"}</span>
         </div>
-        <div class="mini">更新时间：${escapeHtml(card.updatedAt || "-")}</div>
         <div class="row-actions llm-card-actions">
           <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
           <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
@@ -994,10 +1002,12 @@ function renderLlmCards(data) {
 function fillLlmForm(card) {
   const mode = card?.provider || "openai-api-key";
   const model = card?.model || "gpt-5.4";
+  const apiType = card?.apiType || "openai-completions";
   const oauthModels = new Set(["gpt-5.4", "gpt-5.3-codex"]);
   const oauthModel = oauthModels.has(model) ? model : "gpt-5.4";
   document.getElementById("llm-card-name-input").value = card?.name || "";
   document.getElementById("llm-mode").value = mode;
+  document.getElementById("llm-api-type-select").value = apiType;
   document.getElementById("llm-model-oauth-select").value = oauthModel;
   document.getElementById("llm-model-key-input").value = model;
   document.getElementById("llm-token-input").value = "";
@@ -1501,7 +1511,19 @@ function bindLlmSettings() {
   document.getElementById("new-llm-card").addEventListener("click", () => {
     state.editingLlmProfileId = "";
     fillLlmForm(null);
+    setLlmModalOpen(true);
     setInfo("已切换到新建模型卡片。");
+  });
+
+  document.getElementById("close-llm-modal").addEventListener("click", () => {
+    setLlmModalOpen(false);
+  });
+
+  document.getElementById("llm-editor-modal").addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
+      setLlmModalOpen(false);
+    }
   });
 
   document.getElementById("llm-card-list").addEventListener("click", async (event) => {
@@ -1520,6 +1542,7 @@ function bindLlmSettings() {
       if (action === "llm-edit") {
         state.editingLlmProfileId = profileId;
         fillLlmForm(getLlmCardById(profileId));
+        setLlmModalOpen(true);
         return;
       }
 
@@ -1564,6 +1587,7 @@ function bindLlmSettings() {
       });
       state.editingLlmProfileId = result.settings?.id || state.editingLlmProfileId;
       await loadDashboard();
+      setLlmModalOpen(false);
       setInfo(
         payload.provider === "openai-codex-oauth"
           ? "OAuth 模型卡片已保存。是否生效以“当前启用”标记为准。"
@@ -1594,6 +1618,7 @@ function bindLlmSettings() {
         }),
       });
       state.editingLlmProfileId = result.profileId || state.editingLlmProfileId;
+      setLlmModalOpen(false);
       const useFallback = state.oauthStartAttempt % 2 === 1 && result.fallbackAuthUrl;
       const authTarget = useFallback ? result.fallbackAuthUrl : result.authUrl;
       state.oauthStartAttempt += 1;

@@ -483,16 +483,18 @@ legend {
 
 .llm-card-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .llm-card {
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #fffdf8 0%, #fff8ee 100%);
-  padding: 12px;
-  display: grid;
-  gap: 8px;
+  padding: 10px 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
 }
 
 .llm-card.active {
@@ -502,13 +504,14 @@ legend {
 
 .llm-card-head {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .llm-card-actions {
-  margin-top: 2px;
+  justify-content: flex-end;
+  flex: 0 0 auto;
 }
 
 .chip {
@@ -529,6 +532,37 @@ legend {
 }
 
 .llm-form-shell {
+  border-top: 1px solid rgba(218, 200, 172, 0.75);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(44, 36, 24, 0.34);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  position: relative;
+  width: min(860px, calc(100vw - 24px));
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  margin: 14px auto;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(255, 251, 244, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.modal-inner-panel {
+  padding: 0;
+  margin-top: 14px;
   border-top: 1px solid rgba(218, 200, 172, 0.75);
 }
 

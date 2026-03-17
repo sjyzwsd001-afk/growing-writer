@@ -1735,6 +1735,7 @@ async function buildDashboard(vaultRoot: string) {
       source: llmConfig.source,
       baseUrl: llmConfig.baseUrl,
       model: llmConfig.model,
+      apiType: llmConfig.apiType,
       hasSavedSettings: Boolean(stored),
       updatedAt: stored?.updatedAt ?? null,
       oauthReady: Boolean(stored?.oauthAccessToken && stored?.oauthIdToken),
@@ -1751,6 +1752,7 @@ async function buildDashboard(vaultRoot: string) {
             ? OPENAI_KEY_PROVIDER_LABEL
             : OPENAI_CODEX_PROVIDER_LABEL,
         model: profile.model,
+        apiType: profile.apiType || "openai-completions",
         baseUrl: profile.baseUrl,
         authUrl: profile.authUrl,
         routingEnabled: Boolean(profile.routingEnabled),
@@ -1882,6 +1884,7 @@ async function handleOauthCallbackRequest(input: {
     upsertStoredLlmProfile(input.vaultRoot, {
       id: pending.profileId,
       provider: OPENAI_CODEX_PROVIDER,
+      apiType: "openai-completions",
       bearerToken: apiKey,
       baseUrl: pending.baseUrl,
       model: pending.model,
@@ -2034,6 +2037,12 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           id: profileId || undefined,
           name: profileName || undefined,
           provider,
+          apiType:
+            isCodex
+              ? "openai-completions"
+              : body.apiType === "anthropic-messages"
+                ? "anthropic-messages"
+                : "openai-completions",
           bearerToken:
             preserveExistingToken
               ? existing?.bearerToken ?? ""
@@ -2136,6 +2145,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           id: profileId || undefined,
           name: profileName || undefined,
           provider: OPENAI_CODEX_PROVIDER,
+          apiType: "openai-completions",
           bearerToken: existing?.bearerToken ?? "",
           baseUrl: OPENAI_CODEX_BASE_URL,
           model: selectedModel,

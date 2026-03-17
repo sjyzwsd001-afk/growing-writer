@@ -19,6 +19,7 @@ export type LlmConfig = {
   bearerToken: string | null;
   baseUrl: string;
   model: string;
+  apiType: "openai-completions" | "anthropic-messages";
   enabled: boolean;
   source: "saved" | "env" | "default";
 };
@@ -29,6 +30,7 @@ export type StoredLlmSettings = {
   bearerToken: string;
   baseUrl: string;
   model: string;
+  apiType?: "openai-completions" | "anthropic-messages";
   provider: string;
   authUrl: string;
   tokenUrl: string;
@@ -93,6 +95,16 @@ function defaultProfileName(provider: string, model: string): string {
   return `API Key ${model || OPENAI_CODEX_MODEL}`;
 }
 
+function normalizeApiType(
+  value: unknown,
+  provider: string,
+): "openai-completions" | "anthropic-messages" {
+  if (provider === OPENAI_CODEX_PROVIDER) {
+    return "openai-completions";
+  }
+  return value === "anthropic-messages" ? "anthropic-messages" : "openai-completions";
+}
+
 function normalizeStoredSettings(
   input: Partial<StoredLlmSettings> | null,
   fallback?: Partial<StoredLlmSettings>,
@@ -105,6 +117,7 @@ function normalizeStoredSettings(
     : typeof rawModel === "string" && rawModel.trim()
       ? rawModel.trim()
       : OPENAI_CODEX_MODEL;
+  const apiType = normalizeApiType(input?.apiType ?? fallback?.apiType, provider);
   const createdAt =
     typeof input?.createdAt === "string"
       ? input.createdAt
@@ -145,6 +158,7 @@ function normalizeStoredSettings(
           ? fallback.baseUrl.trim()
           : OPENAI_CODEX_BASE_URL,
     model,
+    apiType,
     provider,
     authUrl:
       isCodexProvider
@@ -449,12 +463,14 @@ export function getLlmConfig(vaultRoot = DEFAULT_VAULT_ROOT): LlmConfig {
   const bearerToken = saved?.bearerToken?.trim() || envBearerToken || null;
   const baseUrl = saved?.baseUrl?.trim() || envBaseUrl;
   const model = saved?.model?.trim() || envModel;
+  const apiType = saved?.apiType ?? "openai-completions";
   const source = saved ? "saved" : envBearerToken ? "env" : "default";
 
   return {
     bearerToken,
     baseUrl,
     model,
+    apiType,
     enabled: Boolean(bearerToken),
     source,
   };

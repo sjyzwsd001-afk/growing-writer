@@ -198,68 +198,83 @@
               </div>
               <div id="llm-card-list" class="llm-card-list"></div>
             </div>
-            <div class="panel-sub llm-form-shell">
-              <div class="section-meta">
-                <strong id="llm-form-title">新建模型卡片</strong>
-                <span class="mini" id="llm-editing-meta">未选择卡片</span>
-              </div>
-              <div class="grid two">
-                <label>卡片名称
-                  <input id="llm-card-name-input" placeholder="例如：生产 OpenAI Key / Codex OAuth / 备用模型" />
-                </label>
-                <label>接入方式
-                  <select id="llm-mode">
-                    <option value="openai-api-key">API Key</option>
-                    <option value="openai-codex-oauth">OAuth (OpenAI Codex)</option>
-                  </select>
-                </label>
-                <label id="llm-model-oauth-wrap">OAuth 模型
-                  <select id="llm-model-oauth-select">
-                    <option value="gpt-5.4">gpt-5.4</option>
-                    <option value="gpt-5.3-codex">gpt-5.3-codex</option>
-                  </select>
-                </label>
-                <label id="llm-model-key-wrap">API Key 模型（可自定义）
-                  <input id="llm-model-key-input" placeholder="例如：gpt-5.4 / gpt-4.1 / 自定义兼容模型名" />
-                </label>
-              </div>
-              <div id="key-config">
-                <label>API Key / Bearer Token
-                  <input id="llm-token-input" placeholder="留空则保留当前卡片已存 token；新卡片则为空" />
-                </label>
-                <div class="grid two">
-                  <label>Base URL<input id="llm-base-url-input" value="https://api.openai.com/v1" /></label>
-                  <label>Auth URL（可选）<input id="llm-auth-url-input" placeholder="可留空" /></label>
-                </div>
-              </div>
-              <div id="oauth-config" class="hidden">
-                <p class="hint">先保存卡片，再点击登录；也可以直接点下面按钮开始 OAuth，登录结果会写回当前编辑卡片。</p>
-                <button id="start-oauth-login" class="btn primary" type="button">开始 OAuth 登录</button>
-              </div>
-              <div class="editor-actions">
-                <button id="save-llm-settings" class="btn primary" type="button">保存为模型卡片</button>
-              </div>
-            </div>
-            <div class="panel-sub">
-              <h3>模型路由与降级</h3>
-              <label class="inline-check">
-                <input id="routing-enabled" type="checkbox" />
-                <span>启用智能路由（诊断/提纲走快模型，初稿走强模型）</span>
-              </label>
-              <div class="grid two">
-                <label>快模型
-                  <input id="routing-fast-model" placeholder="例如：gpt-5.3-codex" />
-                </label>
-                <label>强模型
-                  <input id="routing-strong-model" placeholder="例如：gpt-5.4" />
-                </label>
-              </div>
-              <label>降级模型列表（逗号分隔，按顺序重试）
-                <input id="routing-fallback-models" placeholder="例如：gpt-5.3-codex,gpt-4.1" />
-              </label>
-            </div>
             <div class="meta">最近更新：<span id="llm-updated-at">-</span></div>
           </section>
+
+          <div id="llm-editor-modal" class="modal hidden">
+            <div class="modal-backdrop" data-close-modal="true"></div>
+            <section class="modal-card">
+              <div class="panel-header">
+                <h2 id="llm-form-title">新建模型卡片</h2>
+                <button id="close-llm-modal" class="mini-btn" type="button">关闭</button>
+              </div>
+              <div class="panel-sub">
+                <div class="section-meta">
+                  <span class="mini" id="llm-editing-meta">未选择卡片</span>
+                </div>
+                <div class="grid two">
+                  <label>卡片名称
+                    <input id="llm-card-name-input" placeholder="例如：生产 OpenAI Key / Codex OAuth / 备用模型" />
+                  </label>
+                  <label>接入方式
+                    <select id="llm-mode">
+                      <option value="openai-api-key">API Key</option>
+                      <option value="openai-codex-oauth">OAuth (OpenAI Codex)</option>
+                    </select>
+                  </label>
+                  <label id="llm-api-type-wrap">API
+                    <select id="llm-api-type-select">
+                      <option value="openai-completions">openai-completions</option>
+                      <option value="anthropic-messages">anthropic-messages</option>
+                    </select>
+                  </label>
+                  <label id="llm-model-oauth-wrap">OAuth 模型
+                    <select id="llm-model-oauth-select">
+                      <option value="gpt-5.4">gpt-5.4</option>
+                      <option value="gpt-5.3-codex">gpt-5.3-codex</option>
+                    </select>
+                  </label>
+                  <label id="llm-model-key-wrap">API Key 模型（可自定义）
+                    <input id="llm-model-key-input" placeholder="例如：gpt-5.4 / claude-sonnet-4 / 自定义兼容模型名" />
+                  </label>
+                </div>
+                <div id="key-config">
+                  <label>API Key / Bearer Token
+                    <input id="llm-token-input" placeholder="留空则保留当前卡片已存 token；新卡片则为空" />
+                  </label>
+                  <div class="grid two">
+                    <label>Base URL<input id="llm-base-url-input" value="https://api.openai.com/v1" /></label>
+                    <label>Auth URL（可选）<input id="llm-auth-url-input" placeholder="可留空" /></label>
+                  </div>
+                </div>
+                <div id="oauth-config" class="hidden">
+                  <p class="hint">先保存卡片，再点击登录；也可以直接点下面按钮开始 OAuth，登录结果会写回当前编辑卡片。</p>
+                  <button id="start-oauth-login" class="btn primary" type="button">开始 OAuth 登录</button>
+                </div>
+                <div class="panel-sub modal-inner-panel">
+                  <h3>模型路由与降级</h3>
+                  <label class="inline-check">
+                    <input id="routing-enabled" type="checkbox" />
+                    <span>启用智能路由（诊断/提纲走快模型，初稿走强模型）</span>
+                  </label>
+                  <div class="grid two">
+                    <label>快模型
+                      <input id="routing-fast-model" placeholder="例如：gpt-5.3-codex" />
+                    </label>
+                    <label>强模型
+                      <input id="routing-strong-model" placeholder="例如：gpt-5.4" />
+                    </label>
+                  </div>
+                  <label>降级模型列表（逗号分隔，按顺序重试）
+                    <input id="routing-fallback-models" placeholder="例如：gpt-5.3-codex,gpt-4.1" />
+                  </label>
+                </div>
+                <div class="editor-actions">
+                  <button id="save-llm-settings" class="btn primary" type="button">保存为模型卡片</button>
+                </div>
+              </div>
+            </section>
+          </div>
 
           <section class="panel">
             <div class="panel-header"><h2>设置操作结果</h2></div>
