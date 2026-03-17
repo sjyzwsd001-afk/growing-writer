@@ -35,6 +35,10 @@ export type StoredLlmSettings = {
   oauthAccessToken?: string;
   oauthIdToken?: string;
   refreshToken?: string;
+  routingEnabled?: boolean;
+  fastModel?: string;
+  strongModel?: string;
+  fallbackModels?: string[];
   updatedAt?: string;
 };
 
@@ -105,6 +109,19 @@ function normalizeStoredSettings(input: Partial<StoredLlmSettings> | null): Stor
       typeof input?.oauthAccessToken === "string" ? input.oauthAccessToken : undefined,
     oauthIdToken: typeof input?.oauthIdToken === "string" ? input.oauthIdToken : undefined,
     refreshToken: typeof input?.refreshToken === "string" ? input.refreshToken : undefined,
+    routingEnabled: typeof input?.routingEnabled === "boolean" ? input.routingEnabled : false,
+    fastModel: typeof input?.fastModel === "string" && input.fastModel.trim() ? input.fastModel.trim() : OPENAI_CODEX_MODEL,
+    strongModel:
+      typeof input?.strongModel === "string" && input.strongModel.trim()
+        ? input.strongModel.trim()
+        : OPENAI_CODEX_MODEL,
+    fallbackModels: Array.isArray(input?.fallbackModels)
+      ? input.fallbackModels
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [],
     updatedAt: typeof input?.updatedAt === "string" ? input.updatedAt : undefined,
   };
 }
@@ -127,7 +144,9 @@ export function saveStoredLlmSettings(
   vaultRoot = DEFAULT_VAULT_ROOT,
   settings: Partial<StoredLlmSettings>,
 ): StoredLlmSettings {
+  const existing = getStoredLlmSettings(vaultRoot);
   const nextSettings = normalizeStoredSettings({
+    ...existing,
     ...settings,
     updatedAt: new Date().toISOString(),
   });

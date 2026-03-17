@@ -904,6 +904,12 @@ function hydrateLlmSettings(data) {
   document.getElementById("llm-model-oauth-select").value = oauthModel;
   document.getElementById("llm-model-key-input").value = llm.model || "gpt-5.4";
   document.getElementById("llm-base-url-input").value = llm.baseUrl || "https://api.openai.com/v1";
+  document.getElementById("routing-enabled").checked = Boolean(llm.routingEnabled);
+  document.getElementById("routing-fast-model").value = llm.fastModel || llm.model || "gpt-5.3-codex";
+  document.getElementById("routing-strong-model").value = llm.strongModel || llm.model || "gpt-5.4";
+  document.getElementById("routing-fallback-models").value = Array.isArray(llm.fallbackModels)
+    ? llm.fallbackModels.join(",")
+    : "";
   toggleLlmMode(mode);
 }
 
@@ -1387,6 +1393,14 @@ function bindLlmSettings() {
       bearerToken: document.getElementById("llm-token-input").value.trim(),
       baseUrl: document.getElementById("llm-base-url-input").value.trim(),
       authUrl: document.getElementById("llm-auth-url-input").value.trim(),
+      routingEnabled: document.getElementById("routing-enabled").checked,
+      fastModel: document.getElementById("routing-fast-model").value.trim(),
+      strongModel: document.getElementById("routing-strong-model").value.trim(),
+      fallbackModels: document
+        .getElementById("routing-fallback-models")
+        .value.split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
     };
 
     try {

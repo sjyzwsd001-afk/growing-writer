@@ -47,6 +47,7 @@ http://127.0.0.1:4318
 
 - `API Key` 模式：模型名可手输（自定义）
 - `OAuth (OpenAI Codex)` 模式：模型可选 `gpt-5.4` 或 `gpt-5.3-codex`
+- 支持模型路由与降级：`fastModel`（诊断/提纲） + `strongModel`（初稿） + `fallbackModels`（失败重试）
 
 ---
 

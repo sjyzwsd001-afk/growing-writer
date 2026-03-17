@@ -283,6 +283,31 @@ function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
 }
 
+function createLlmClientWithModel(vaultRoot: string, modelOverride?: string): OpenAiCompatibleClient {
+  const config = getLlmConfig(vaultRoot);
+  const model = typeof modelOverride === "string" && modelOverride.trim() ? modelOverride.trim() : config.model;
+  return new OpenAiCompatibleClient({
+    ...config,
+    model,
+  });
+}
+
+function getRoutingSettings(vaultRoot: string): {
+  enabled: boolean;
+  fastModel: string;
+  strongModel: string;
+  fallbackModels: string[];
+} {
+  const llm = getLlmConfig(vaultRoot);
+  const stored = getStoredLlmSettings(vaultRoot);
+  return {
+    enabled: Boolean(stored?.routingEnabled),
+    fastModel: stored?.fastModel || llm.model,
+    strongModel: stored?.strongModel || llm.model,
+    fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels.filter(Boolean) : [],
+  };
+}
+
 function toBase64Url(input: Buffer): string {
   return input
     .toString("base64")
@@ -1018,12 +1043,75 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   };
 }
 
+async function executeWithModelRouting<T>(input: {
+  vaultRoot: string;
+  route: "fast" | "strong";
+  stageLabel: string;
+  runWithClient: (client: OpenAiCompatibleClient) => Promise<T>;
+  fallback: () => T | Promise<T>;
+}) {
+  const baseClient = createLlmClient(input.vaultRoot);
+  if (!baseClient.isEnabled()) {
+    return {
+      value: await input.fallback(),
+      routeMeta: {
+        stage: input.stageLabel,
+        usedModel: "heuristic-fallback",
+        triedModels: [] as string[],
+        errors: [] as string[],
+      },
+    };
+  }
+
+  const llm = getLlmConfig(input.vaultRoot);
+  const routing = getRoutingSettings(input.vaultRoot);
+  const preferredModel = routing.enabled
+    ? input.route === "fast"
+      ? routing.fastModel
+      : routing.strongModel
+    : llm.model;
+  const triedModels = [preferredModel, ...(routing.enabled ? routing.fallbackModels : [])]
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const uniqueModels = [...new Set(triedModels)];
+  const errors: string[] = [];
+
+  for (const model of uniqueModels) {
+    try {
+      const routedClient = createLlmClientWithModel(input.vaultRoot, model);
+      const value = await input.runWithClient(routedClient);
+      return {
+        value,
+        routeMeta: {
+          stage: input.stageLabel,
+          usedModel: model,
+          triedModels: uniqueModels,
+          errors,
+        },
+      };
+    } catch (error) {
+      errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const fallbackValue = await input.fallback();
+  return {
+    value: fallbackValue,
+    routeMeta: {
+      stage: input.stageLabel,
+      usedModel: "heuristic-fallback",
+      triedModels: uniqueModels,
+      errors,
+    },
+  };
+}
+
 async function runTaskAction(input: {
   vaultRoot: string;
   taskPath: string;
   action: "diagnose" | "outline" | "draft";
 }) {
-  const { client, task, profiles, analysis, matchedRules, matchedMaterials, ruleDecisionLog } =
+  const { task, profiles, analysis, matchedRules, matchedMaterials, ruleDecisionLog } =
     await buildTaskSnapshot(
     input.vaultRoot,
     input.taskPath,
@@ -1043,9 +1131,25 @@ async function runTaskAction(input: {
     profiles,
   };
 
-  const diagnosis = client.isEnabled()
-    ? await diagnoseTaskWithLlm(client, diagnosisInput)
-    : diagnoseTask(diagnosisInput);
+  const routeMetas: Array<{
+    stage: string;
+    usedModel: string;
+    triedModels: string[];
+    errors: string[];
+  }> = [];
+  const diagnosisResult = await executeWithModelRouting({
+    vaultRoot: input.vaultRoot,
+    route: "fast",
+    stageLabel: "diagnose",
+    runWithClient: (client) => diagnoseTaskWithLlm(client, diagnosisInput),
+    fallback: () => diagnoseTask(diagnosisInput),
+  });
+  const diagnosis = diagnosisResult.value;
+  routeMetas.push(diagnosisResult.routeMeta);
+  const withRoutingDecisionLog = [...ruleDecisionLog];
+  withRoutingDecisionLog.push(
+    `模型路由[diagnose]：used=${diagnosisResult.routeMeta.usedModel} / tried=${diagnosisResult.routeMeta.triedModels.join(",") || "-"}${diagnosisResult.routeMeta.errors.length ? ` / fallbackErrors=${diagnosisResult.routeMeta.errors.length}` : ""}`,
+  );
 
   if (input.action === "diagnose") {
     await writeTaskSections({
@@ -1054,9 +1158,9 @@ async function runTaskAction(input: {
       matchedRules,
       matchedMaterials,
       evidenceCards,
-      decisionLog: ruleDecisionLog,
+      decisionLog: withRoutingDecisionLog,
     });
-    return { analysis, diagnosis, evidenceCards, ruleDecisionLog };
+    return { analysis, diagnosis, evidenceCards, modelRouting: routeMetas, ruleDecisionLog: withRoutingDecisionLog };
   }
 
   const outlineInput = {
@@ -1069,9 +1173,18 @@ async function runTaskAction(input: {
     profiles,
   };
 
-  const outline = client.isEnabled()
-    ? await buildOutlineWithLlm(client, outlineInput)
-    : buildOutline(outlineInput);
+  const outlineResult = await executeWithModelRouting({
+    vaultRoot: input.vaultRoot,
+    route: "fast",
+    stageLabel: "outline",
+    runWithClient: (client) => buildOutlineWithLlm(client, outlineInput),
+    fallback: () => buildOutline(outlineInput),
+  });
+  const outline = outlineResult.value;
+  routeMetas.push(outlineResult.routeMeta);
+  withRoutingDecisionLog.push(
+    `模型路由[outline]：used=${outlineResult.routeMeta.usedModel} / tried=${outlineResult.routeMeta.triedModels.join(",") || "-"}${outlineResult.routeMeta.errors.length ? ` / fallbackErrors=${outlineResult.routeMeta.errors.length}` : ""}`,
+  );
 
   if (input.action === "outline") {
     await writeTaskSections({
@@ -1081,13 +1194,17 @@ async function runTaskAction(input: {
       matchedRules,
       matchedMaterials,
       evidenceCards,
-      decisionLog: ruleDecisionLog,
+      decisionLog: withRoutingDecisionLog,
     });
-    return { analysis, diagnosis, outline, evidenceCards, ruleDecisionLog };
+    return { analysis, diagnosis, outline, evidenceCards, modelRouting: routeMetas, ruleDecisionLog: withRoutingDecisionLog };
   }
 
-  const draft = client.isEnabled()
-    ? await generateDraftWithLlm(client, {
+  const draftResult = await executeWithModelRouting({
+    vaultRoot: input.vaultRoot,
+    route: "strong",
+    stageLabel: "draft",
+    runWithClient: (client) =>
+      generateDraftWithLlm(client, {
         task,
         analysis,
         diagnosis,
@@ -1096,14 +1213,21 @@ async function runTaskAction(input: {
         matchedMaterials,
         evidenceCards,
         profiles,
-      })
-    : generateDraft({
+      }),
+    fallback: () =>
+      generateDraft({
         task,
         analysis,
         diagnosis,
         outline,
         evidenceCards,
-      });
+      }),
+  });
+  const draft = draftResult.value;
+  routeMetas.push(draftResult.routeMeta);
+  withRoutingDecisionLog.push(
+    `模型路由[draft]：used=${draftResult.routeMeta.usedModel} / tried=${draftResult.routeMeta.triedModels.join(",") || "-"}${draftResult.routeMeta.errors.length ? ` / fallbackErrors=${draftResult.routeMeta.errors.length}` : ""}`,
+  );
 
   await writeTaskSections({
     task,
@@ -1113,10 +1237,10 @@ async function runTaskAction(input: {
     matchedRules,
     matchedMaterials,
     evidenceCards,
-    decisionLog: ruleDecisionLog,
+    decisionLog: withRoutingDecisionLog,
   });
 
-  return { analysis, diagnosis, outline, draft, evidenceCards, ruleDecisionLog };
+  return { analysis, diagnosis, outline, draft, evidenceCards, modelRouting: routeMetas, ruleDecisionLog: withRoutingDecisionLog };
 }
 
 async function createTaskFromRequest(input: {
@@ -1474,6 +1598,10 @@ async function buildDashboard(vaultRoot: string) {
       hasSavedSettings: Boolean(stored),
       updatedAt: stored?.updatedAt ?? null,
       oauthReady: Boolean(stored?.oauthAccessToken && stored?.oauthIdToken),
+      routingEnabled: Boolean(stored?.routingEnabled),
+      fastModel: stored?.fastModel || llmConfig.model,
+      strongModel: stored?.strongModel || llmConfig.model,
+      fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels : [],
     },
     materials: materialItems,
     templates: materialItems.filter((item) => item.isTemplate || item.quality === "high"),
@@ -1693,29 +1821,82 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm") {
-        const body = (await readBody(req)) as Record<string, string | undefined>;
+        const body = (await readBody(req)) as Record<string, unknown>;
         const provider =
           body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
         const existing = getStoredLlmSettings(vaultRoot);
         const isCodex = provider === OPENAI_CODEX_PROVIDER;
-        const model = isCodex ? normalizeCodexModel(body.model ?? existing?.model) : body.model?.trim() || existing?.model || OPENAI_CODEX_MODEL;
+        const model = isCodex
+          ? normalizeCodexModel(body.model ?? existing?.model)
+          : typeof body.model === "string" && body.model.trim()
+            ? body.model.trim()
+            : existing?.model || OPENAI_CODEX_MODEL;
+        const fallbackModels =
+          Array.isArray(body.fallbackModels)
+            ? body.fallbackModels
+                .filter((item): item is string => typeof item === "string")
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : typeof body.fallbackModels === "string"
+              ? body.fallbackModels
+                  .split(",")
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+              : existing?.fallbackModels || [];
 
         const settings = saveStoredLlmSettings(vaultRoot, {
           provider,
-          bearerToken: body.bearerToken ?? existing?.bearerToken ?? "",
+          bearerToken:
+            typeof body.bearerToken === "string"
+              ? body.bearerToken
+              : existing?.bearerToken ?? "",
           baseUrl:
             isCodex
               ? OPENAI_CODEX_BASE_URL
-              : body.baseUrl?.trim() || existing?.baseUrl || OPENAI_CODEX_BASE_URL,
+              : typeof body.baseUrl === "string" && body.baseUrl.trim()
+                ? body.baseUrl.trim()
+                : existing?.baseUrl || OPENAI_CODEX_BASE_URL,
           model,
-          authUrl: isCodex ? OPENAI_CODEX_AUTH_URL : body.authUrl?.trim() || existing?.authUrl || "",
+          authUrl:
+            isCodex
+              ? OPENAI_CODEX_AUTH_URL
+              : typeof body.authUrl === "string" && body.authUrl.trim()
+                ? body.authUrl.trim()
+                : existing?.authUrl || "",
           tokenUrl:
-            isCodex ? OPENAI_CODEX_TOKEN_URL : body.tokenUrl?.trim() || existing?.tokenUrl || "",
-          clientId: isCodex ? OPENAI_CODEX_CLIENT_ID : body.clientId?.trim() || existing?.clientId || "",
-          scope: isCodex ? OPENAI_CODEX_SCOPE : body.scope?.trim() || existing?.scope || "",
+            isCodex
+              ? OPENAI_CODEX_TOKEN_URL
+              : typeof body.tokenUrl === "string" && body.tokenUrl.trim()
+                ? body.tokenUrl.trim()
+                : existing?.tokenUrl || "",
+          clientId:
+            isCodex
+              ? OPENAI_CODEX_CLIENT_ID
+              : typeof body.clientId === "string" && body.clientId.trim()
+                ? body.clientId.trim()
+                : existing?.clientId || "",
+          scope:
+            isCodex
+              ? OPENAI_CODEX_SCOPE
+              : typeof body.scope === "string" && body.scope.trim()
+                ? body.scope.trim()
+                : existing?.scope || "",
           oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
           oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,
           refreshToken: isCodex ? existing?.refreshToken : undefined,
+          routingEnabled:
+            typeof body.routingEnabled === "boolean"
+              ? body.routingEnabled
+              : existing?.routingEnabled ?? false,
+          fastModel:
+            typeof body.fastModel === "string" && body.fastModel.trim()
+              ? body.fastModel.trim()
+              : existing?.fastModel || model,
+          strongModel:
+            typeof body.strongModel === "string" && body.strongModel.trim()
+              ? body.strongModel.trim()
+              : existing?.strongModel || model,
+          fallbackModels,
         });
         const resolved = getLlmConfig(vaultRoot);
         sendJson(res, 200, { settings, resolved });
