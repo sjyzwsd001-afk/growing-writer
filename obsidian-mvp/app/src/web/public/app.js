@@ -516,6 +516,19 @@ function renderSettingsLists() {
     </div>`;
   });
 
+  renderSimpleList("settings-observability", data.observability || [], (item) => {
+    const modelDetail = [item.usedModel || "-", ...(item.triedModels || [])]
+      .filter((value, index, arr) => value && arr.indexOf(value) === index)
+      .join(" -> ");
+    return `<div class="row-main">
+      <strong>${escapeHtml(item.stage || "-")} / ${escapeHtml(item.taskId || "-")}</strong>
+      <div class="mini">${escapeHtml(item.at || "-")} / model=${escapeHtml(modelDetail || "-")} / ${escapeHtml(String(item.durationMs || 0))}ms / success=${escapeHtml(String(item.success))} / rules=${escapeHtml(String(item.matchedRuleCount || 0))}</div>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="mini-btn" data-action="view-observability" data-obid="${escapeHtml(item.id || "")}">查看</button>
+    </div>`;
+  });
+
   const workflowMeta = data.workflowDefinition;
   if (workflowMeta) {
     const container = document.getElementById("settings-workflows");
@@ -1675,6 +1688,16 @@ async function runSettingsAction(action, button) {
     return;
   }
 
+  if (action === "view-observability") {
+    const observabilityId = button.dataset.obid || "";
+    const hit = (state.dashboard?.observability || []).find((item) => item.id === observabilityId);
+    if (!hit) {
+      throw new Error("找不到对应的可观测性记录。");
+    }
+    setSettingsResult(`可观测性事件：${observabilityId}`, hit);
+    return;
+  }
+
   if (action === "analyze-material") {
     const result = await api("/api/materials/analyze", {
       method: "POST",
@@ -1776,6 +1799,7 @@ function bindSettingsActions() {
     "settings-profiles",
     "settings-feedback",
     "settings-workflows",
+    "settings-observability",
   ];
 
   for (const id of containers) {

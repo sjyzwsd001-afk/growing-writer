@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
-import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -820,6 +820,54 @@ async function persistFeedbackEvaluation(input: {
   await writeMarkdownDocument(doc.path, nextFrontmatter, nextContent);
 }
 
+type ObservabilityEvent = {
+  id: string;
+  at: string;
+  taskId: string;
+  taskPath: string;
+  stage: string;
+  action: "diagnose" | "outline" | "draft";
+  usedModel: string;
+  triedModels: string[];
+  durationMs: number;
+  success: boolean;
+  errors: string[];
+  matchedRuleCount: number;
+  matchedMaterialCount: number;
+  evidenceCardCount: number;
+};
+
+function observabilityLogPath(vaultRoot: string): string {
+  return join(vaultRoot, "observability", "llm-events.jsonl");
+}
+
+async function appendObservabilityEvent(vaultRoot: string, event: ObservabilityEvent): Promise<void> {
+  const path = observabilityLogPath(vaultRoot);
+  await mkdir(dirname(path), { recursive: true });
+  await appendFile(path, `${JSON.stringify(event)}\n`, "utf8");
+}
+
+async function readRecentObservabilityEvents(vaultRoot: string, limit = 80): Promise<ObservabilityEvent[]> {
+  try {
+    const raw = await readFile(observabilityLogPath(vaultRoot), "utf8");
+    const lines = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const items: ObservabilityEvent[] = [];
+    for (const line of lines.slice(-limit)) {
+      try {
+        items.push(JSON.parse(line) as ObservabilityEvent);
+      } catch {
+        // ignore malformed lines
+      }
+    }
+    return items.sort((a, b) => b.at.localeCompare(a.at));
+  } catch {
+    return [];
+  }
+}
+
 async function applyRuleAction(input: {
   action: RuleAction;
   vaultRoot: string;
@@ -1050,6 +1098,7 @@ async function executeWithModelRouting<T>(input: {
   runWithClient: (client: OpenAiCompatibleClient) => Promise<T>;
   fallback: () => T | Promise<T>;
 }) {
+  const startedAt = Date.now();
   const baseClient = createLlmClient(input.vaultRoot);
   if (!baseClient.isEnabled()) {
     return {
@@ -1059,6 +1108,8 @@ async function executeWithModelRouting<T>(input: {
         usedModel: "heuristic-fallback",
         triedModels: [] as string[],
         errors: [] as string[],
+        durationMs: Date.now() - startedAt,
+        success: true,
       },
     };
   }
@@ -1087,6 +1138,8 @@ async function executeWithModelRouting<T>(input: {
           usedModel: model,
           triedModels: uniqueModels,
           errors,
+          durationMs: Date.now() - startedAt,
+          success: true,
         },
       };
     } catch (error) {
@@ -1102,6 +1155,8 @@ async function executeWithModelRouting<T>(input: {
       usedModel: "heuristic-fallback",
       triedModels: uniqueModels,
       errors,
+      durationMs: Date.now() - startedAt,
+      success: false,
     },
   };
 }
@@ -1136,6 +1191,8 @@ async function runTaskAction(input: {
     usedModel: string;
     triedModels: string[];
     errors: string[];
+    durationMs: number;
+    success: boolean;
   }> = [];
   const diagnosisResult = await executeWithModelRouting({
     vaultRoot: input.vaultRoot,
@@ -1150,6 +1207,22 @@ async function runTaskAction(input: {
   withRoutingDecisionLog.push(
     `模型路由[diagnose]：used=${diagnosisResult.routeMeta.usedModel} / tried=${diagnosisResult.routeMeta.triedModels.join(",") || "-"}${diagnosisResult.routeMeta.errors.length ? ` / fallbackErrors=${diagnosisResult.routeMeta.errors.length}` : ""}`,
   );
+  await appendObservabilityEvent(input.vaultRoot, {
+    id: `obs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    taskId: task.id,
+    taskPath: task.path,
+    stage: "diagnose",
+    action: input.action,
+    usedModel: diagnosisResult.routeMeta.usedModel,
+    triedModels: diagnosisResult.routeMeta.triedModels,
+    durationMs: diagnosisResult.routeMeta.durationMs,
+    success: diagnosisResult.routeMeta.success,
+    errors: diagnosisResult.routeMeta.errors,
+    matchedRuleCount: matchedRules.length,
+    matchedMaterialCount: matchedMaterials.length,
+    evidenceCardCount: evidenceCards.length,
+  }).catch(() => undefined);
 
   if (input.action === "diagnose") {
     await writeTaskSections({
@@ -1185,6 +1258,22 @@ async function runTaskAction(input: {
   withRoutingDecisionLog.push(
     `模型路由[outline]：used=${outlineResult.routeMeta.usedModel} / tried=${outlineResult.routeMeta.triedModels.join(",") || "-"}${outlineResult.routeMeta.errors.length ? ` / fallbackErrors=${outlineResult.routeMeta.errors.length}` : ""}`,
   );
+  await appendObservabilityEvent(input.vaultRoot, {
+    id: `obs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    taskId: task.id,
+    taskPath: task.path,
+    stage: "outline",
+    action: input.action,
+    usedModel: outlineResult.routeMeta.usedModel,
+    triedModels: outlineResult.routeMeta.triedModels,
+    durationMs: outlineResult.routeMeta.durationMs,
+    success: outlineResult.routeMeta.success,
+    errors: outlineResult.routeMeta.errors,
+    matchedRuleCount: matchedRules.length,
+    matchedMaterialCount: matchedMaterials.length,
+    evidenceCardCount: evidenceCards.length,
+  }).catch(() => undefined);
 
   if (input.action === "outline") {
     await writeTaskSections({
@@ -1228,6 +1317,22 @@ async function runTaskAction(input: {
   withRoutingDecisionLog.push(
     `模型路由[draft]：used=${draftResult.routeMeta.usedModel} / tried=${draftResult.routeMeta.triedModels.join(",") || "-"}${draftResult.routeMeta.errors.length ? ` / fallbackErrors=${draftResult.routeMeta.errors.length}` : ""}`,
   );
+  await appendObservabilityEvent(input.vaultRoot, {
+    id: `obs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    taskId: task.id,
+    taskPath: task.path,
+    stage: "draft",
+    action: input.action,
+    usedModel: draftResult.routeMeta.usedModel,
+    triedModels: draftResult.routeMeta.triedModels,
+    durationMs: draftResult.routeMeta.durationMs,
+    success: draftResult.routeMeta.success,
+    errors: draftResult.routeMeta.errors,
+    matchedRuleCount: matchedRules.length,
+    matchedMaterialCount: matchedMaterials.length,
+    evidenceCardCount: evidenceCards.length,
+  }).catch(() => undefined);
 
   await writeTaskSections({
     task,
@@ -1532,7 +1637,7 @@ async function advanceWorkflowRunForAction(input: {
 
 async function buildDashboard(vaultRoot: string) {
   const repo = new VaultRepository(vaultRoot);
-  const [materials, tasks, rules, feedbackEntries, profiles, workflowRuns, workflowDefinition] =
+  const [materials, tasks, rules, feedbackEntries, profiles, workflowRuns, workflowDefinition, observabilityEvents] =
     await Promise.all([
     repo.loadMaterials(),
     repo.loadTasks(),
@@ -1541,6 +1646,7 @@ async function buildDashboard(vaultRoot: string) {
     repo.loadProfiles(),
     listWorkflowRuns(vaultRoot),
     loadWorkflowDefinition(vaultRoot),
+    readRecentObservabilityEvents(vaultRoot, 80),
     ]);
 
   const llmConfig = getLlmConfig(vaultRoot);
@@ -1650,6 +1756,7 @@ async function buildDashboard(vaultRoot: string) {
       initialStage: workflowDefinition.definition.initialStage,
       stageCount: workflowDefinition.definition.stages.length,
     },
+    observability: observabilityEvents.slice(0, 60),
   };
 }
 
