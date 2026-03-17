@@ -194,10 +194,16 @@ function updateWizardSummary() {
   const selectedCount = formData.getAll("sourceMaterialIds").length;
   const templateTitle =
     document.querySelector("#template-selector option:checked")?.textContent || "不使用模板";
+  const templateMode = String(formData.get("templateMode") || "hybrid");
+  const overrideCount = String(formData.get("templateOverrides") || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
   const lines = [
     `任务：${String(formData.get("title") || "").trim() || "未填写"}`,
     `文档类型：${String(formData.get("docType") || "").trim() || "未填写"}`,
     `模板：${templateTitle}`,
+    `模板模式：${templateMode} / 覆盖条目：${overrideCount}`,
     `历史材料：${selectedCount} 篇`,
     `背景条目：${String(formData.get("background") || "").trim() ? "已填写" : "未填写"}`,
     `检查状态：${state.wizardCheckPassed ? "已通过" : "未通过"}`,
@@ -980,6 +986,9 @@ async function createAndRunTask() {
       facts: String(formData.get("facts") || "").trim(),
       mustInclude: String(formData.get("mustInclude") || "").trim(),
       specialRequirements: String(formData.get("specialRequirements") || "").trim(),
+      templateId,
+      templateMode: String(formData.get("templateMode") || "hybrid").trim(),
+      templateOverrides: String(formData.get("templateOverrides") || "").trim(),
       sourceMaterialIds: [...new Set(sourceMaterialIds)],
     };
 
@@ -1210,7 +1219,7 @@ function bindWizard() {
   document.getElementById("wizard-form").addEventListener("input", (event) => {
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
-      if (state.wizardCheckPassed && ["title", "docType", "background", "facts", "mustInclude", "specialRequirements", "sourceMaterialIds", "templateId", "backgroundUpload"].includes(target.name || target.id)) {
+      if (state.wizardCheckPassed && ["title", "docType", "background", "facts", "mustInclude", "specialRequirements", "sourceMaterialIds", "templateId", "templateMode", "templateOverrides", "backgroundUpload"].includes(target.name || target.id)) {
         state.wizardCheckPassed = false;
         state.wizardCheckReport = null;
         if (state.wizardStep === 5) {

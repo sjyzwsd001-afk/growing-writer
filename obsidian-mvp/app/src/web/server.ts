@@ -173,8 +173,37 @@ type TaskCreateRequest = {
   facts: string;
   mustInclude: string;
   specialRequirements: string;
+  templateId: string;
+  templateMode: "strict" | "hybrid" | "light";
+  templateOverrides: string;
   sourceMaterialIds: string[];
 };
+
+function normalizeTemplateMode(value: unknown): "strict" | "hybrid" | "light" {
+  if (value === "strict" || value === "hybrid" || value === "light") {
+    return value;
+  }
+  return "hybrid";
+}
+
+function parseTemplateOverrideMap(raw: string): Record<string, string> {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const index = line.indexOf("=");
+      if (index < 1) {
+        return ["", ""];
+      }
+      return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
+    })
+    .filter(([section, instruction]) => section && instruction)
+    .reduce<Record<string, string>>((acc, [section, instruction]) => {
+      acc[section] = instruction;
+      return acc;
+    }, {});
+}
 
 function toTaskCreateRequest(body: Record<string, unknown>): TaskCreateRequest {
   return {
@@ -192,6 +221,10 @@ function toTaskCreateRequest(body: Record<string, unknown>): TaskCreateRequest {
     mustInclude: typeof body.mustInclude === "string" ? body.mustInclude : "",
     specialRequirements:
       typeof body.specialRequirements === "string" ? body.specialRequirements : "",
+    templateId: typeof body.templateId === "string" ? body.templateId.trim() : "",
+    templateMode: normalizeTemplateMode(body.templateMode),
+    templateOverrides:
+      typeof body.templateOverrides === "string" ? body.templateOverrides : "",
     sourceMaterialIds: Array.isArray(body.sourceMaterialIds)
       ? body.sourceMaterialIds.filter((item): item is string => typeof item === "string")
       : [],
@@ -911,8 +944,67 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     profiles,
     feedbackEntries,
   });
-  const matchedRules = ruleMatch.matchedRules;
-  const matchedMaterials = matchMaterials(task, materials);
+  const baseMatchedRules = ruleMatch.matchedRules;
+  const baseMatchedMaterials = matchMaterials(task, materials);
+
+  const templateId =
+    typeof task.frontmatter.template_id === "string" ? task.frontmatter.template_id : "";
+  const templateMode = normalizeTemplateMode(task.frontmatter.template_mode);
+  const templateOverridesRaw = task.frontmatter.template_overrides;
+  const templateOverrides =
+    templateOverridesRaw && typeof templateOverridesRaw === "object" && !Array.isArray(templateOverridesRaw)
+      ? Object.entries(templateOverridesRaw as Record<string, unknown>)
+          .filter(([section, instruction]) => section && typeof instruction === "string" && instruction.trim())
+          .reduce<Record<string, string>>((acc, [section, instruction]) => {
+            acc[section] = String(instruction).trim();
+            return acc;
+          }, {})
+      : {};
+
+  const selectedTemplate =
+    (templateId && materials.find((item) => item.id === templateId)) ||
+    baseMatchedMaterials.find((item) =>
+      isTemplateMaterial({
+        tags: item.tags,
+        source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+        docType: item.docType,
+      }),
+    ) ||
+    null;
+
+  const templateRules = selectedTemplate
+    ? [
+        {
+          rule_id: `template-inherit:${selectedTemplate.id}`,
+          title: `模板继承(${templateMode})：${selectedTemplate.title}`,
+          priority: 1,
+          reason: `继承模板结构与语气（mode=${templateMode}）`,
+          source: "template" as const,
+          effective_score: templateMode === "strict" ? 2.5 : templateMode === "hybrid" ? 2.1 : 1.6,
+        },
+        ...Object.entries(templateOverrides).map(([section, instruction], index) => ({
+          rule_id: `template-override:${selectedTemplate.id}:${index + 1}`,
+          title: `模板覆盖：${section}`,
+          priority: 2 + index,
+          reason: instruction,
+          source: "template" as const,
+          effective_score: 2.35 - Math.min(0.5, index * 0.05),
+        })),
+      ]
+    : [];
+
+  const matchedRules = [...templateRules, ...baseMatchedRules]
+    .sort((a, b) => (b.effective_score || 0) - (a.effective_score || 0))
+    .slice(0, 10);
+  const matchedMaterials = selectedTemplate
+    ? [selectedTemplate, ...baseMatchedMaterials.filter((item) => item.id !== selectedTemplate.id)]
+    : baseMatchedMaterials;
+  const ruleDecisionLog = [
+    ...ruleMatch.decisionLog,
+    selectedTemplate
+      ? `模板继承：启用 ${selectedTemplate.title}（mode=${templateMode}，overrides=${Object.keys(templateOverrides).length}）`
+      : "模板继承：未指定模板，使用常规规则匹配。",
+  ];
 
   return {
     repo,
@@ -922,7 +1014,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     analysis,
     matchedRules,
     matchedMaterials,
-    ruleDecisionLog: ruleMatch.decisionLog,
+    ruleDecisionLog,
   };
 }
 
@@ -1056,6 +1148,9 @@ async function createTaskFromRequest(input: {
     facts: input.request.facts,
     mustInclude: input.request.mustInclude,
     specialRequirements: input.request.specialRequirements,
+    templateId: input.request.templateId,
+    templateMode: input.request.templateMode,
+    templateOverrides: parseTemplateOverrideMap(input.request.templateOverrides),
     sourceMaterials: selectedMaterials,
   });
 

@@ -39,12 +39,18 @@ function buildTaskContent(input: {
   facts?: string;
   mustInclude?: string;
   specialRequirements?: string;
+  templateId?: string;
+  templateMode?: "strict" | "hybrid" | "light";
+  templateOverrides?: Record<string, string>;
   selectedMaterials: Material[];
 }): string {
   const backgroundLines = parseLines(input.background);
   const factLines = parseLines(input.facts);
   const mustIncludeLines = parseLines(input.mustInclude);
   const specialRequirementLines = parseLines(input.specialRequirements);
+  const templateOverrideLines = Object.entries(input.templateOverrides ?? {}).map(
+    ([section, instruction]) => `${section}=${instruction}`,
+  );
   const selectedMaterialLines = input.selectedMaterials.map(
     (item) => `${item.title}${item.docType ? `（${item.docType}）` : ""}`,
   );
@@ -76,6 +82,15 @@ ${toBulletList(specialRequirementLines)}
 # 参考材料输入
 
 ${toBulletList(selectedMaterialLines)}
+
+# 模板继承设置
+
+- 模板ID：${input.templateId || ""}
+- 模式：${input.templateMode || "hybrid"}
+
+## 覆盖规则
+
+${toBulletList(templateOverrideLines)}
 
 # 写前诊断
 
@@ -129,6 +144,9 @@ export async function createTask(input: {
   facts?: string;
   mustInclude?: string;
   specialRequirements?: string;
+  templateId?: string;
+  templateMode?: "strict" | "hybrid" | "light";
+  templateOverrides?: Record<string, string>;
   sourceMaterials?: Material[];
 }): Promise<{ path: string; taskId: string }> {
   const now = new Date().toISOString();
@@ -147,6 +165,9 @@ export async function createTask(input: {
     priority: input.priority ?? "medium",
     target_length: input.targetLength ?? "",
     deadline: input.deadline ?? "",
+    template_id: input.templateId ?? "",
+    template_mode: input.templateMode ?? "hybrid",
+    template_overrides: input.templateOverrides ?? {},
     source_materials: (input.sourceMaterials ?? []).map((item) => item.id),
     matched_rules: [],
     created_at: now,
@@ -160,6 +181,9 @@ export async function createTask(input: {
     facts: input.facts,
     mustInclude: input.mustInclude,
     specialRequirements: input.specialRequirements,
+    templateId: input.templateId,
+    templateMode: input.templateMode,
+    templateOverrides: input.templateOverrides,
     selectedMaterials: input.sourceMaterials ?? [],
   });
 

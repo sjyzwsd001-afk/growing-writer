@@ -74,6 +74,16 @@
                     <option value="">不使用模板</option>
                   </select>
                 </label>
+                <label>模板继承模式
+                  <select name="templateMode">
+                    <option value="hybrid">hybrid（推荐：模板骨架 + 任务事实）</option>
+                    <option value="strict">strict（强继承模板结构）</option>
+                    <option value="light">light（仅参考模板语气）</option>
+                  </select>
+                </label>
+                <label>模板覆盖规则（每行：章节=覆盖要求）
+                  <textarea name="templateOverrides" rows="4" placeholder="例如：开头=先写意义再写现状&#10;风险分析=必须量化到指标"></textarea>
+                </label>
               </div>
 
               <div class="wizard-step" data-step="4">
