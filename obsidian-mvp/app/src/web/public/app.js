@@ -545,7 +545,10 @@ function renderFeedbackHistory() {
   }
 
   const latestRows = Object.values(state.latestFeedbackByLocation)
-    .map((item) => `<li><strong>${escapeHtml(item.location)}</strong>：${escapeHtml(item.reason || "未填原因")}（最新版本 ${escapeHtml(item.version || "-")}）</li>`)
+    .map(
+      (item) =>
+        `<li><strong>${escapeHtml(item.location)}</strong>：${escapeHtml(item.reason || "未填原因")}（最新版本 ${escapeHtml(item.version || "-")} / 吸收评分 ${escapeHtml(String(item.absorptionScore ?? "-"))}）</li>`,
+    )
     .join("");
 
   const allRows = [...state.feedbackHistory]
@@ -555,6 +558,7 @@ function renderFeedbackHistory() {
         <div><strong>${escapeHtml(item.version || "-")}</strong> ${escapeHtml(item.createdAt || "")}</div>
         <div>位置：${escapeHtml(item.location)}</div>
         <div>原因：${escapeHtml(item.reason || "-")}</div>
+        <div>吸收评分：${escapeHtml(String(item.absorptionScore ?? "-"))}（${escapeHtml(item.absorptionLevel || "-")}）</div>
         <div class="mini">${escapeHtml(item.comment || "")}</div>
       </li>`,
     )
@@ -1115,6 +1119,18 @@ async function submitFeedbackAndRegenerate() {
     generated?.draft?.draft_markdown ||
     (await getTaskDraftFromFile(state.currentTask.path)) ||
     draft;
+  const evalResult = await api("/api/feedback/evaluate", {
+    method: "POST",
+    body: JSON.stringify({
+      feedbackPath: feedback.path,
+      beforeDraft: draft,
+      afterDraft: latestDraft,
+      reason,
+      comment,
+      selectedText: selection?.text || "",
+    }),
+  });
+  const evaluation = evalResult?.evaluation || null;
   if (generated?.run) {
     state.currentWorkflowRun = generated.run;
   }
@@ -1128,12 +1144,15 @@ async function submitFeedbackAndRegenerate() {
     comment,
     version: `v${state.feedbackHistory.length + 1}`,
     createdAt: new Date().toISOString(),
+    absorptionScore: evaluation?.score ?? null,
+    absorptionLevel: evaluation?.level ?? "",
   };
   state.feedbackHistory.push(entry);
   state.latestFeedbackByLocation[location] = entry;
   saveFeedbackHistoryToStorage(state.currentTask.id);
   renderFeedbackHistory();
   renderWorkflowStageTracker();
+  return evaluation;
 }
 
 function bindTabs() {
@@ -1257,9 +1276,13 @@ function bindEditorActions() {
     button.disabled = true;
     button.textContent = "生成中...";
     try {
-      await submitFeedbackAndRegenerate();
+      const evaluation = await submitFeedbackAndRegenerate();
       setTaskBadge("已按反馈再生成");
-      setInfo("反馈已学习并生成新稿。你可以继续改，也可以直接定稿。");
+      const scoreText =
+        evaluation && typeof evaluation.score === "number"
+          ? `本轮吸收评分 ${evaluation.score}（${evaluation.level}）。`
+          : "已完成本轮反馈学习。";
+      setInfo(`反馈已学习并生成新稿。${scoreText}你可以继续改，也可以直接定稿。`);
     } catch (error) {
       setTaskBadge("再生成失败", true);
       setInfo(error.message, true);
