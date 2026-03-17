@@ -35,12 +35,17 @@
           <section class="panel">
             <div class="panel-header">
               <h2>引导式写作</h2>
-              <div class="step-indicator">步骤 <span id="wizard-step-index">1</span> / 4</div>
+              <div class="step-indicator">采集步骤 <span id="wizard-step-index">1</span> / 4</div>
+            </div>
+            <div class="panel-sub">
+              <h3>7步流程状态</h3>
+              <div id="workflow-stage-tracker" class="workflow-stage-tracker"></div>
+              <div id="workflow-stage-note" class="mini">当前阶段：问背景</div>
             </div>
 
             <form id="wizard-form" class="wizard-form">
               <div class="wizard-step active" data-step="1">
-                <h3>Step 1. 写作任务基础信息</h3>
+                <h3>Step 1. 问背景（任务目标与场景）</h3>
                 <div class="grid two">
                   <label>任务标题<input name="title" required placeholder="例如：联调阶段风险汇报" /></label>
                   <label>文档类型<input name="docType" required placeholder="例如：风险汇报" /></label>
@@ -54,13 +59,7 @@
               </div>
 
               <div class="wizard-step" data-step="2">
-                <h3>Step 2. 选择模板与历史材料</h3>
-                <p class="hint">模板属于高权重材料，会优先影响结构和语气。</p>
-                <label>模板选择
-                  <select id="template-selector" name="templateId">
-                    <option value="">不使用模板</option>
-                  </select>
-                </label>
+                <h3>Step 2. 问材料（历史素材）</h3>
                 <fieldset>
                   <legend>补充历史材料</legend>
                   <div id="wizard-material-options" class="check-grid"></div>
@@ -68,7 +67,17 @@
               </div>
 
               <div class="wizard-step" data-step="3">
-                <h3>Step 3. 输入本次背景素材</h3>
+                <h3>Step 3. 问模板（高权重）</h3>
+                <p class="hint">模板属于高权重材料，会优先影响结构和语气。</p>
+                <label>模板选择
+                  <select id="template-selector" name="templateId">
+                    <option value="">不使用模板</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="wizard-step" data-step="4">
+                <h3>Step 4. 写作输入（本次背景与约束）</h3>
                 <p class="hint">可上传文件（txt/md/docx/pdf）或直接粘贴文字。上传内容会作为本次写作背景材料参与生成。</p>
                 <label>背景材料上传
                   <input type="file" name="backgroundUpload" accept=".txt,.md,.docx,.pdf" />
@@ -85,10 +94,6 @@
                 <label>特殊要求（每行一条）
                   <textarea name="specialRequirements" rows="4" placeholder="例如：先写意义再写措施"></textarea>
                 </label>
-              </div>
-
-              <div class="wizard-step" data-step="4">
-                <h3>Step 4. 确认并生成</h3>
                 <div id="wizard-summary" class="summary-box">确认前 3 步后点击生成。</div>
               </div>
 
@@ -104,6 +109,9 @@
             <div class="panel-header">
               <h2>修改反馈与迭代</h2>
               <div id="task-badge" class="badge">任务未创建</div>
+            </div>
+            <div class="panel-sub">
+              <div id="workflow-editor-stage" class="workflow-editor-stage">当前编排阶段：未开始</div>
             </div>
 
             <div class="grid one">

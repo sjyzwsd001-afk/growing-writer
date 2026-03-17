@@ -174,6 +174,48 @@ h3 {
   font-size: 13px;
 }
 
+.workflow-stage-tracker {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.workflow-stage-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fffefb;
+  padding: 8px 9px;
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-stage-item .stage-no {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.workflow-stage-item.pending {
+  opacity: 0.78;
+}
+
+.workflow-stage-item.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(143, 79, 26, 0.25);
+}
+
+.workflow-stage-item.completed {
+  border-color: rgba(31, 107, 70, 0.35);
+  background: #f6fcf8;
+}
+
+.workflow-editor-stage {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 10px;
+  color: var(--muted);
+  background: #fffefb;
+}
+
 .wizard-form {
   padding: 16px;
 }

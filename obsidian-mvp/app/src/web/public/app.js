@@ -3,6 +3,7 @@ const state = {
   currentView: "create",
   wizardStep: 1,
   currentTask: null,
+  currentWorkflowRun: null,
   feedbackHistory: [],
   latestFeedbackByLocation: {},
   workflowDefinition: null,
@@ -15,6 +16,16 @@ const trustedOrigins = new Set([
   window.location.origin.replace("127.0.0.1", "localhost"),
   window.location.origin.replace("localhost", "127.0.0.1"),
 ]);
+
+const DEFAULT_FLOW_STAGES = [
+  { id: "INTAKE_BACKGROUND", label: "问背景", description: "收集背景、目标、约束" },
+  { id: "INTAKE_MATERIALS", label: "问材料", description: "收集历史材料、补充事实" },
+  { id: "SELECT_TEMPLATE", label: "问模板", description: "选择模板与结构偏好" },
+  { id: "GENERATE_DRAFT", label: "写作", description: "生成诊断、提纲与初稿" },
+  { id: "REVIEW_DIAGNOSE", label: "检查", description: "执行规则裁决与诊断复核" },
+  { id: "USER_CONFIRM_OR_EDIT", label: "确认", description: "用户修改、批注、反馈" },
+  { id: "FINALIZE_AND_LEARN", label: "定稿", description: "定稿并学习反馈" },
+];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -180,6 +191,78 @@ function updateWizardSummary() {
   document.getElementById("wizard-summary").innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
 }
 
+function getWorkflowStagesForUi() {
+  const fromDsl = state.workflowDefinition?.definition?.stages;
+  if (Array.isArray(fromDsl) && fromDsl.length) {
+    return fromDsl.map((stage) => ({
+      id: String(stage.id || ""),
+      label: String(stage.label || stage.id || "未命名阶段"),
+      description: String(stage.description || ""),
+    }));
+  }
+  return DEFAULT_FLOW_STAGES;
+}
+
+function deriveActiveStageIdByWizardStep(stages) {
+  const index = Math.max(0, Math.min(state.wizardStep - 1, stages.length - 1));
+  return stages[index]?.id || "";
+}
+
+function renderWorkflowStageTracker() {
+  const tracker = document.getElementById("workflow-stage-tracker");
+  const note = document.getElementById("workflow-stage-note");
+  const editorStage = document.getElementById("workflow-editor-stage");
+  if (!tracker || !note || !editorStage) {
+    return;
+  }
+
+  const stages = getWorkflowStagesForUi();
+  if (!stages.length) {
+    tracker.innerHTML = `<div class="empty">暂无流程定义。</div>`;
+    note.textContent = "当前阶段：未定义";
+    editorStage.textContent = "当前编排阶段：未开始";
+    return;
+  }
+
+  const run = state.currentWorkflowRun;
+  const activeStageId = run?.currentStage || deriveActiveStageIdByWizardStep(stages);
+  const activeIndex = Math.max(
+    0,
+    stages.findIndex((stage) => stage.id === activeStageId),
+  );
+
+  tracker.innerHTML = stages
+    .map((stage, index) => {
+      let status = "pending";
+      if (run) {
+        if (run.status === "completed") {
+          status = index <= activeIndex ? "completed" : "pending";
+        } else if (index < activeIndex) {
+          status = "completed";
+        } else if (index === activeIndex) {
+          status = "active";
+        }
+      } else if (index < activeIndex) {
+        status = "completed";
+      } else if (index === activeIndex) {
+        status = "active";
+      }
+      return `<div class="workflow-stage-item ${status}">
+        <div class="stage-no">第 ${index + 1} 步</div>
+        <strong>${escapeHtml(stage.label || stage.id)}</strong>
+        <div class="mini">${escapeHtml(stage.description || "")}</div>
+      </div>`;
+    })
+    .join("");
+
+  const activeStage = stages[activeIndex] || stages[0];
+  const statusText = run ? `（Run: ${run.status || "running"}）` : "（表单引导）";
+  note.textContent = `当前阶段：${activeStage.label || activeStage.id}${statusText}`;
+  editorStage.textContent = run
+    ? `当前编排阶段：${activeStage.label || activeStage.id} / ${run.currentStage || "-"}`
+    : "当前编排阶段：未开始（先完成前4步并生成）";
+}
+
 function updateWizardStep() {
   document.getElementById("wizard-step-index").textContent = String(state.wizardStep);
   document.querySelectorAll(".wizard-step").forEach((step) => {
@@ -191,6 +274,7 @@ function updateWizardStep() {
   if (state.wizardStep === MAX_WIZARD_STEP) {
     updateWizardSummary();
   }
+  renderWorkflowStageTracker();
 }
 
 function renderCheckOptions(containerId, items, name) {
@@ -661,6 +745,7 @@ async function loadWorkflowDefinitionEditor() {
   const payload = await api("/api/workflow/definition");
   state.workflowDefinition = payload;
   applyWorkflowDefinitionToEditor(payload.definition || {});
+  renderWorkflowStageTracker();
 }
 
 async function loadDashboard() {
@@ -673,6 +758,7 @@ async function loadDashboard() {
   renderSettingsLists();
   await loadWorkflowDefinitionEditor();
   updateWizardSummary();
+  renderWorkflowStageTracker();
 }
 
 async function importBackgroundMaterialIfNeeded(formData) {
@@ -759,11 +845,13 @@ async function createAndRunTask() {
       title: taskPayload.title,
       runId: run?.runId || "",
     };
+    state.currentWorkflowRun = run || null;
 
     loadFeedbackHistoryFromStorage(created.taskId);
     renderFeedbackHistory();
     setEditorVisible(true);
     setTaskBadge(`当前任务：${taskPayload.title}`);
+    renderWorkflowStageTracker();
     setInfo("初稿已生成。你可以直接改正文，写修改原因，再提交反馈继续生成。");
     await loadDashboard();
   } finally {
@@ -861,6 +949,9 @@ async function submitFeedbackAndRegenerate() {
     generated?.draft?.draft_markdown ||
     (await getTaskDraftFromFile(state.currentTask.path)) ||
     draft;
+  if (generated?.run) {
+    state.currentWorkflowRun = generated.run;
+  }
   document.getElementById("draft-editor").value = latestDraft;
 
   const entry = {
@@ -876,6 +967,7 @@ async function submitFeedbackAndRegenerate() {
   state.latestFeedbackByLocation[location] = entry;
   saveFeedbackHistoryToStorage(state.currentTask.id);
   renderFeedbackHistory();
+  renderWorkflowStageTracker();
 }
 
 function bindTabs() {
@@ -953,7 +1045,7 @@ function bindEditorActions() {
     try {
       await saveCurrentDraft(true);
       if (state.currentTask?.runId) {
-        await api("/api/workflow/advance", {
+        const finalized = await api("/api/workflow/advance", {
           method: "POST",
           body: JSON.stringify({
             runId: state.currentTask.runId,
@@ -961,8 +1053,12 @@ function bindEditorActions() {
             taskPath: state.currentTask.path,
           }),
         });
+        if (finalized?.run) {
+          state.currentWorkflowRun = finalized.run;
+        }
       }
       setTaskBadge("已定稿");
+      renderWorkflowStageTracker();
       setInfo("已定稿并写入任务文件。");
       await loadDashboard();
     } catch (error) {
