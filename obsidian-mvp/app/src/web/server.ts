@@ -2057,6 +2057,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         authUrl.searchParams.set("code_challenge_method", "S256");
         authUrl.searchParams.set("code_challenge", challenge);
         authUrl.searchParams.set("scope", OPENAI_CODEX_SCOPE);
+        authUrl.searchParams.set("prompt", "select_account");
         authUrl.searchParams.set("id_token_add_organizations", "true");
         authUrl.searchParams.set("codex_cli_simplified_flow", "true");
         authUrl.searchParams.set("originator", OPENAI_CODEX_ORIGINATOR);
