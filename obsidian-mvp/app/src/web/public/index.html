@@ -253,6 +253,19 @@
                 <button id="reload-workflow-definition" type="button" class="btn ghost">重新加载 DSL</button>
                 <button id="save-workflow-definition" type="button" class="btn primary">保存 DSL</button>
               </div>
+              <div class="workflow-builder">
+                <h3>可视化编排编辑</h3>
+                <p class="hint">可在下方直接维护流程结构，右侧 JSON 会自动同步。</p>
+                <div class="workflow-builder-meta">
+                  <label>流程 ID<input id="wf-meta-id" type="text" placeholder="例如：growing-writer-workflow" /></label>
+                  <label>版本<input id="wf-meta-version" type="number" min="1" step="1" placeholder="1" /></label>
+                  <label>初始阶段
+                    <select id="wf-meta-initial"></select>
+                  </label>
+                  <button id="wf-add-stage" type="button" class="btn ghost">新增阶段</button>
+                </div>
+                <div id="workflow-stage-list" class="workflow-stage-list"></div>
+              </div>
               <div class="workflow-preview">
                 <h3>流程图预览（实时）</h3>
                 <div id="workflow-graph" class="workflow-graph"></div>

@@ -489,6 +489,76 @@ legend {
   gap: 6px;
 }
 
+.workflow-builder {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-builder h3 {
+  margin: 0;
+}
+
+.workflow-builder-meta {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: end;
+}
+
+.workflow-builder-meta button {
+  height: 40px;
+}
+
+.workflow-stage-list {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-stage-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fffefb;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-stage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-stage-head strong {
+  font-size: 14px;
+}
+
+.workflow-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workflow-stage-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.workflow-stage-grid .full {
+  grid-column: 1 / -1;
+}
+
+.workflow-stage-card textarea {
+  min-height: 68px;
+}
+
 .empty {
   color: var(--muted);
   font-size: 13px;

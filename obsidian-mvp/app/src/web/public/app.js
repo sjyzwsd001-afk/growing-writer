@@ -6,6 +6,7 @@ const state = {
   feedbackHistory: [],
   latestFeedbackByLocation: {},
   workflowDefinition: null,
+  workflowEditorDefinition: null,
 };
 
 const MAX_WIZARD_STEP = 4;
@@ -397,6 +398,151 @@ function normalizeWorkflowDefinitionLite(raw) {
   return definition;
 }
 
+function ensureWorkflowDefinition(raw) {
+  const normalized = normalizeWorkflowDefinitionLite(raw);
+  if (!normalized) {
+    return {
+      id: "",
+      version: 1,
+      initialStage: "",
+      stages: [],
+    };
+  }
+  return {
+    ...normalized,
+    version: Number.isFinite(normalized.version) && normalized.version > 0 ? Math.floor(normalized.version) : 1,
+  };
+}
+
+function safeParseWorkflowEditorValue() {
+  const editor = document.getElementById("workflow-definition-editor");
+  const raw = String(editor?.value || "").trim();
+  if (!raw) {
+    return { definition: ensureWorkflowDefinition(null), error: "DSL 为空。" };
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return { definition: ensureWorkflowDefinition(parsed), error: "" };
+  } catch (error) {
+    return { definition: null, error: error.message || "JSON 解析失败。" };
+  }
+}
+
+function formatActionsForEditor(actions) {
+  return Object.entries(actions || {})
+    .map(([action, target]) => `${action}=${target}`)
+    .join("\n");
+}
+
+function parseActionsFromEditor(value) {
+  const entries = String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const separatorIndex = line.includes("=") ? line.indexOf("=") : line.indexOf(":");
+      if (separatorIndex < 0) {
+        return ["", ""];
+      }
+      const action = String(line.slice(0, separatorIndex)).trim();
+      const target = String(line.slice(separatorIndex + 1)).trim();
+      return [action, target];
+    })
+    .filter(([action, target]) => action && target);
+  return Object.fromEntries(entries);
+}
+
+function parseTargetsCsv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function createUniqueStageId(definition, seed = "stage") {
+  const used = new Set((definition.stages || []).map((stage) => stage.id).filter(Boolean));
+  let index = 1;
+  let candidate = `${seed}_${index}`;
+  while (used.has(candidate)) {
+    index += 1;
+    candidate = `${seed}_${index}`;
+  }
+  return candidate;
+}
+
+function applyWorkflowDefinitionToEditor(definition, options = {}) {
+  const { skipEditorWrite = false } = options;
+  const normalized = ensureWorkflowDefinition(definition);
+  state.workflowEditorDefinition = normalized;
+
+  if (!skipEditorWrite) {
+    const editor = document.getElementById("workflow-definition-editor");
+    if (editor) {
+      editor.value = JSON.stringify(normalized, null, 2);
+    }
+  }
+
+  renderWorkflowGraph(normalized);
+  renderWorkflowStageEditor(normalized);
+}
+
+function renderWorkflowStageEditor(definition, parseError = "") {
+  const list = document.getElementById("workflow-stage-list");
+  const metaId = document.getElementById("wf-meta-id");
+  const metaVersion = document.getElementById("wf-meta-version");
+  const metaInitial = document.getElementById("wf-meta-initial");
+  if (!list || !metaId || !metaVersion || !metaInitial) {
+    return;
+  }
+
+  if (parseError) {
+    metaId.value = "";
+    metaVersion.value = "";
+    metaInitial.innerHTML = '<option value="">无法编辑（DSL 解析失败）</option>';
+    list.innerHTML = `<div class="msg error">${escapeHtml(parseError)}</div>`;
+    return;
+  }
+
+  const normalized = ensureWorkflowDefinition(definition);
+  const stageOptions = normalized.stages
+    .map((stage) => `<option value="${escapeHtml(stage.id)}"${stage.id === normalized.initialStage ? " selected" : ""}>${escapeHtml(stage.label || stage.id || "(未命名阶段)")}</option>`)
+    .join("");
+
+  metaId.value = normalized.id || "";
+  metaVersion.value = String(normalized.version || 1);
+  metaInitial.innerHTML =
+    `<option value="">请选择初始阶段</option>${stageOptions}`;
+
+  if (!normalized.stages.length) {
+    list.innerHTML = `<div class="empty">还没有阶段，点击“新增阶段”开始。</div>`;
+    return;
+  }
+
+  list.innerHTML = normalized.stages
+    .map((stage, index) => {
+      const isInitial = stage.id && stage.id === normalized.initialStage;
+      return `<div class="workflow-stage-card" data-stage-index="${index}">
+        <div class="workflow-stage-head">
+          <strong>${index + 1}. ${escapeHtml(stage.label || stage.id || "未命名阶段")}${isInitial ? "（初始）" : ""}</strong>
+          <div class="workflow-stage-actions">
+            <button type="button" class="mini-btn" data-action="stage-up" data-index="${index}" ${index === 0 ? "disabled" : ""}>上移</button>
+            <button type="button" class="mini-btn" data-action="stage-down" data-index="${index}" ${index === normalized.stages.length - 1 ? "disabled" : ""}>下移</button>
+            <button type="button" class="mini-btn" data-action="stage-initial" data-index="${index}">设为初始</button>
+            <button type="button" class="mini-btn" data-action="stage-delete" data-index="${index}">删除</button>
+          </div>
+        </div>
+        <div class="workflow-stage-grid">
+          <label>阶段 ID<input type="text" data-field="id" data-index="${index}" value="${escapeHtml(stage.id || "")}" /></label>
+          <label>标题<input type="text" data-field="label" data-index="${index}" value="${escapeHtml(stage.label || "")}" /></label>
+          <label class="full">描述<textarea data-field="description" data-index="${index}">${escapeHtml(stage.description || "")}</textarea></label>
+          <label class="full">next（逗号分隔）<input type="text" data-field="next" data-index="${index}" value="${escapeHtml((stage.next || []).join(", "))}" placeholder="例如：confirm_rules,compose" /></label>
+          <label class="full">actions（每行 action=target）<textarea data-field="actions" data-index="${index}" placeholder="approve=confirm_rules&#10;retry=collect_materials">${escapeHtml(formatActionsForEditor(stage.actions || {}))}</textarea></label>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
 function renderWorkflowGraph(definition, parseError = "") {
   const graph = document.getElementById("workflow-graph");
   const hints = document.getElementById("workflow-graph-hints");
@@ -480,6 +626,16 @@ function renderWorkflowGraph(definition, parseError = "") {
     : `<div class="msg">DSL 结构检查通过。初始阶段：${escapeHtml(normalized.initialStage)}</div>`;
 }
 
+function updateWorkflowDefinitionFromUi(mutator) {
+  const base = ensureWorkflowDefinition(state.workflowEditorDefinition);
+  const next = ensureWorkflowDefinition(JSON.parse(JSON.stringify(base)));
+  mutator(next);
+  if (!next.initialStage && next.stages.length > 0) {
+    next.initialStage = next.stages[0].id || "";
+  }
+  applyWorkflowDefinitionToEditor(next);
+}
+
 function updateTopStatus(data) {
   document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
   document.getElementById("llm-status").textContent = data.llm.enabled ? "已可调用" : "未就绪";
@@ -504,11 +660,7 @@ function hydrateLlmSettings(data) {
 async function loadWorkflowDefinitionEditor() {
   const payload = await api("/api/workflow/definition");
   state.workflowDefinition = payload;
-  const editor = document.getElementById("workflow-definition-editor");
-  if (editor) {
-    editor.value = JSON.stringify(payload.definition || {}, null, 2);
-  }
-  renderWorkflowGraph(payload.definition || {});
+  applyWorkflowDefinitionToEditor(payload.definition || {});
 }
 
 async function loadDashboard() {
@@ -919,17 +1071,22 @@ function bindLlmSettings() {
 
 function bindWorkflowDefinitionEditor() {
   document.getElementById("workflow-definition-editor").addEventListener("input", (event) => {
-    const raw = String(event.currentTarget.value || "");
-    if (!raw.trim()) {
+    const raw = String(event.currentTarget.value || "").trim();
+    if (!raw) {
+      state.workflowEditorDefinition = ensureWorkflowDefinition(null);
       renderWorkflowGraph(null, "DSL 为空。");
+      renderWorkflowStageEditor(null, "DSL 为空。");
       return;
     }
-    try {
-      const parsed = JSON.parse(raw);
-      renderWorkflowGraph(parsed);
-    } catch (error) {
-      renderWorkflowGraph(null, error.message || "JSON 解析失败。");
+    const { definition, error } = safeParseWorkflowEditorValue();
+    if (error) {
+      renderWorkflowGraph(null, error);
+      renderWorkflowStageEditor(null, error);
+      return;
     }
+    state.workflowEditorDefinition = definition;
+    renderWorkflowGraph(definition);
+    renderWorkflowStageEditor(definition);
   });
 
   document.getElementById("reload-workflow-definition").addEventListener("click", async () => {
@@ -949,6 +1106,149 @@ function bindWorkflowDefinitionEditor() {
     }
   });
 
+  document.getElementById("wf-add-stage").addEventListener("click", () => {
+    updateWorkflowDefinitionFromUi((definition) => {
+      const stageId = createUniqueStageId(definition);
+      definition.stages.push({
+        id: stageId,
+        label: `阶段 ${definition.stages.length + 1}`,
+        description: "",
+        next: [],
+        actions: {},
+      });
+      if (!definition.initialStage) {
+        definition.initialStage = stageId;
+      }
+    });
+    setInfo("已新增阶段，可继续补充 next / actions。");
+  });
+
+  document.getElementById("wf-meta-id").addEventListener("change", (event) => {
+    const value = String(event.currentTarget.value || "").trim();
+    updateWorkflowDefinitionFromUi((definition) => {
+      definition.id = value;
+    });
+  });
+
+  document.getElementById("wf-meta-version").addEventListener("change", (event) => {
+    const raw = Number(event.currentTarget.value || 1);
+    updateWorkflowDefinitionFromUi((definition) => {
+      definition.version = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
+    });
+  });
+
+  document.getElementById("wf-meta-initial").addEventListener("change", (event) => {
+    const value = String(event.currentTarget.value || "").trim();
+    updateWorkflowDefinitionFromUi((definition) => {
+      definition.initialStage = value;
+    });
+  });
+
+  const stageList = document.getElementById("workflow-stage-list");
+  stageList.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const field = target.dataset.field || "";
+    const index = Number(target.dataset.index);
+    if (!field || !Number.isInteger(index) || index < 0) {
+      return;
+    }
+
+    updateWorkflowDefinitionFromUi((definition) => {
+      const stage = definition.stages[index];
+      if (!stage) {
+        return;
+      }
+      const raw = String(target.value || "");
+      if (field === "id") {
+        const oldId = stage.id;
+        const newId = raw.trim();
+        stage.id = newId;
+        if (oldId && newId && oldId !== newId) {
+          if (definition.initialStage === oldId) {
+            definition.initialStage = newId;
+          }
+          definition.stages.forEach((item) => {
+            item.next = (item.next || []).map((it) => (it === oldId ? newId : it));
+            item.actions = Object.fromEntries(
+              Object.entries(item.actions || {}).map(([action, targetId]) => [
+                action,
+                targetId === oldId ? newId : targetId,
+              ]),
+            );
+          });
+        }
+        return;
+      }
+      if (field === "label") {
+        stage.label = raw.trim();
+        return;
+      }
+      if (field === "description") {
+        stage.description = raw.trim();
+        return;
+      }
+      if (field === "next") {
+        stage.next = parseTargetsCsv(raw);
+        return;
+      }
+      if (field === "actions") {
+        stage.actions = parseActionsFromEditor(raw);
+      }
+    });
+  });
+
+  stageList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+    const action = button.dataset.action || "";
+    const index = Number(button.dataset.index);
+    if (!action || !Number.isInteger(index) || index < 0) {
+      return;
+    }
+
+    updateWorkflowDefinitionFromUi((definition) => {
+      const stage = definition.stages[index];
+      if (!stage) {
+        return;
+      }
+
+      if (action === "stage-up" && index > 0) {
+        const temp = definition.stages[index - 1];
+        definition.stages[index - 1] = stage;
+        definition.stages[index] = temp;
+        return;
+      }
+      if (action === "stage-down" && index < definition.stages.length - 1) {
+        const temp = definition.stages[index + 1];
+        definition.stages[index + 1] = stage;
+        definition.stages[index] = temp;
+        return;
+      }
+      if (action === "stage-initial") {
+        definition.initialStage = stage.id || "";
+        return;
+      }
+      if (action === "stage-delete") {
+        const deletedId = stage.id;
+        definition.stages.splice(index, 1);
+        definition.stages.forEach((item) => {
+          item.next = (item.next || []).filter((targetId) => targetId !== deletedId);
+          item.actions = Object.fromEntries(
+            Object.entries(item.actions || {}).filter(([, targetId]) => targetId !== deletedId),
+          );
+        });
+        if (definition.initialStage === deletedId) {
+          definition.initialStage = definition.stages[0]?.id || "";
+        }
+      }
+    });
+  });
+
   document.getElementById("save-workflow-definition").addEventListener("click", async () => {
     const button = document.getElementById("save-workflow-definition");
     const original = button.textContent;
@@ -962,7 +1262,7 @@ function bindWorkflowDefinitionEditor() {
         body: JSON.stringify({ definition: parsed }),
       });
       state.workflowDefinition = result.reloaded || result.saved || null;
-      renderWorkflowGraph((result.reloaded && result.reloaded.definition) || parsed);
+      applyWorkflowDefinitionToEditor((result.reloaded && result.reloaded.definition) || parsed);
       setSettingsResult("Workflow DSL 已保存", result);
       setInfo("Workflow DSL 保存成功，后续流程已按新定义生效。");
       await loadDashboard();

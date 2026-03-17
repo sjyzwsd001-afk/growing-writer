@@ -33,6 +33,7 @@
 11. 工作流改为 DSL 驱动，定义文件在 `workflow/workflow-definition.json`
 12. 设置页提供 DSL 图形化编辑入口，保存后实时生效（热更新）
 13. DSL 编辑区下方提供实时流程图预览和结构校验提示（next/action 目标有效性、重复 stage id 等）
+14. DSL 可视化编辑支持阶段新增、删除、上移下移、设初始阶段，且自动同步 JSON
 
 一句话理解：
 
@@ -549,6 +550,26 @@ npx tsx src/cli/index.ts refresh-profile
 默认画像文件在这里：
 
 - [default-profile.md](/Users/zw/Documents/growing writer/obsidian-mvp/profiles/default-profile.md)
+
+### 16.3 在设置页图形化维护 Workflow DSL（推荐）
+
+打开 Web 控制台后进入 `设置 -> Workflow DSL 编辑`，你会看到 3 块：
+
+1. `DSL JSON`：完整定义，适合高级修改
+2. `可视化编排编辑`：适合日常增删改
+3. `流程图预览`：实时结构校验
+
+日常最推荐这样用：
+
+1. 点 `新增阶段`
+2. 填阶段 `ID/标题/描述`
+3. 填 `next`（逗号分隔）和 `actions`（每行 `action=target`）
+4. 用 `设为初始` 或上方下拉指定 `initialStage`
+5. 点 `保存 DSL`
+
+你只要改可视化区域，JSON 会自动同步；如果你直接改 JSON，也会实时刷新可视化区和预览区。
+
+如果你删掉某个阶段，系统会自动清理其他阶段里指向它的 `next/actions` 目标，避免脏引用。
 
 ---
 
