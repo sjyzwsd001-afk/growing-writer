@@ -35,7 +35,7 @@
           <section class="panel">
             <div class="panel-header">
               <h2>引导式写作</h2>
-              <div class="step-indicator">采集步骤 <span id="wizard-step-index">1</span> / 4</div>
+              <div class="step-indicator">步骤 <span id="wizard-step-index">1</span> / 7</div>
             </div>
             <div class="panel-sub">
               <h3>7步流程状态</h3>
@@ -94,13 +94,40 @@
                 <label>特殊要求（每行一条）
                   <textarea name="specialRequirements" rows="4" placeholder="例如：先写意义再写措施"></textarea>
                 </label>
+              </div>
+
+              <div class="wizard-step" data-step="5">
+                <h3>Step 5. 检查（完整性与风险）</h3>
+                <p class="hint">系统会检查关键输入完整性。通过检查后才能进入确认步骤。</p>
+                <div id="wizard-check-result" class="summary-box">点击“执行检查”开始。</div>
+                <div class="editor-actions">
+                  <button type="button" id="wizard-run-check" class="btn ghost">执行检查</button>
+                </div>
+              </div>
+
+              <div class="wizard-step" data-step="6">
+                <h3>Step 6. 确认（准备生成）</h3>
                 <div id="wizard-summary" class="summary-box">确认前 3 步后点击生成。</div>
+                <label class="inline-check">
+                  <input type="checkbox" id="wizard-confirm-check" />
+                  <span>我已确认输入内容，允许系统开始生成初稿。</span>
+                </label>
+              </div>
+
+              <div class="wizard-step" data-step="7">
+                <h3>Step 7. 定稿（完成写作流程）</h3>
+                <div class="summary-box">
+                  初稿已生成。请在下方“修改反馈与迭代”区域完成调整，最后点击“直接定稿”。
+                </div>
+                <div class="editor-actions">
+                  <button type="button" id="goto-editor-panel" class="btn primary">前往修改与定稿区</button>
+                </div>
               </div>
 
               <div class="wizard-actions">
                 <button type="button" id="wizard-prev" class="btn ghost">上一步</button>
                 <button type="button" id="wizard-next" class="btn ghost">下一步</button>
-                <button type="submit" id="wizard-submit" class="btn primary">生成初稿</button>
+                <button type="submit" id="wizard-submit" class="btn primary">确认并生成初稿</button>
               </div>
             </form>
           </section>

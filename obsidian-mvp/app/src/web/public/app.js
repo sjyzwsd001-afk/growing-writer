@@ -2,6 +2,8 @@ const state = {
   dashboard: null,
   currentView: "create",
   wizardStep: 1,
+  wizardCheckPassed: false,
+  wizardCheckReport: null,
   currentTask: null,
   currentWorkflowRun: null,
   feedbackHistory: [],
@@ -10,7 +12,7 @@ const state = {
   workflowEditorDefinition: null,
 };
 
-const MAX_WIZARD_STEP = 4;
+const MAX_WIZARD_STEP = 7;
 const trustedOrigins = new Set([
   window.location.origin,
   window.location.origin.replace("127.0.0.1", "localhost"),
@@ -26,6 +28,16 @@ const DEFAULT_FLOW_STAGES = [
   { id: "USER_CONFIRM_OR_EDIT", label: "确认", description: "用户修改、批注、反馈" },
   { id: "FINALIZE_AND_LEARN", label: "定稿", description: "定稿并学习反馈" },
 ];
+
+const WIZARD_STEP_STAGE_MAP = {
+  1: "INTAKE_BACKGROUND",
+  2: "INTAKE_MATERIALS",
+  3: "SELECT_TEMPLATE",
+  4: "GENERATE_DRAFT",
+  5: "REVIEW_DIAGNOSE",
+  6: "USER_CONFIRM_OR_EDIT",
+  7: "FINALIZE_AND_LEARN",
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -187,8 +199,101 @@ function updateWizardSummary() {
     `模板：${templateTitle}`,
     `历史材料：${selectedCount} 篇`,
     `背景条目：${String(formData.get("background") || "").trim() ? "已填写" : "未填写"}`,
+    `检查状态：${state.wizardCheckPassed ? "已通过" : "未通过"}`,
   ];
   document.getElementById("wizard-summary").innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+}
+
+function runWizardCheck() {
+  const form = document.getElementById("wizard-form");
+  const formData = new FormData(form);
+
+  const title = String(formData.get("title") || "").trim();
+  const docType = String(formData.get("docType") || "").trim();
+  const background = String(formData.get("background") || "").trim();
+  const facts = String(formData.get("facts") || "").trim();
+  const mustInclude = String(formData.get("mustInclude") || "").trim();
+  const specialRequirements = String(formData.get("specialRequirements") || "").trim();
+  const materialCount = formData.getAll("sourceMaterialIds").length;
+  const templateId = String(formData.get("templateId") || "").trim();
+  const hasUpload =
+    formData.get("backgroundUpload") instanceof File && formData.get("backgroundUpload").size > 0;
+
+  const blockers = [];
+  const warnings = [];
+
+  if (!title) {
+    blockers.push("任务标题未填写。");
+  }
+  if (!docType) {
+    blockers.push("文档类型未填写。");
+  }
+  if (!background && !facts && !hasUpload) {
+    blockers.push("本次背景素材为空：请填写背景/事实或上传背景文件。");
+  }
+  if (!mustInclude) {
+    warnings.push("“必须包含的信息”为空，可能导致生成遗漏重点。");
+  }
+  if (!materialCount && !templateId) {
+    warnings.push("未选择历史材料或模板，风格迁移能力会下降。");
+  }
+  if (!specialRequirements) {
+    warnings.push("“特殊要求”为空，建议补充结构偏好（如先意义后措施）。");
+  }
+
+  const ok = blockers.length === 0;
+  const report = { ok, blockers, warnings };
+  state.wizardCheckPassed = ok;
+  state.wizardCheckReport = report;
+  return report;
+}
+
+function renderWizardCheckResult(report) {
+  const container = document.getElementById("wizard-check-result");
+  if (!container) {
+    return;
+  }
+
+  if (!report) {
+    container.innerHTML = `<div>点击“执行检查”开始。</div>`;
+    return;
+  }
+
+  const blockerLines = report.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  const warningLines = report.warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  container.innerHTML = `
+    <div class="${report.ok ? "msg" : "msg error"}">${report.ok ? "检查通过，可进入确认步骤。" : "检查未通过，请先修复阻塞项。"}</div>
+    <div><strong>阻塞项</strong></div>
+    <ul>${blockerLines || "<li>无</li>"}</ul>
+    <div><strong>提醒项</strong></div>
+    <ul>${warningLines || "<li>无</li>"}</ul>
+  `;
+}
+
+function validateStepBeforeNext(step) {
+  const form = document.getElementById("wizard-form");
+  const formData = new FormData(form);
+  if (step === 1) {
+    if (!String(formData.get("title") || "").trim() || !String(formData.get("docType") || "").trim()) {
+      return "请先填写任务标题和文档类型。";
+    }
+  }
+  if (step === 4) {
+    const background = String(formData.get("background") || "").trim();
+    const facts = String(formData.get("facts") || "").trim();
+    const hasUpload =
+      formData.get("backgroundUpload") instanceof File && formData.get("backgroundUpload").size > 0;
+    if (!background && !facts && !hasUpload) {
+      return "请至少填写背景/事实或上传背景文件，再进入检查步骤。";
+    }
+  }
+  if (step === 5 && !state.wizardCheckPassed) {
+    return "请先在 Step 5 执行检查并通过。";
+  }
+  if (step === 6 && !state.currentTask?.id) {
+    return "请先点击“确认并生成初稿”，生成后才能进入定稿步骤。";
+  }
+  return "";
 }
 
 function getWorkflowStagesForUi() {
@@ -204,8 +309,12 @@ function getWorkflowStagesForUi() {
 }
 
 function deriveActiveStageIdByWizardStep(stages) {
+  const preferredStageId = WIZARD_STEP_STAGE_MAP[state.wizardStep] || "";
+  if (preferredStageId && stages.some((stage) => stage.id === preferredStageId)) {
+    return preferredStageId;
+  }
   const index = Math.max(0, Math.min(state.wizardStep - 1, stages.length - 1));
-  return stages[index]?.id || "";
+  return stages[index]?.id || preferredStageId;
 }
 
 function renderWorkflowStageTracker() {
@@ -270,9 +379,12 @@ function updateWizardStep() {
   });
   document.getElementById("wizard-prev").disabled = state.wizardStep === 1;
   document.getElementById("wizard-next").classList.toggle("hidden", state.wizardStep >= MAX_WIZARD_STEP);
-  document.getElementById("wizard-submit").classList.toggle("hidden", state.wizardStep < MAX_WIZARD_STEP);
-  if (state.wizardStep === MAX_WIZARD_STEP) {
+  document.getElementById("wizard-submit").classList.toggle("hidden", state.wizardStep !== 6);
+  if (state.wizardStep >= 6) {
     updateWizardSummary();
+  }
+  if (state.wizardStep === 5) {
+    renderWizardCheckResult(state.wizardCheckReport);
   }
   renderWorkflowStageTracker();
 }
@@ -850,6 +962,8 @@ async function createAndRunTask() {
     loadFeedbackHistoryFromStorage(created.taskId);
     renderFeedbackHistory();
     setEditorVisible(true);
+    state.wizardStep = 7;
+    updateWizardStep();
     setTaskBadge(`当前任务：${taskPayload.title}`);
     renderWorkflowStageTracker();
     setInfo("初稿已生成。你可以直接改正文，写修改原因，再提交反馈继续生成。");
@@ -986,21 +1100,70 @@ function bindWizard() {
 
   document.getElementById("wizard-next").addEventListener("click", () => {
     if (state.wizardStep < MAX_WIZARD_STEP) {
+      const blocker = validateStepBeforeNext(state.wizardStep);
+      if (blocker) {
+        setInfo(blocker, true);
+        return;
+      }
       state.wizardStep += 1;
       updateWizardStep();
     }
   });
 
-  document.getElementById("wizard-form").addEventListener("input", () => {
-    if (state.wizardStep === MAX_WIZARD_STEP) {
+  document.getElementById("wizard-run-check").addEventListener("click", () => {
+    const report = runWizardCheck();
+    renderWizardCheckResult(report);
+    if (report.ok) {
+      setInfo("检查通过，可进入确认步骤。");
+    } else {
+      setInfo("检查未通过，请先修复阻塞项。", true);
+    }
+    updateWizardSummary();
+  });
+
+  document.getElementById("wizard-confirm-check").addEventListener("change", () => {
+    if (state.wizardStep >= 6) {
+      updateWizardSummary();
+    }
+  });
+
+  document.getElementById("goto-editor-panel").addEventListener("click", () => {
+    const panel = document.getElementById("editor-panel");
+    if (!panel || panel.classList.contains("hidden")) {
+      setInfo("当前还没有可编辑正文，请先完成生成。", true);
+      return;
+    }
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  document.getElementById("wizard-form").addEventListener("input", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+      if (state.wizardCheckPassed && ["title", "docType", "background", "facts", "mustInclude", "specialRequirements", "sourceMaterialIds", "templateId", "backgroundUpload"].includes(target.name || target.id)) {
+        state.wizardCheckPassed = false;
+        state.wizardCheckReport = null;
+        if (state.wizardStep === 5) {
+          renderWizardCheckResult(null);
+        }
+      }
+    }
+    if (state.wizardStep >= 6) {
       updateWizardSummary();
     }
   });
 
   document.getElementById("wizard-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (state.wizardStep !== MAX_WIZARD_STEP) {
-      setInfo("请先走完整个引导步骤再生成。", true);
+    if (state.wizardStep !== 6) {
+      setInfo("请先进入 Step 6（确认）后再生成。", true);
+      return;
+    }
+    if (!state.wizardCheckPassed) {
+      setInfo("请先完成 Step 5 检查并通过。", true);
+      return;
+    }
+    if (!document.getElementById("wizard-confirm-check").checked) {
+      setInfo("请先勾选“我已确认输入内容”。", true);
       return;
     }
     try {
