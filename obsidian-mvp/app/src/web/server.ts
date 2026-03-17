@@ -1029,7 +1029,14 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     repo.loadProfiles(),
     repo.loadFeedbackEntries(),
   ]);
-  const analysis = client.isEnabled() ? await parseTaskWithLlm(client, task) : parseTask(task);
+  const analysisResult = await executeWithModelRouting({
+    vaultRoot,
+    route: "fast",
+    stageLabel: "parse_task",
+    runWithClient: (client) => parseTaskWithLlm(client, task),
+    fallback: () => parseTask(task),
+  });
+  const analysis = analysisResult.value;
   const ruleMatch = matchRulesWithPolicy({
     task,
     rules,

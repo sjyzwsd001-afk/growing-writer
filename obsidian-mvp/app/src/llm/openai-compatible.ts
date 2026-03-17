@@ -2,6 +2,8 @@ import { z, type ZodType } from "zod";
 
 import type { LlmConfig } from "../config/env.js";
 
+const LLM_REQUEST_TIMEOUT_MS = 45_000;
+
 const chatCompletionSchema = z.object({
   choices: z
     .array(
@@ -32,22 +34,36 @@ export class OpenAiCompatibleClient {
       throw new Error("OPENAI_BEARER_TOKEN or OPENAI_API_KEY is not configured.");
     }
 
-    const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.bearerToken}`,
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: options.system },
-          { role: "user", content: options.user },
-        ],
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LLM_REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.bearerToken}`,
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.config.model,
+          temperature: 0.2,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: options.system },
+            { role: "user", content: options.user },
+          ],
+        }),
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`LLM request timed out after ${LLM_REQUEST_TIMEOUT_MS}ms.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const body = await response.text();

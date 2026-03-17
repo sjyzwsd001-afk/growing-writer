@@ -15,6 +15,8 @@ const state = {
 };
 
 const MAX_WIZARD_STEP = 7;
+const DEFAULT_API_TIMEOUT_MS = 30000;
+const WORKFLOW_START_TIMEOUT_MS = 90000;
 const trustedOrigins = new Set([
   window.location.origin,
   window.location.origin.replace("127.0.0.1", "localhost"),
@@ -138,16 +140,29 @@ function loadFeedbackHistoryFromStorage(taskId) {
   }
 }
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || `Request failed: ${response.status}`);
+async function api(path, options = {}, timeoutMs = DEFAULT_API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `Request failed: ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`请求超时（>${Math.round(timeoutMs / 1000)} 秒）。如果后台仍停留在旧进程，请重启 \`npm run web\` 后再试。`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return data;
 }
 
 async function fileToBase64(file) {
@@ -1016,10 +1031,14 @@ async function createAndRunTask() {
       throw new Error("任务标题和文档类型是必填项。");
     }
 
-    const workflow = await api("/api/workflow/start", {
-      method: "POST",
-      body: JSON.stringify(taskPayload),
-    });
+    const workflow = await api(
+      "/api/workflow/start",
+      {
+        method: "POST",
+        body: JSON.stringify(taskPayload),
+      },
+      WORKFLOW_START_TIMEOUT_MS,
+    );
     const created = workflow.created;
     const generated = workflow.generated;
     const run = workflow.run;
