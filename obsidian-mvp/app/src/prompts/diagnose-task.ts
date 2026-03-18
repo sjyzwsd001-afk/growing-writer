@@ -1,5 +1,12 @@
 import type { EvidenceCard, MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
 import type { TaskAnalysis } from "../types/schemas.js";
+import {
+  compactEvidenceCards,
+  compactMatchedRules,
+  compactMaterialSummaries,
+  compactProfiles,
+  compactTaskAnalysis,
+} from "./context.js";
 
 export function buildDiagnoseTaskPrompt(input: {
   taskAnalysis: TaskAnalysis;
@@ -8,12 +15,6 @@ export function buildDiagnoseTaskPrompt(input: {
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
 }): string {
-  const profileSummary = input.profiles.map((profile) => ({
-    id: profile.id,
-    name: profile.name,
-    content: profile.content.slice(0, 1200),
-  }));
-
   return `请根据任务分析、已命中规则、相似材料摘要和写作画像，输出写前诊断。
 
 要求：
@@ -27,19 +28,20 @@ export function buildDiagnoseTaskPrompt(input: {
 - 只输出 JSON
 - 不要直接写正文
 - 结构建议必须可执行
+- 以下输入已经做过裁剪，请优先抓住最相关信息，不要因为缺少细枝末节而编造内容
 
 任务分析:
-${JSON.stringify(input.taskAnalysis, null, 2)}
+${JSON.stringify(compactTaskAnalysis(input.taskAnalysis), null, 2)}
 
 命中规则:
-${JSON.stringify(input.matchedRules, null, 2)}
+${JSON.stringify(compactMatchedRules(input.matchedRules), null, 2)}
 
 相似材料摘要:
-${JSON.stringify(input.materialSummaries, null, 2)}
+${JSON.stringify(compactMaterialSummaries(input.materialSummaries), null, 2)}
 
 证据卡片:
-${JSON.stringify(input.evidenceCards, null, 2)}
+${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 
 写作画像:
-${JSON.stringify(profileSummary, null, 2)}`;
+${JSON.stringify(compactProfiles(input.profiles), null, 2)}`;
 }

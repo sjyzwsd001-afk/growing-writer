@@ -1,5 +1,13 @@
 import type { EvidenceCard, MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
 import type { DiagnosisResult, TaskAnalysis } from "../types/schemas.js";
+import {
+  compactDiagnosis,
+  compactEvidenceCards,
+  compactMatchedRules,
+  compactMaterialSummaries,
+  compactProfiles,
+  compactTaskAnalysis,
+} from "./context.js";
 
 export function buildOutlinePrompt(input: {
   taskAnalysis: TaskAnalysis;
@@ -9,12 +17,6 @@ export function buildOutlinePrompt(input: {
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
 }): string {
-  const profileSummary = input.profiles.map((profile) => ({
-    id: profile.id,
-    name: profile.name,
-    content: profile.content.slice(0, 1200),
-  }));
-
   return `请生成一份可直接用于写作的提纲。
 
 要求：
@@ -27,22 +29,23 @@ export function buildOutlinePrompt(input: {
 输出要求：
 - 只输出 JSON
 - 提纲要稳定、克制、适合正式材料
+- 以下输入已经做过裁剪，请只抓关键结构和依据
 
 任务分析:
-${JSON.stringify(input.taskAnalysis, null, 2)}
+${JSON.stringify(compactTaskAnalysis(input.taskAnalysis), null, 2)}
 
 写前诊断:
-${JSON.stringify(input.diagnosis, null, 2)}
+${JSON.stringify(compactDiagnosis(input.diagnosis), null, 2)}
 
 命中规则:
-${JSON.stringify(input.matchedRules, null, 2)}
+${JSON.stringify(compactMatchedRules(input.matchedRules), null, 2)}
 
 相似材料摘要:
-${JSON.stringify(input.materialSummaries, null, 2)}
+${JSON.stringify(compactMaterialSummaries(input.materialSummaries), null, 2)}
 
 证据卡片:
-${JSON.stringify(input.evidenceCards, null, 2)}
+${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 
 写作画像:
-${JSON.stringify(profileSummary, null, 2)}`;
+${JSON.stringify(compactProfiles(input.profiles), null, 2)}`;
 }

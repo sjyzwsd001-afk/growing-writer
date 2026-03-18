@@ -22,6 +22,77 @@ import {
   taskAnalysisSchema,
 } from "../types/schemas.js";
 
+const TASK_ANALYSIS_SCHEMA_HINT = `{
+  "task_type": "string",
+  "audience": "string",
+  "scenario": "string",
+  "goal": "string",
+  "must_include": ["string"],
+  "constraints": ["string"],
+  "raw_facts": ["string"],
+  "missing_info": ["string"],
+  "risk_flags": ["string"],
+  "confidence": 0.0
+}`;
+
+const DIAGNOSIS_SCHEMA_HINT = `{
+  "readiness": "ready | partial | blocked",
+  "diagnosis_summary": "string",
+  "recommended_structure": [
+    {
+      "section": "string",
+      "purpose": "string",
+      "must_cover": ["string"]
+    }
+  ],
+  "missing_info": ["string"],
+  "applied_rules": ["string"],
+  "reference_materials": ["string"],
+  "writing_risks": ["string"],
+  "next_action": "string"
+}`;
+
+const OUTLINE_SCHEMA_HINT = `{
+  "outline_title": "string",
+  "sections": [
+    {
+      "heading": "string",
+      "purpose": "string",
+      "key_points": ["string"],
+      "source_basis": ["string"]
+    }
+  ],
+  "tone_notes": ["string"],
+  "coverage_check": ["string"]
+}`;
+
+const DRAFT_SCHEMA_HINT = `{
+  "draft_markdown": "string",
+  "self_review": {
+    "strengths": ["string"],
+    "risks": ["string"],
+    "missing_points": ["string"],
+    "rule_violations": ["string"]
+  },
+  "revision_suggestions": ["string"]
+}`;
+
+const FEEDBACK_SCHEMA_HINT = `{
+  "feedback_type": "wording | structure | order | logic | missing_info | scenario_mismatch | factual_fix",
+  "feedback_summary": "string",
+  "is_reusable_rule": true,
+  "candidate_rule": {
+    "title": "string",
+    "content": "string",
+    "scope": "string",
+    "doc_types": ["string"],
+    "audiences": ["string"],
+    "confidence": 0.0
+  },
+  "reasoning": "string",
+  "suggested_update": "string"
+}`;
+
 export function parseTask(task: Task): TaskAnalysis {
   return {
     task_type: task.docType || "未识别文体",
@@ -45,6 +116,9 @@ export async function parseTaskWithLlm(
     system: BASE_SYSTEM_PROMPT,
     user: buildParseTaskPrompt(task),
     schema: taskAnalysisSchema,
+    schemaHint: TASK_ANALYSIS_SCHEMA_HINT,
+    maxTokens: 900,
+    timeoutMs: 45_000,
   });
 }
 
@@ -100,6 +174,9 @@ export async function diagnoseTaskWithLlm(
       profiles: input.profiles,
     }),
     schema: diagnosisResultSchema,
+    schemaHint: DIAGNOSIS_SCHEMA_HINT,
+    maxTokens: 1200,
+    timeoutMs: 75_000,
   });
 }
 
@@ -151,6 +228,9 @@ export async function buildOutlineWithLlm(
       profiles: input.profiles,
     }),
     schema: outlineResultSchema,
+    schemaHint: OUTLINE_SCHEMA_HINT,
+    maxTokens: 1400,
+    timeoutMs: 75_000,
   });
 }
 
@@ -205,6 +285,9 @@ export async function generateDraftWithLlm(
       profiles: input.profiles,
     }),
     schema: draftResultSchema,
+    schemaHint: DRAFT_SCHEMA_HINT,
+    maxTokens: 1600,
+    timeoutMs: 60_000,
   });
 }
 
@@ -231,5 +314,8 @@ export async function learnFeedbackWithLlm(
     system: BASE_SYSTEM_PROMPT,
     user: buildLearnFeedbackPrompt(input),
     schema: feedbackAnalysisSchema,
+    schemaHint: FEEDBACK_SCHEMA_HINT,
+    maxTokens: 1000,
+    timeoutMs: 60_000,
   });
 }
