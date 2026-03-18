@@ -483,18 +483,18 @@ legend {
 
 .llm-card-list {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .llm-card {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   background: linear-gradient(180deg, #fffdf8 0%, #fff8ee 100%);
-  padding: 10px 11px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 10px;
+  display: grid;
   gap: 10px;
+  min-height: 122px;
 }
 
 .llm-card.active {
@@ -504,23 +504,35 @@ legend {
 
 .llm-card-head {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
   min-width: 0;
 }
 
 .llm-card-main {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
+}
+
+.llm-card-main strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.llm-card-meta {
+  color: var(--muted);
 }
 
 .llm-card-note {
   color: var(--muted);
-  white-space: nowrap;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 360px;
+  max-width: 100%;
 }
 
 .llm-card-note.danger {
@@ -528,8 +540,15 @@ legend {
 }
 
 .llm-card-actions {
-  justify-content: flex-end;
-  flex: 0 0 auto;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.llm-card-badges {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
 }
 
 .chip {
@@ -541,6 +560,24 @@ legend {
   color: var(--muted);
   padding: 4px 10px;
   font-size: 12px;
+}
+
+.status-chip.ok {
+  background: #eef8ee;
+  border-color: rgba(72, 125, 72, 0.18);
+  color: #2c6d35;
+}
+
+.status-chip.pending {
+  background: #fff7e7;
+  border-color: rgba(170, 119, 31, 0.18);
+  color: #8a5a0a;
+}
+
+.status-chip.error {
+  background: #fff1f1;
+  border-color: rgba(155, 46, 46, 0.18);
+  color: var(--danger);
 }
 
 .chip.active {

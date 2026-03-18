@@ -1048,18 +1048,22 @@ function renderLlmCards(data) {
                 ? "待校准"
                 : "未就绪";
       const summary = calibration?.message || validation.errors[0] || "";
+      const providerLabel = card.provider === "openai-codex-oauth" ? "OAuth" : "API Key";
       return `<div class="llm-card ${card.isActive ? "active" : ""}">
         <div class="llm-card-head">
           <div class="llm-card-main">
             <strong>${escapeHtml(card.name || card.id)}</strong>
-            <div class="mini">${escapeHtml(card.model || "-")} / ${escapeHtml(statusText)}</div>
+            <div class="mini llm-card-meta">${escapeHtml(providerLabel)} · ${escapeHtml(card.model || "-")}</div>
             ${
               summary
                 ? `<div class="mini llm-card-note ${validation.errors.length ? "danger" : ""}">${escapeHtml(summary)}</div>`
                 : ""
             }
           </div>
-          <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用卡片"}</span>
+          <div class="llm-card-badges">
+            <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
+            <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用"}</span>
+          </div>
         </div>
         <div class="row-actions llm-card-actions">
           <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
