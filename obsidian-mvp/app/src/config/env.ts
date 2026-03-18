@@ -43,6 +43,13 @@ export type StoredLlmSettings = {
   fastModel?: string;
   strongModel?: string;
   fallbackModels?: string[];
+  calibration?: {
+    status: "pending" | "running" | "ready" | "failed";
+    usable: boolean;
+    message?: string;
+    checkedAt?: string;
+    structuredOutput?: "strict-schema" | "connectivity-only" | "unknown";
+  };
   createdAt?: string;
   updatedAt?: string;
 };
@@ -330,6 +337,44 @@ function normalizeStoredSettings(
             .filter(Boolean)
             .slice(0, 6)
         : [],
+    calibration:
+      input?.calibration && typeof input.calibration === "object" && !Array.isArray(input.calibration)
+        ? {
+            status:
+              input.calibration.status === "running" ||
+              input.calibration.status === "ready" ||
+              input.calibration.status === "failed"
+                ? input.calibration.status
+                : "pending",
+            usable: Boolean(input.calibration.usable),
+            message:
+              typeof input.calibration.message === "string" ? input.calibration.message : "",
+            checkedAt:
+              typeof input.calibration.checkedAt === "string"
+                ? input.calibration.checkedAt
+                : typeof fallback?.calibration?.checkedAt === "string"
+                  ? fallback.calibration.checkedAt
+                  : undefined,
+            structuredOutput:
+              input.calibration.structuredOutput === "strict-schema" ||
+              input.calibration.structuredOutput === "connectivity-only"
+                ? input.calibration.structuredOutput
+                : "unknown",
+          }
+        : fallback?.calibration
+          ? {
+              status: fallback.calibration.status,
+              usable: Boolean(fallback.calibration.usable),
+              message: fallback.calibration.message ?? "",
+              checkedAt: fallback.calibration.checkedAt,
+              structuredOutput: fallback.calibration.structuredOutput ?? "unknown",
+            }
+          : {
+              status: "pending",
+              usable: false,
+              message: "",
+              structuredOutput: "unknown",
+            },
     createdAt,
     updatedAt,
   };
@@ -563,4 +608,29 @@ export function getLlmConfig(vaultRoot = DEFAULT_VAULT_ROOT): LlmConfig {
     enabled: Boolean(bearerToken),
     source,
   };
+}
+
+export function updateStoredLlmProfileCalibration(
+  vaultRoot = DEFAULT_VAULT_ROOT,
+  profileId: string,
+  calibration: StoredLlmSettings["calibration"],
+): { profile: StoredLlmSettings; store: StoredLlmSettingsStore } {
+  const store = readStoredSettingsStore(vaultRoot);
+  if (!store) {
+    throw new Error("No saved LLM profiles.");
+  }
+
+  const existingProfile = store.profiles.find((profile) => profile.id === profileId);
+  if (!existingProfile) {
+    throw new Error(`LLM profile not found: ${profileId}`);
+  }
+
+  return upsertStoredLlmProfile(
+    vaultRoot,
+    {
+      id: profileId,
+      calibration,
+    },
+    { activate: store.activeProfileId === profileId },
+  );
 }

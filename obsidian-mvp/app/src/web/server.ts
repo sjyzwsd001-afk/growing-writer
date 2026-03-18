@@ -30,6 +30,7 @@ import {
   getLlmConfig,
   listStoredLlmProfiles,
   getStoredLlmSettings,
+  updateStoredLlmProfileCalibration,
   upsertStoredLlmProfile,
   validateStoredLlmProfile,
   type StoredLlmSettings,
@@ -303,6 +304,40 @@ function createLlmClientWithModel(vaultRoot: string, modelOverride?: string): Op
   });
 }
 
+const autoCalibrationSchema = z.object({
+  readiness: z.enum(["ready", "partial", "blocked"]),
+  diagnosis_summary: z.string(),
+  recommended_structure: z.array(
+    z.object({
+      section: z.string(),
+      purpose: z.string(),
+      must_cover: z.array(z.string()),
+    }),
+  ),
+  missing_info: z.array(z.string()),
+  applied_rules: z.array(z.string()),
+  reference_materials: z.array(z.string()),
+  writing_risks: z.array(z.string()),
+  next_action: z.string(),
+});
+
+const AUTO_CALIBRATION_SCHEMA_HINT = `{
+  "readiness": "ready | partial | blocked",
+  "diagnosis_summary": "string",
+  "recommended_structure": [
+    {
+      "section": "string",
+      "purpose": "string",
+      "must_cover": ["string"]
+    }
+  ],
+  "missing_info": ["string"],
+  "applied_rules": ["string"],
+  "reference_materials": ["string"],
+  "writing_risks": ["string"],
+  "next_action": "string"
+}`;
+
 async function runLlmConnectivityTest(settings: StoredLlmSettings) {
   const validation = validateStoredLlmProfile(settings);
   if (validation.errors.length) {
@@ -368,6 +403,104 @@ async function runLlmConnectivityTest(settings: StoredLlmSettings) {
       apiType: settings.apiType || "openai-completions",
     };
   }
+}
+
+async function runLlmAutoCalibration(settings: StoredLlmSettings) {
+  const connectivity = await runLlmConnectivityTest(settings);
+  if (!connectivity.ok) {
+    return {
+      ok: false,
+      usable: false,
+      message: connectivity.message,
+      structuredOutput: "unknown" as const,
+    };
+  }
+
+  const client = new OpenAiCompatibleClient({
+    bearerToken: settings.bearerToken.trim(),
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    apiType: settings.apiType || "openai-completions",
+    enabled: true,
+    source: "saved",
+  });
+
+  try {
+    await client.generateJson({
+      system:
+        "你是写作助手的模型入驻校准程序。必须严格按给定 schema 返回 JSON，字段名不允许改写。",
+      user: `请输出一份极短的写前诊断，用于验证结构化输出能力。
+
+任务分析:
+{
+  "task_type": "情况说明",
+  "audience": "内部",
+  "scenario": "模型自动校准",
+  "goal": "验证结构化输出能力",
+  "must_include": ["本次目的", "当前结果", "后续建议"],
+  "constraints": ["不要编造事实"],
+  "raw_facts": ["基础连通已通过"],
+  "missing_info": [],
+  "risk_flags": [],
+  "confidence": 0.9
+}
+
+命中规则:
+[]
+
+相似材料摘要:
+[]
+
+证据卡片:
+[]
+
+写作画像:
+[]`,
+      schema: autoCalibrationSchema,
+      schemaHint: AUTO_CALIBRATION_SCHEMA_HINT,
+      maxTokens: 900,
+      timeoutMs: 45_000,
+    });
+
+    return {
+      ok: true,
+      usable: true,
+      message: "自动校准完成，可直接用于正式写作。",
+      structuredOutput: "strict-schema" as const,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      usable: false,
+      message: error instanceof Error ? error.message : String(error),
+      structuredOutput: "connectivity-only" as const,
+    };
+  }
+}
+
+async function calibrateAndPersistLlmProfile(vaultRoot: string, profile: StoredLlmSettings) {
+  updateStoredLlmProfileCalibration(vaultRoot, profile.id, {
+    status: "running",
+    usable: false,
+    message: "正在自动校准…",
+    checkedAt: new Date().toISOString(),
+    structuredOutput: "unknown",
+  });
+
+  const result = await runLlmAutoCalibration(profile);
+  const calibration = updateStoredLlmProfileCalibration(vaultRoot, profile.id, {
+    status: result.ok ? "ready" : "failed",
+    usable: result.usable,
+    message: result.message,
+    checkedAt: new Date().toISOString(),
+    structuredOutput: result.structuredOutput,
+  }).profile.calibration;
+
+  return {
+    ok: result.ok,
+    calibration,
+    message: result.message,
+  };
 }
 
 function getRoutingSettings(vaultRoot: string): {
@@ -1854,6 +1987,7 @@ async function buildDashboard(vaultRoot: string) {
       fastModel: stored?.fastModel || llmConfig.model,
       strongModel: stored?.strongModel || llmConfig.model,
       fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels : [],
+      calibration: stored?.calibration ?? null,
       cards: llmProfiles.profiles.map((profile) => ({
         id: profile.id,
         name: profile.name,
@@ -1874,6 +2008,7 @@ async function buildDashboard(vaultRoot: string) {
         hasBearerToken: Boolean(profile.bearerToken?.trim()),
         oauthReady: Boolean(profile.oauthAccessToken && profile.oauthIdToken),
         validation: validateStoredLlmProfile(profile),
+        calibration: profile.calibration ?? null,
         updatedAt: profile.updatedAt ?? null,
         createdAt: profile.createdAt ?? null,
         isActive: profile.id === llmProfiles.activeProfileId,
@@ -2000,7 +2135,7 @@ async function handleOauthCallbackRequest(input: {
       return;
     }
 
-    upsertStoredLlmProfile(input.vaultRoot, {
+    const savedProfile = upsertStoredLlmProfile(input.vaultRoot, {
       id: pending.profileId,
       provider: OPENAI_CODEX_PROVIDER,
       apiType: "openai-completions",
@@ -2014,7 +2149,8 @@ async function handleOauthCallbackRequest(input: {
       oauthAccessToken: tokens.accessToken,
       oauthIdToken: tokens.idToken,
       refreshToken: tokens.refreshToken,
-    });
+    }).profile;
+    await calibrateAndPersistLlmProfile(input.vaultRoot, savedProfile);
   } catch (error) {
     input.res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
     input.res.end(
@@ -2250,8 +2386,30 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const settings = upsertStoredLlmProfile(vaultRoot, {
           ...candidateSettings,
         }, { activate: shouldActivate }).profile;
+        const calibration = settings.bearerToken.trim()
+          ? await calibrateAndPersistLlmProfile(vaultRoot, settings)
+          : {
+              ok: false,
+              calibration: updateStoredLlmProfileCalibration(vaultRoot, settings.id, {
+                status: "pending",
+                usable: false,
+                message:
+                  settings.provider === OPENAI_CODEX_PROVIDER
+                    ? "等待 OAuth 登录完成后自动校准。"
+                    : "等待填写可用 token 后自动校准。",
+                checkedAt: new Date().toISOString(),
+                structuredOutput: "unknown",
+              }).profile.calibration,
+              message:
+                settings.provider === OPENAI_CODEX_PROVIDER
+                  ? "等待 OAuth 登录完成后自动校准。"
+                  : "等待填写可用 token 后自动校准。",
+            };
+        const latestSettings =
+          listStoredLlmProfiles(vaultRoot).profiles.find((profile) => profile.id === settings.id) ??
+          settings;
         const resolved = getLlmConfig(vaultRoot);
-        sendJson(res, 200, { settings, resolved, validation });
+        sendJson(res, 200, { settings: latestSettings, resolved, validation, calibration });
         return;
       }
 
