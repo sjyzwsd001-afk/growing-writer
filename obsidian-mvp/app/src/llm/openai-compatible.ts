@@ -31,6 +31,22 @@ type ChatJsonOptions<T> = {
   schema: ZodType<T>;
 };
 
+function extractJsonPayload(raw: string): string {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1].trim() : trimmed;
+}
+
+function buildLlmRequestError(status: number, body: string): Error {
+  if (/deactivated_workspace/i.test(body)) {
+    return new Error(
+      "OpenAI Codex OAuth 已失效：当前账号绑定的 workspace 已停用或不再可用。请在模型设置里重新执行 OAuth 登录后再试。",
+    );
+  }
+
+  return new Error(`LLM request failed: ${status} ${body}`);
+}
+
 export class OpenAiCompatibleClient {
   constructor(private readonly config: LlmConfig) {}
 
@@ -99,7 +115,7 @@ export class OpenAiCompatibleClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`LLM request failed: ${response.status} ${body}`);
+      throw buildLlmRequestError(response.status, body);
     }
 
     const rawJson = await response.json();
@@ -118,7 +134,16 @@ export class OpenAiCompatibleClient {
     try {
       parsed = JSON.parse(content);
     } catch (error) {
-      throw new Error(`Failed to parse model JSON: ${String(error)}`);
+      const normalized = extractJsonPayload(content);
+      if (normalized !== content) {
+        try {
+          parsed = JSON.parse(normalized);
+        } catch (normalizedError) {
+          throw new Error(`Failed to parse model JSON: ${String(normalizedError)}`);
+        }
+      } else {
+        throw new Error(`Failed to parse model JSON: ${String(error)}`);
+      }
     }
 
     return options.schema.parse(parsed);
