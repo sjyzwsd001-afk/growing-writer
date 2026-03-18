@@ -574,6 +574,46 @@ function toggleLlmMode(mode) {
   }
 }
 
+function renderValidationMessages(validation, options = {}) {
+  const errors = Array.isArray(validation?.errors) ? validation.errors : [];
+  const warnings = Array.isArray(validation?.warnings) ? validation.warnings : [];
+  if (!errors.length && !warnings.length) {
+    return options.emptyText ? `<div class="mini">${escapeHtml(options.emptyText)}</div>` : "";
+  }
+
+  const items = [
+    ...errors.map((item) => ({ level: "error", text: item })),
+    ...warnings.map((item) => ({ level: "warn", text: item })),
+  ];
+  return `<div class="validation-list">
+    ${items
+      .map(
+        (item) =>
+          `<div class="validation-item ${item.level}">${escapeHtml(item.text)}</div>`,
+      )
+      .join("")}
+  </div>`;
+}
+
+function setLlmValidationFeedback(validation, message = "") {
+  const container = document.getElementById("llm-validation-feedback");
+  if (!container) {
+    return;
+  }
+
+  const hasErrors = Array.isArray(validation?.errors) && validation.errors.length > 0;
+  const hasWarnings = Array.isArray(validation?.warnings) && validation.warnings.length > 0;
+  const hasMessages = hasErrors || hasWarnings || Boolean(message);
+  container.classList.toggle("hidden", !hasMessages);
+  if (!hasMessages) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const messageHtml = message ? `<div class="msg">${escapeHtml(message)}</div>` : "";
+  container.innerHTML = `${messageHtml}${renderValidationMessages(validation)}`;
+}
+
 function setLlmModalOpen(open) {
   document.getElementById("llm-editor-modal").classList.toggle("hidden", !open);
 }
@@ -593,7 +633,10 @@ function getLlmFormPayload() {
         ? "openai-completions"
         : document.getElementById("llm-api-type-select").value,
     model,
-    bearerToken: document.getElementById("llm-token-input").value.trim(),
+    bearerToken:
+      mode === "openai-codex-oauth"
+        ? ""
+        : document.getElementById("llm-token-input").value.trim(),
     baseUrl: document.getElementById("llm-base-url-input").value.trim(),
     authUrl: document.getElementById("llm-auth-url-input").value.trim(),
     routingEnabled: document.getElementById("routing-enabled").checked,
@@ -951,10 +994,13 @@ function updateWorkflowDefinitionFromUi(mutator) {
 }
 
 function updateTopStatus(data) {
+  const validation = data.llm.validation || { errors: [], warnings: [] };
   document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
-  document.getElementById("llm-status").textContent = data.llm.enabled
-    ? `已可调用${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`
-    : "未就绪";
+  document.getElementById("llm-status").textContent = validation.errors.length
+    ? `配置错误${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`
+    : data.llm.enabled
+      ? `已配置${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`
+      : "未就绪";
   document.getElementById("llm-source").textContent = data.llm.source || "-";
   document.getElementById("llm-model-text").textContent = data.llm.model || "-";
   document.getElementById("vault-root").textContent = data.vaultRoot || "-";
@@ -980,17 +1026,31 @@ function renderLlmCards(data) {
 
   container.innerHTML = cards
     .map((card) => {
-      const statusText = card.enabled ? "可调用" : card.oauthReady ? "OAuth 已就绪" : "未就绪";
+      const validation = card.validation || { errors: [], warnings: [] };
+      const statusText = validation.errors.length
+        ? "配置错误"
+        : card.enabled
+          ? "已配置"
+          : card.oauthReady
+            ? "OAuth 已就绪"
+            : "未就绪";
+      const summary = validation.errors[0] || validation.warnings[0] || "";
       return `<div class="llm-card ${card.isActive ? "active" : ""}">
         <div class="llm-card-head">
-          <div>
+          <div class="llm-card-main">
             <strong>${escapeHtml(card.name || card.id)}</strong>
             <div class="mini">${escapeHtml(card.model || "-")} / ${escapeHtml(statusText)}</div>
+            ${
+              summary
+                ? `<div class="mini llm-card-note ${validation.errors.length ? "danger" : ""}">${escapeHtml(summary)}</div>`
+                : ""
+            }
           </div>
           <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用卡片"}</span>
         </div>
         <div class="row-actions llm-card-actions">
           <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
+          <button type="button" class="mini-btn" data-action="llm-test" data-profile-id="${escapeHtml(card.id)}">测试</button>
           <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
           <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
         </div>
@@ -1025,6 +1085,7 @@ function fillLlmForm(card) {
     : "未选择卡片";
   document.getElementById("save-llm-settings").textContent = card ? "保存卡片修改" : "保存为模型卡片";
   toggleLlmMode(mode);
+  setLlmValidationFeedback(card?.validation || null);
 }
 
 function hydrateLlmSettings(data) {
@@ -1557,6 +1618,16 @@ function bindLlmSettings() {
         return;
       }
 
+      if (action === "llm-test") {
+        const result = await api("/api/settings/llm/test", {
+          method: "POST",
+          body: JSON.stringify({ profileId }),
+        });
+        setSettingsResult("模型连通性测试", result);
+        setInfo(result.message || "模型连通成功。");
+        return;
+      }
+
       if (action === "llm-delete") {
         await api("/api/settings/llm/delete", {
           method: "POST",
@@ -1593,9 +1664,31 @@ function bindLlmSettings() {
           ? "OAuth 模型卡片已保存。是否生效以“当前启用”标记为准。"
           : "API Key 模型卡片已保存。是否生效以“当前启用”标记为准。",
       );
+      setSettingsResult("模型卡片已保存", result);
       toggleView("settings");
     } catch (error) {
       setInfo(`保存模型配置失败：${error.message}`, true);
+    }
+  });
+
+  document.getElementById("test-llm-settings").addEventListener("click", async () => {
+    const payload = getLlmFormPayload();
+    if (!payload.name) {
+      setInfo("请先填写卡片名称。", true);
+      return;
+    }
+
+    try {
+      const result = await api("/api/settings/llm/test", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setLlmValidationFeedback(result.validation, result.message);
+      setSettingsResult("模型连通性测试", result);
+      setInfo(result.message || "模型连通成功。");
+    } catch (error) {
+      setLlmValidationFeedback(null, error.message || "模型测试失败。");
+      setInfo(`模型测试失败：${error.message}`, true);
     }
   });
 

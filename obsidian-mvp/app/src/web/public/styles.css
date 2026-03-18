@@ -509,6 +509,24 @@ legend {
   min-width: 0;
 }
 
+.llm-card-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.llm-card-note {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+
+.llm-card-note.danger {
+  color: var(--danger);
+}
+
 .llm-card-actions {
   justify-content: flex-end;
   flex: 0 0 auto;
@@ -564,6 +582,35 @@ legend {
   padding: 0;
   margin-top: 14px;
   border-top: 1px solid rgba(218, 200, 172, 0.75);
+}
+
+#llm-validation-feedback {
+  display: grid;
+  gap: 8px;
+}
+
+.validation-list {
+  display: grid;
+  gap: 6px;
+}
+
+.validation-item {
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.validation-item.warn {
+  border: 1px solid rgba(170, 119, 31, 0.2);
+  background: #fff7e9;
+  color: #8a5a0a;
+}
+
+.validation-item.error {
+  border: 1px solid rgba(155, 46, 46, 0.22);
+  background: #fff1f1;
+  color: var(--danger);
 }
 
 .result-viewer {

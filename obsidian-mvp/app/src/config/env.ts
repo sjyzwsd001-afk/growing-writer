@@ -54,6 +54,12 @@ export type StoredLlmSettingsStore = {
   updatedAt?: string;
 };
 
+export type LlmProfileValidation = {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+};
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -103,6 +109,89 @@ function normalizeApiType(
     return "openai-completions";
   }
   return value === "anthropic-messages" ? "anthropic-messages" : "openai-completions";
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const segments = token.split(".");
+  if (segments.length !== 3) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.from(segments[1] ?? "", "base64url").toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+  } catch {
+    return null;
+  }
+}
+
+export function validateStoredLlmProfile(
+  profileLike: Partial<StoredLlmSettings> | null,
+): LlmProfileValidation {
+  const profile = normalizeStoredSettings(profileLike);
+  const token = profile.bearerToken.trim();
+  const baseUrl = profile.baseUrl.trim().toLowerCase();
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!token) {
+    warnings.push(
+      profile.provider === OPENAI_CODEX_PROVIDER
+        ? "这张 OAuth 卡片还没有完成登录授权。"
+        : "这张卡片还没有填写 API Key / Bearer Token。",
+    );
+  }
+
+  if (baseUrl.includes("api.openai.com") && token.startsWith("sk-kimi-")) {
+    errors.push("当前 Base URL 指向 OpenAI，但 token 看起来是 Kimi key。");
+  }
+
+  if (baseUrl.includes("api.kimi.com") && token && !token.startsWith("sk-kimi-")) {
+    warnings.push("当前 Base URL 指向 Kimi，但 token 前缀不像 Kimi key，请确认是否填错。");
+  }
+
+  if (
+    profile.provider === OPENAI_KEY_PROVIDER &&
+    profile.apiType === "anthropic-messages" &&
+    baseUrl.includes("api.openai.com")
+  ) {
+    warnings.push("当前 API 类型是 anthropic-messages，但 Base URL 指向 OpenAI，通常不匹配。");
+  }
+
+  if (token.startsWith("eyJ")) {
+    warnings.push("当前 bearer token 看起来像 JWT，不像常见 API key；若走 API Key 模式，请确认来源。");
+  }
+
+  if (profile.provider === OPENAI_CODEX_PROVIDER) {
+    if (token && (!profile.oauthAccessToken || !profile.oauthIdToken)) {
+      warnings.push("OAuth 卡片缺少配套 OAuth 会话信息，这个 token 可能是手工填入或串到了别的卡片。");
+    }
+
+    if (profile.oauthIdToken) {
+      const payload = decodeJwtPayload(profile.oauthIdToken);
+      const authClaims =
+        payload && typeof payload["https://api.openai.com/auth"] === "object"
+          ? (payload["https://api.openai.com/auth"] as Record<string, unknown>)
+          : null;
+      const organizationId =
+        typeof authClaims?.organization_id === "string" ? authClaims.organization_id : "";
+      const workspaceId =
+        typeof authClaims?.workspace_id === "string" ? authClaims.workspace_id : "";
+      if (!organizationId && !workspaceId) {
+        errors.push(
+          "当前 OAuth 身份里没有 organization_id / workspace_id，无法换出 Codex 可用的 OpenAI API key。",
+        );
+      }
+    }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors: [...new Set(errors)],
+    warnings: [...new Set(warnings)],
+  };
 }
 
 function normalizeStoredSettings(

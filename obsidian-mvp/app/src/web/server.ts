@@ -1,9 +1,12 @@
 import { createReadStream } from "node:fs";
+import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { access, appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { z } from "zod";
 
 import {
   DEFAULT_VAULT_ROOT,
@@ -28,6 +31,8 @@ import {
   listStoredLlmProfiles,
   getStoredLlmSettings,
   upsertStoredLlmProfile,
+  validateStoredLlmProfile,
+  type StoredLlmSettings,
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRules, matchRulesWithPolicy } from "../retrieve/matchers.js";
@@ -108,6 +113,8 @@ type OauthCallbackServerState = {
   port: number;
   close: () => Promise<void>;
 };
+
+const execFileAsync = promisify(execFile);
 
 type RuleVersionMeta = {
   versionId: string;
@@ -294,6 +301,73 @@ function createLlmClientWithModel(vaultRoot: string, modelOverride?: string): Op
     ...config,
     model,
   });
+}
+
+async function runLlmConnectivityTest(settings: StoredLlmSettings) {
+  const validation = validateStoredLlmProfile(settings);
+  if (validation.errors.length) {
+    return {
+      ok: false,
+      validation,
+      message: validation.errors[0] ?? "配置校验失败。",
+      provider: settings.provider,
+      model: settings.model,
+      apiType: settings.apiType || "openai-completions",
+    };
+  }
+
+  if (!settings.bearerToken.trim()) {
+    return {
+      ok: false,
+      validation,
+      message:
+        settings.provider === OPENAI_CODEX_PROVIDER
+          ? "这张 OAuth 卡片还没有拿到可用 token，请先完成 OAuth 登录。"
+          : "这张卡片还没有填写 API Key / Bearer Token。",
+      provider: settings.provider,
+      model: settings.model,
+      apiType: settings.apiType || "openai-completions",
+    };
+  }
+
+  const client = new OpenAiCompatibleClient({
+    bearerToken: settings.bearerToken.trim(),
+    baseUrl: settings.baseUrl,
+    model: settings.model,
+    apiType: settings.apiType || "openai-completions",
+    enabled: true,
+    source: "saved",
+  });
+
+  try {
+    const result = await client.generateJson({
+      system:
+        "You are a connectivity test for a writing assistant. Respond with JSON only.",
+      user: 'Return exactly this JSON: {"reply":"GW_LLM_OK"}',
+      schema: z.object({
+        reply: z.string(),
+      }),
+    });
+
+    return {
+      ok: true,
+      validation,
+      message: `模型连通成功：${settings.model}`,
+      provider: settings.provider,
+      model: settings.model,
+      apiType: settings.apiType || "openai-completions",
+      response: result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      validation,
+      message: error instanceof Error ? error.message : String(error),
+      provider: settings.provider,
+      model: settings.model,
+      apiType: settings.apiType || "openai-completions",
+    };
+  }
 }
 
 function getRoutingSettings(vaultRoot: string): {
@@ -554,6 +628,41 @@ function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
 function sendText(res: ServerResponse, statusCode: number, message: string) {
   res.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" });
   res.end(message);
+}
+
+async function describeListeningProcess(port: number): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("lsof", [
+      "-n",
+      "-P",
+      `-iTCP:${port}`,
+      "-sTCP:LISTEN",
+    ]);
+    const lines = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length <= 1) {
+      return null;
+    }
+    return lines[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function closeOauthCallbackServerIfIdle() {
+  if (!oauthCallbackServerState || pendingOauthRequests.size > 0) {
+    return;
+  }
+
+  const serverState = oauthCallbackServerState;
+  try {
+    await serverState.close();
+  } catch {
+    // The callback server is best-effort cleanup. A later login attempt will
+    // still surface a concrete port conflict if the listener did not stop.
+  }
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
@@ -1683,6 +1792,7 @@ async function buildDashboard(vaultRoot: string) {
   const llmConfig = getLlmConfig(vaultRoot);
   const stored = getStoredLlmSettings(vaultRoot);
   const llmProfiles = listStoredLlmProfiles(vaultRoot);
+  const activeValidation = stored ? validateStoredLlmProfile(stored) : { ok: true, errors: [], warnings: [] };
   const provider =
     stored?.provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER : OPENAI_CODEX_PROVIDER;
   const providerLabel =
@@ -1739,6 +1849,7 @@ async function buildDashboard(vaultRoot: string) {
       hasSavedSettings: Boolean(stored),
       updatedAt: stored?.updatedAt ?? null,
       oauthReady: Boolean(stored?.oauthAccessToken && stored?.oauthIdToken),
+      validation: activeValidation,
       routingEnabled: Boolean(stored?.routingEnabled),
       fastModel: stored?.fastModel || llmConfig.model,
       strongModel: stored?.strongModel || llmConfig.model,
@@ -1762,6 +1873,7 @@ async function buildDashboard(vaultRoot: string) {
         enabled: Boolean(profile.bearerToken?.trim()),
         hasBearerToken: Boolean(profile.bearerToken?.trim()),
         oauthReady: Boolean(profile.oauthAccessToken && profile.oauthIdToken),
+        validation: validateStoredLlmProfile(profile),
         updatedAt: profile.updatedAt ?? null,
         createdAt: profile.createdAt ?? null,
         isActive: profile.id === llmProfiles.activeProfileId,
@@ -1835,6 +1947,9 @@ async function handleOauthCallbackRequest(input: {
   const oauthErrorDescription = input.url.searchParams.get("error_description");
 
   if (oauthError) {
+    if (state) {
+      pendingOauthRequests.delete(state);
+    }
     input.res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
     input.res.end(
       buildOauthErrorPage({
@@ -1843,16 +1958,19 @@ async function handleOauthCallbackRequest(input: {
         details: oauthErrorDescription || "No error_description returned from OAuth callback.",
       }),
     );
+    void closeOauthCallbackServerIfIdle();
     return;
   }
   if (!code || !state) {
     sendText(input.res, 400, "Missing code or state.");
+    void closeOauthCallbackServerIfIdle();
     return;
   }
 
   const pending = pendingOauthRequests.get(state);
   if (!pending) {
     sendText(input.res, 400, "OAuth state is invalid or expired.");
+    void closeOauthCallbackServerIfIdle();
     return;
   }
   pendingOauthRequests.delete(state);
@@ -1878,6 +1996,7 @@ async function handleOauthCallbackRequest(input: {
           frontendOrigin: pending.frontendOrigin,
         }),
       );
+      void closeOauthCallbackServerIfIdle();
       return;
     }
 
@@ -1906,11 +2025,13 @@ async function handleOauthCallbackRequest(input: {
         frontendOrigin: pending.frontendOrigin,
       }),
     );
+    void closeOauthCallbackServerIfIdle();
     return;
   }
 
   input.res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   input.res.end(buildOauthSuccessPage(pending.frontendOrigin));
+  void closeOauthCallbackServerIfIdle();
 }
 
 async function ensureOauthCallbackServer(vaultRoot: string) {
@@ -1940,9 +2061,26 @@ async function ensureOauthCallbackServer(vaultRoot: string) {
   });
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    callbackServer.once("error", rejectPromise);
+    const onError = (error: NodeJS.ErrnoException) => {
+      if (error.code === "EADDRINUSE") {
+        void describeListeningProcess(OPENAI_CODEX_CALLBACK_PORT).then((occupant) => {
+          const suffix = occupant
+            ? ` 当前监听进程：${occupant}`
+            : " 无法自动识别监听进程。";
+          rejectPromise(
+            new Error(
+              `OAuth 回调端口 ${OPENAI_CODEX_CALLBACK_PORT} 已被占用。请关闭旧的本地监听后重试。${suffix}`,
+            ),
+          );
+        });
+        return;
+      }
+      rejectPromise(error);
+    };
+
+    callbackServer.once("error", onError);
     callbackServer.listen(OPENAI_CODEX_CALLBACK_PORT, "127.0.0.1", () => {
-      callbackServer.off("error", rejectPromise);
+      callbackServer.off("error", onError);
       resolvePromise();
     });
   });
@@ -2025,17 +2163,20 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
               : existing?.fallbackModels || [];
 
         const tokenInput = typeof body.bearerToken === "string" ? body.bearerToken : "";
+        if (isCodex && tokenInput.trim()) {
+          sendJson(res, 400, {
+            error: "OAuth 卡片不支持手工填写 token。请保存卡片后点击“开始 OAuth 登录”。",
+          });
+          return;
+        }
         const preserveExistingToken =
           Boolean(profileId) &&
           !tokenInput &&
-          provider === OPENAI_KEY_PROVIDER &&
           existing?.id === profileId;
 
-        const shouldActivate =
-          !profiles.activeProfileId || !profileId || profiles.activeProfileId === profileId;
-        const settings = upsertStoredLlmProfile(vaultRoot, {
-          id: profileId || undefined,
-          name: profileName || undefined,
+        const candidateSettings: StoredLlmSettings = {
+          id: profileId || existing?.id || `llm-preview-${Date.now()}`,
+          name: profileName || existing?.name || "",
           provider,
           apiType:
             isCodex
@@ -2094,9 +2235,135 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
               ? body.strongModel.trim()
               : existing?.strongModel || model,
           fallbackModels,
+        };
+        const validation = validateStoredLlmProfile(candidateSettings);
+        if (validation.errors.length) {
+          sendJson(res, 400, {
+            error: validation.errors[0],
+            validation,
+          });
+          return;
+        }
+
+        const shouldActivate =
+          !profiles.activeProfileId || !profileId || profiles.activeProfileId === profileId;
+        const settings = upsertStoredLlmProfile(vaultRoot, {
+          ...candidateSettings,
         }, { activate: shouldActivate }).profile;
         const resolved = getLlmConfig(vaultRoot);
-        sendJson(res, 200, { settings, resolved });
+        sendJson(res, 200, { settings, resolved, validation });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/settings/llm/test") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
+        const profiles = listStoredLlmProfiles(vaultRoot);
+        const existing =
+          profiles.profiles.find((profile) => profile.id === profileId) ??
+          getStoredLlmSettings(vaultRoot);
+
+        let candidate: StoredLlmSettings | null = null;
+        if (profileId && existing?.id === profileId) {
+          candidate = existing;
+        } else if (typeof body.provider === "string") {
+          const provider =
+            body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
+          const isCodex = provider === OPENAI_CODEX_PROVIDER;
+          const model = isCodex
+            ? normalizeCodexModel(body.model ?? existing?.model)
+            : typeof body.model === "string" && body.model.trim()
+              ? body.model.trim()
+              : existing?.model || OPENAI_CODEX_MODEL;
+          const fallbackModels =
+            Array.isArray(body.fallbackModels)
+              ? body.fallbackModels
+                  .filter((item): item is string => typeof item === "string")
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+              : [];
+          const tokenInput = typeof body.bearerToken === "string" ? body.bearerToken : "";
+          if (isCodex && tokenInput.trim()) {
+            sendJson(res, 400, {
+              error: "OAuth 卡片不支持手工填写 token。请保存卡片后点击“开始 OAuth 登录”。",
+            });
+            return;
+          }
+          const preserveExistingToken = Boolean(profileId) && !tokenInput && existing?.id === profileId;
+          candidate = {
+            id: profileId || existing?.id || `llm-preview-${Date.now()}`,
+            name:
+              typeof body.name === "string" && body.name.trim()
+                ? body.name.trim()
+                : existing?.name || "",
+            provider,
+            apiType:
+              isCodex
+                ? "openai-completions"
+                : body.apiType === "anthropic-messages"
+                  ? "anthropic-messages"
+                  : "openai-completions",
+            bearerToken:
+              preserveExistingToken
+                ? existing?.bearerToken ?? ""
+                : tokenInput,
+            baseUrl:
+              isCodex
+                ? OPENAI_CODEX_BASE_URL
+                : typeof body.baseUrl === "string" && body.baseUrl.trim()
+                  ? body.baseUrl.trim()
+                  : existing?.baseUrl || OPENAI_CODEX_BASE_URL,
+            model,
+            authUrl:
+              isCodex
+                ? OPENAI_CODEX_AUTH_URL
+                : typeof body.authUrl === "string" && body.authUrl.trim()
+                  ? body.authUrl.trim()
+                  : existing?.authUrl || "",
+            tokenUrl:
+              isCodex
+                ? OPENAI_CODEX_TOKEN_URL
+                : typeof body.tokenUrl === "string" && body.tokenUrl.trim()
+                  ? body.tokenUrl.trim()
+                  : existing?.tokenUrl || "",
+            clientId:
+              isCodex
+                ? OPENAI_CODEX_CLIENT_ID
+                : typeof body.clientId === "string" && body.clientId.trim()
+                  ? body.clientId.trim()
+                  : existing?.clientId || "",
+            scope:
+              isCodex
+                ? OPENAI_CODEX_SCOPE
+                : typeof body.scope === "string" && body.scope.trim()
+                  ? body.scope.trim()
+                  : existing?.scope || "",
+            oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
+            oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,
+            refreshToken: isCodex ? existing?.refreshToken : undefined,
+            routingEnabled:
+              typeof body.routingEnabled === "boolean"
+                ? body.routingEnabled
+                : existing?.routingEnabled ?? false,
+            fastModel:
+              typeof body.fastModel === "string" && body.fastModel.trim()
+                ? body.fastModel.trim()
+                : existing?.fastModel || model,
+            strongModel:
+              typeof body.strongModel === "string" && body.strongModel.trim()
+                ? body.strongModel.trim()
+                : existing?.strongModel || model,
+            fallbackModels,
+          };
+        }
+
+        if (!candidate) {
+          sendJson(res, 400, { error: "Missing profileId or model config payload." });
+          return;
+        }
+
+        const result = await runLlmConnectivityTest(candidate);
+        sendJson(res, result.ok ? 200 : 400, result);
         return;
       }
 

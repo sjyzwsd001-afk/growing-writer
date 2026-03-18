@@ -248,9 +248,10 @@
                   </div>
                 </div>
                 <div id="oauth-config" class="hidden">
-                  <p class="hint">先保存卡片，再点击登录；也可以直接点下面按钮开始 OAuth，登录结果会写回当前编辑卡片。</p>
+                  <p class="hint">OAuth 卡片不手填 token。先保存卡片，再点下面按钮登录；登录结果会自动写回当前卡片。</p>
                   <button id="start-oauth-login" class="btn primary" type="button">开始 OAuth 登录</button>
                 </div>
+                <div id="llm-validation-feedback" class="hidden"></div>
                 <div class="panel-sub modal-inner-panel">
                   <h3>模型路由与降级</h3>
                   <label class="inline-check">
@@ -270,6 +271,7 @@
                   </label>
                 </div>
                 <div class="editor-actions">
+                  <button id="test-llm-settings" class="btn ghost" type="button">测试连接</button>
                   <button id="save-llm-settings" class="btn primary" type="button">保存为模型卡片</button>
                 </div>
               </div>
