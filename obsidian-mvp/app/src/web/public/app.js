@@ -553,6 +553,7 @@ function renderGroupedRuleList(containerId, items) {
             const docTypes = Array.isArray(item.docTypes) ? item.docTypes.join(", ") : "";
             const audiences = Array.isArray(item.audiences) ? item.audiences.join(", ") : "";
             const sourceTitles = Array.isArray(item.sourceMaterialTitles) ? item.sourceMaterialTitles.slice(0, 3) : [];
+            const taskTitles = Array.isArray(item.linkedTaskTitles) ? item.linkedTaskTitles : [];
             const feedbackIds = Array.isArray(item.linkedFeedbackIds) ? item.linkedFeedbackIds : [];
             const priorityHint =
               group.key === "candidate" && Number(item.linkedFeedbackCount || 0) > 0
@@ -565,6 +566,11 @@ function renderGroupedRuleList(containerId, items) {
                 <div class="mini">版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 命中任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次 / 关联反馈 ${escapeHtml(String(item.linkedFeedbackCount ?? 0))} 次</div>
                 <div class="inline-chips">
                   ${priorityHint}
+                  ${
+                    taskTitles.length
+                      ? taskTitles.map((title) => `<span class="mini-chip priority">${escapeHtml(title)}</span>`).join("")
+                      : ""
+                  }
                   ${
                     feedbackIds.length
                       ? feedbackIds.map((id) => `<span class="mini-chip">${escapeHtml(id)}</span>`).join("")
@@ -2611,8 +2617,14 @@ async function runSettingsAction(action, button) {
     });
     setSettingsResult(`规则操作完成：${mappedAction}`, result);
     const updatedCount = Array.isArray(result.updatedTasks) ? result.updatedTasks.length : 0;
+    const updatedTaskTitles = Array.isArray(result.updatedTasks)
+      ? result.updatedTasks
+          .map((task) => (task && typeof task.title === "string" ? task.title : ""))
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
     setInfo(
-      `规则已${mappedAction === "confirm" ? "确认" : mappedAction === "disable" ? "停用" : "拒绝"}，已同步 ${updatedCount} 个任务${result.profilePath ? "，并刷新写作画像" : ""}。`,
+      `规则已${mappedAction === "confirm" ? "确认" : mappedAction === "disable" ? "停用" : "拒绝"}，已同步 ${updatedCount} 个任务${updatedTaskTitles.length ? `（${updatedTaskTitles.join(" / ")}）` : ""}${result.profilePath ? "，并刷新写作画像" : ""}。`,
     );
     await loadDashboard();
     return;
@@ -2625,7 +2637,13 @@ async function runSettingsAction(action, button) {
     });
     setSettingsResult(`规则操作完成：confirm`, result);
     const updatedCount = Array.isArray(result.updatedTasks) ? result.updatedTasks.length : 0;
-    setInfo(`已从反馈记录确认规则，已同步 ${updatedCount} 个任务${result.profilePath ? "，并刷新写作画像" : ""}。`);
+    const updatedTaskTitles = Array.isArray(result.updatedTasks)
+      ? result.updatedTasks
+          .map((task) => (task && typeof task.title === "string" ? task.title : ""))
+          .filter(Boolean)
+          .slice(0, 3)
+      : [];
+    setInfo(`已从反馈记录确认规则，已同步 ${updatedCount} 个任务${updatedTaskTitles.length ? `（${updatedTaskTitles.join(" / ")}）` : ""}${result.profilePath ? "，并刷新写作画像" : ""}。`);
     await loadDashboard();
     return;
   }

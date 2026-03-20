@@ -2025,7 +2025,8 @@ async function buildDashboard(vaultRoot: string) {
   const ruleItems = await Promise.all(
     rules.map(async (item) => {
       const versions = await listRuleVersions(vaultRoot, item.id);
-      const linkedTaskCount = tasks.filter((task) => Array.isArray(task.matchedRules) && task.matchedRules.includes(item.id)).length;
+      const linkedTasks = tasks.filter((task) => Array.isArray(task.matchedRules) && task.matchedRules.includes(item.id));
+      const linkedTaskCount = linkedTasks.length;
       const linkedFeedbacks = feedbackEntries.filter((feedback) =>
         Array.isArray(feedback.relatedRuleIds) && feedback.relatedRuleIds.includes(item.id),
       );
@@ -2045,6 +2046,7 @@ async function buildDashboard(vaultRoot: string) {
         versionCount: versions.length,
         latestVersionAt: versions[0]?.createdAt || "",
         linkedTaskCount,
+        linkedTaskTitles: linkedTasks.slice(0, 3).map((task) => task.title),
         linkedFeedbackCount,
         linkedFeedbackIds: linkedFeedbacks.slice(0, 3).map((feedback) => feedback.id),
         path: item.path,
