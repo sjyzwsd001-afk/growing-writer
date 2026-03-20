@@ -37,7 +37,7 @@ import {
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRules, matchRulesWithPolicy } from "../retrieve/matchers.js";
-import { buildEvidenceCards } from "../retrieve/summaries.js";
+import { buildEvidenceCards, summarizeMaterial } from "../retrieve/summaries.js";
 import { VaultRepository } from "../vault/repository.js";
 import {
   buildOutline,
@@ -1958,22 +1958,28 @@ async function buildDashboard(vaultRoot: string) {
   const providerLabel =
     provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER_LABEL : OPENAI_CODEX_PROVIDER_LABEL;
   const materialItems = materials
-    .map((item) => ({
-      id: item.id,
-      title: item.title,
-      docType: item.docType,
-      audience: item.audience,
-      scenario: item.scenario,
-      quality: item.quality,
-      source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
-      tags: item.tags,
-      isTemplate: isTemplateMaterial({
-        tags: item.tags,
-        source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+    .map((item) => {
+      const summary = summarizeMaterial(item);
+      return {
+        id: item.id,
+        title: item.title,
         docType: item.docType,
-      }),
-      path: item.path,
-    }))
+        audience: item.audience,
+        scenario: item.scenario,
+        quality: item.quality,
+        source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+        tags: item.tags,
+        isTemplate: isTemplateMaterial({
+          tags: item.tags,
+          source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+          docType: item.docType,
+        }),
+        structureSummary: summary.structure_summary,
+        styleSummary: summary.style_summary,
+        usefulPhrases: summary.useful_phrases,
+        path: item.path,
+      };
+    })
     .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
 
   const ruleItems = await Promise.all(

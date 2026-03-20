@@ -448,6 +448,44 @@ function renderTemplateSelector(items) {
     option.textContent = `${item.title}${item.docType ? `（${item.docType}）` : ""}`;
     select.append(option);
   }
+  renderTemplatePreview();
+}
+
+function renderTemplatePreview() {
+  const container = document.getElementById("template-preview");
+  if (!container) {
+    return;
+  }
+
+  const templateId = String(document.getElementById("template-selector")?.value || "").trim();
+  const templateMode = String(document.querySelector("[name='templateMode']")?.value || "hybrid");
+  const templates = Array.isArray(state.dashboard?.templates) ? state.dashboard.templates : [];
+  const selected = templates.find((item) => item.id === templateId) || null;
+
+  if (!selected) {
+    container.innerHTML = `
+      <div>未选择模板。本次会主要依据历史材料、规则库和当前背景生成。</div>
+      <div class="mini">如果你有特别固定的结构或语气，建议在这一步选择模板。</div>
+    `;
+    return;
+  }
+
+  const modeHint =
+    templateMode === "strict"
+      ? "强继承模板结构，适合格式很固定的材料。"
+      : templateMode === "light"
+        ? "主要借模板语气与风格，结构会更自由。"
+        : "兼顾模板骨架与本次事实，适合大多数情况。";
+  const structure = Array.isArray(selected.structureSummary) ? selected.structureSummary.slice(0, 3) : [];
+  const phrases = Array.isArray(selected.usefulPhrases) ? selected.usefulPhrases.slice(0, 2) : [];
+
+  container.innerHTML = `
+    <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
+    <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
+    <div class="mini">${escapeHtml(modeHint)}</div>
+    <div class="mini">结构提示：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
+    <div class="mini">表达参考：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
+  `;
 }
 
 function renderSimpleList(containerId, items, renderItem) {
@@ -1739,6 +1777,9 @@ function bindWizard() {
         if (state.wizardStep === 5) {
           renderWizardCheckResult(null);
         }
+      }
+      if ((target.name || target.id) === "templateId" || (target.name || target.id) === "templateMode") {
+        renderTemplatePreview();
       }
     }
     if (state.wizardStep >= 6) {
