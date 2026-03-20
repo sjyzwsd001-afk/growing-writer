@@ -1110,6 +1110,9 @@ function renderTaskContextSummary() {
   const topRules = context.matchedRules
     .filter((item) => String(item?.source || "") !== "template")
     .slice(0, 4);
+  const templateOverrides = context.matchedRules
+    .filter((item) => String(item?.source || "") === "template" && /template-override:/.test(String(item?.rule_id || "")))
+    .slice(0, 3);
   const topMaterials = context.matchedMaterials
     .filter((item) => item?.id !== context.templateMaterial?.id)
     .slice(0, 3);
@@ -1124,13 +1127,25 @@ function renderTaskContextSummary() {
         <strong>模板继承</strong>
         <div>${escapeHtml(templateTitle)}</div>
         <div class="mini">${escapeHtml(templateReason)}</div>
+        ${
+          templateOverrides.length
+            ? `<div class="mini">模板加注：${escapeHtml(
+                templateOverrides.map((item) => item.reason || item.title || "-").join(" / "),
+              )}</div>`
+            : ""
+        }
       </div>
       <div class="context-card">
         <strong>高优先规则</strong>
         <ul>
           ${
             topRules.length
-              ? topRules.map((item) => `<li>${escapeHtml(item.title || "-")}</li>`).join("")
+              ? topRules
+                  .map(
+                    (item) =>
+                      `<li><strong>${escapeHtml(item.title || "-")}</strong><br /><span class="mini">${escapeHtml(item.reason || "按规则匹配命中")}</span></li>`,
+                  )
+                  .join("")
               : "<li>本次未命中额外高优先规则</li>"
           }
         </ul>
@@ -1140,7 +1155,12 @@ function renderTaskContextSummary() {
         <ul>
           ${
             topMaterials.length
-              ? topMaterials.map((item) => `<li>${escapeHtml(item.title || "-")}</li>`).join("")
+              ? topMaterials
+                  .map(
+                    (item) =>
+                      `<li><strong>${escapeHtml(item.title || "-")}</strong><br /><span class="mini">${escapeHtml(item.docType || "背景材料")} / ${escapeHtml(item.audience || "未限定")}</span></li>`,
+                  )
+                  .join("")
               : "<li>仅使用当前任务输入与模板</li>"
           }
         </ul>
