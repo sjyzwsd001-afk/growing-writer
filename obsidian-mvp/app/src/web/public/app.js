@@ -2299,7 +2299,66 @@ function bindEditorActions() {
 }
 
 function bindMaterialImport() {
-  document.getElementById("material-form").addEventListener("submit", async (event) => {
+  const form = document.getElementById("material-form");
+  const modeSelect = form?.querySelector("[name='mode']");
+  const hintContainer = document.getElementById("material-mode-hint");
+
+  function analyzeMaterialImportMode() {
+    if (!form || !modeSelect || !hintContainer) {
+      return;
+    }
+    const formData = new FormData(form);
+    const title = String(formData.get("title") || "").trim();
+    const docType = String(formData.get("docType") || "").trim();
+    const source = String(formData.get("source") || "").trim();
+    const tags = String(formData.get("tags") || "").trim();
+    const combined = `${title} ${docType} ${source} ${tags}`.toLowerCase();
+
+    let suggestedMode = "normal";
+    let reason = "当前更像一般历史材料，适合先进入材料库供后续检索和学习。";
+
+    if (/模板|范式|框架|标准|固定结构|固定格式|套话|通用版|v\d+/i.test(combined)) {
+      suggestedMode = "template";
+      reason = "标题或标签显示它更像固定结构/高复用模板，适合高权重参与生成。";
+    } else if (/最佳稿|优秀稿|成熟稿|历史最佳|定稿/i.test(combined)) {
+      suggestedMode = "normal";
+      reason = "这更像高质量历史范文，适合沉淀结构和表达习惯，但不一定要作为硬模板。";
+    }
+
+    const currentMode = String(modeSelect.value || "normal");
+    hintContainer.innerHTML = `
+      <div><strong>建议模式：${escapeHtml(suggestedMode === "template" ? "模板（高权重）" : "历史材料")}</strong></div>
+      <div class="mini">${escapeHtml(reason)}</div>
+      ${
+        currentMode !== suggestedMode
+          ? `<div class="editor-actions"><button type="button" id="apply-material-mode-hint" class="mini-btn">按建议切换</button></div>`
+          : `<div class="mini">当前选择已与建议一致。</div>`
+      }
+    `;
+
+    const applyButton = document.getElementById("apply-material-mode-hint");
+    if (applyButton) {
+      applyButton.addEventListener("click", () => {
+        modeSelect.value = suggestedMode;
+        analyzeMaterialImportMode();
+        setInfo(`已切换为${suggestedMode === "template" ? "模板（高权重）" : "历史材料"}模式。`);
+      });
+    }
+  }
+
+  form?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) {
+      return;
+    }
+    if (["title", "docType", "source", "tags", "mode"].includes(target.name || target.id)) {
+      analyzeMaterialImportMode();
+    }
+  });
+
+  analyzeMaterialImportMode();
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
