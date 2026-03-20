@@ -449,6 +449,17 @@ legend {
   gap: 6px;
 }
 
+.annotation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.annotation-controls select {
+  min-width: 72px;
+}
+
 .annotation-head {
   display: flex;
   justify-content: space-between;

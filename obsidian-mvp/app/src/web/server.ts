@@ -2951,6 +2951,11 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
                 location: typeof item?.location === "string" ? item.location : "",
                 reason: typeof item?.reason === "string" ? item.reason : "",
                 comment: typeof item?.comment === "string" ? item.comment : "",
+                isReusable: Boolean(item?.isReusable),
+                priority:
+                  typeof item?.priority === "string" && item.priority.trim()
+                    ? item.priority.trim()
+                    : "medium",
                 selectedText: typeof item?.selectedText === "string" ? item.selectedText : "",
                 selectionStart:
                   typeof item?.selectionStart === "number"

@@ -10,10 +10,11 @@ export function buildLearnFeedbackPrompt(input: {
 
 要求：
 1. feedback_type 只能从指定枚举中选择
-2. 如果只是本次场景特殊要求，不要强行抽成长期规则
+2. 如果反馈正文或批注清单里已经明确标了“本次修改”，不要强行抽成长期规则
 3. 如果适合沉淀，candidate_rule 要写得足够明确，可复用，可判断是否命中
-4. reasoning 要说明为什么建议或不建议入库
-5. suggested_update 要说明本次稿件应该怎么改
+4. 如果反馈正文或批注清单里明确标了“长期偏好”，要优先认真评估是否应入库
+5. reasoning 要说明为什么建议或不建议入库
+6. suggested_update 要说明本次稿件应该怎么改
 
 输出要求：
 - 只输出 JSON

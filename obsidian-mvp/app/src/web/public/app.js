@@ -742,6 +742,7 @@ function summarizeDraftChanges() {
     `字数变化：${charDelta >= 0 ? "+" : ""}${charDelta}`,
     `变化行数：约 ${changedLineCount} 行`,
     `本轮批注：${state.pendingAnnotations.length} 条`,
+    `长期偏好：${state.pendingAnnotations.filter((item) => item.isReusable).length} 条`,
   ];
   container.innerHTML = summary.map((item) => `<div>${escapeHtml(item)}</div>`).join("");
 }
@@ -763,6 +764,19 @@ function renderPendingAnnotations() {
         <div class="annotation-head">
           <strong>${escapeHtml(item.location || `批注 ${index + 1}`)}</strong>
           <button type="button" class="mini-btn danger" data-action="remove-annotation" data-index="${index}">删除</button>
+        </div>
+        <div class="annotation-controls">
+          <label class="inline-check mini">
+            <input type="checkbox" data-action="annotation-toggle-reusable" data-index="${index}" ${item.isReusable ? "checked" : ""} />
+            <span>${item.isReusable ? "长期偏好" : "本次修改"}</span>
+          </label>
+          <label class="mini">优先级
+            <select data-action="annotation-priority" data-index="${index}">
+              <option value="high" ${item.priority === "high" ? "selected" : ""}>高</option>
+              <option value="medium" ${item.priority === "medium" ? "selected" : ""}>中</option>
+              <option value="low" ${item.priority === "low" ? "selected" : ""}>低</option>
+            </select>
+          </label>
         </div>
         <div class="mini">原因：${escapeHtml(item.reason || "未填写")}</div>
         <div class="mini">说明：${escapeHtml(item.comment || "未填写")}</div>
@@ -792,6 +806,8 @@ function collectCurrentAnnotation({ strictSelection = true, persist = false } = 
     reason,
     comment,
     selection,
+    isReusable: /长期|规则|以后都|一律|默认/.test(`${location} ${reason} ${comment}`),
+    priority: /必须|一定|重点|优先|严重/.test(`${location} ${reason} ${comment}`) ? "high" : "medium",
     createdAt: new Date().toISOString(),
   };
 
@@ -1408,6 +1424,8 @@ async function submitFeedbackAndRegenerate() {
       `${index + 1}. 位置：${item.location}`,
       `   原因：${item.reason || "未填写"}`,
       `   说明：${item.comment || "未填写"}`,
+      `   偏好类型：${item.isReusable ? "长期偏好" : "本次修改"}`,
+      `   优先级：${item.priority || "medium"}`,
       `   选区：${item.selection ? `${item.selection.start}-${item.selection.end}` : "未选择"}`,
       `   原文：${item.selection?.text || "未选择"}`,
     ]),
@@ -1438,6 +1456,8 @@ async function submitFeedbackAndRegenerate() {
         location: item.location,
         reason: item.reason,
         comment: item.comment,
+        isReusable: Boolean(item.isReusable),
+        priority: item.priority || "medium",
         selectedText: item.selection?.text || "",
         selectionStart: item.selection?.start,
         selectionEnd: item.selection?.end,
@@ -1501,6 +1521,7 @@ async function submitFeedbackAndRegenerate() {
     version: `v${state.feedbackHistory.length + 1}`,
     createdAt: new Date().toISOString(),
     annotationCount: annotations.length,
+    reusableAnnotationCount: annotations.filter((item) => item.isReusable).length,
     absorptionScore: evaluation?.score ?? null,
     absorptionLevel: evaluation?.level ?? "",
   };
@@ -1651,6 +1672,29 @@ function bindEditorActions() {
     }
     state.pendingAnnotations.splice(index, 1);
     renderPendingAnnotations();
+  });
+
+  document.getElementById("annotation-list").addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const action = target.dataset.action || "";
+    const index = Number(target.dataset.index);
+    if (!Number.isInteger(index) || index < 0 || !state.pendingAnnotations[index]) {
+      return;
+    }
+
+    if (action === "annotation-toggle-reusable" && target instanceof HTMLInputElement) {
+      state.pendingAnnotations[index].isReusable = target.checked;
+      renderPendingAnnotations();
+      return;
+    }
+
+    if (action === "annotation-priority" && target instanceof HTMLSelectElement) {
+      state.pendingAnnotations[index].priority = target.value;
+      summarizeDraftChanges();
+    }
   });
 
   document.getElementById("save-draft").addEventListener("click", async () => {

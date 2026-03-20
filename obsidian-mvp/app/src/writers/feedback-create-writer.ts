@@ -28,6 +28,8 @@ export async function createFeedback(input: {
     location?: string;
     reason?: string;
     comment?: string;
+    isReusable?: boolean;
+    priority?: string;
     selectedText?: string;
     selectionStart?: number;
     selectionEnd?: number;
@@ -62,6 +64,8 @@ export async function createFeedback(input: {
         `  - 位置：${item.location ?? ""}`,
         `  - 原因：${item.reason ?? ""}`,
         `  - 说明：${item.comment ?? ""}`,
+        `  - 偏好类型：${item.isReusable ? "长期偏好" : "本次修改"}`,
+        `  - 优先级：${item.priority ?? "medium"}`,
         `  - 选区偏移：${typeof item.selectionStart === "number" && typeof item.selectionEnd === "number" ? `${item.selectionStart}-${item.selectionEnd}` : ""}`,
         `  - 选区原文：${item.selectedText ?? ""}`,
       ]).join("\n")
