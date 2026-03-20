@@ -853,6 +853,11 @@ legend {
   gap: 8px;
 }
 
+.context-card.context-card-emphasis {
+  background: linear-gradient(180deg, #fff8eb 0%, #fffef9 100%);
+  border-color: rgba(194, 120, 64, 0.24);
+}
+
 .context-card strong {
   font-size: 13px;
 }

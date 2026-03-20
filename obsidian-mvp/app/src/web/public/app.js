@@ -1110,12 +1110,32 @@ function renderTaskContextSummary() {
   const topRules = context.matchedRules
     .filter((item) => String(item?.source || "") !== "template")
     .slice(0, 4);
+  const templateRules = context.matchedRules.filter((item) => String(item?.source || "") === "template");
   const templateOverrides = context.matchedRules
     .filter((item) => String(item?.source || "") === "template" && /template-override:/.test(String(item?.rule_id || "")))
     .slice(0, 3);
   const topMaterials = context.matchedMaterials
     .filter((item) => item?.id !== context.templateMaterial?.id)
     .slice(0, 3);
+  const effectiveScores = context.matchedRules
+    .map((item) => Number(item?.effective_score || 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const strongestRuleScore = effectiveScores.length ? Math.max(...effectiveScores) : 0;
+  const priorityMode = context.templateRule?.title?.match(/\(([^)]+)\)/)?.[1] || "";
+  const hierarchyItems = [
+    context.templateRule
+      ? `模板主导${priorityMode ? `（${priorityMode}）` : ""}：${templateTitle}`
+      : "未启用模板主导层",
+    topRules.length ? `规则补充：命中 ${topRules.length} 条高优先规则` : "规则补充：未命中额外高优先规则",
+    topMaterials.length ? `材料兜底：参考 ${topMaterials.length} 份背景材料` : "材料兜底：主要依赖任务输入",
+  ];
+  const dominanceSummary = context.templateRule
+    ? strongestRuleScore >= 2.1
+      ? "本次由模板结构优先定调，规则和材料主要负责补充约束。"
+      : "本次模板只做轻量约束，正文更多依赖规则匹配和背景材料。"
+    : topRules.length
+      ? "本次没有指定模板，正文主要由已确认规则和背景材料共同驱动。"
+      : "本次主要依赖任务输入与背景材料生成。";
   const routeSummary = context.modelRouting.length
     ? context.modelRouting.map((item) => `${item.stage}: ${item.usedModel || "-"}`)
     : ["本次未记录模型路由"];
@@ -1134,6 +1154,14 @@ function renderTaskContextSummary() {
               )}</div>`
             : ""
         }
+      </div>
+      <div class="context-card context-card-emphasis">
+        <strong>优先级关系</strong>
+        <div class="mini">${escapeHtml(dominanceSummary)}</div>
+        <ul>
+          ${hierarchyItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        </ul>
+        <div class="mini">模板规则 ${escapeHtml(String(templateRules.length))} 条 / 常规规则 ${escapeHtml(String(topRules.length))} 条 / 最高命中分 ${escapeHtml(strongestRuleScore ? strongestRuleScore.toFixed(2) : "0")}</div>
       </div>
       <div class="context-card">
         <strong>高优先规则</strong>
