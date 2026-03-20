@@ -739,7 +739,8 @@ function renderSettingsLists() {
   renderSimpleList("settings-materials", data.materials || [], (item) => {
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
-      <div class="mini">${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
+      <div class="mini">${escapeHtml(item.roleLabel || "参考材料")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
+      <div class="mini">${escapeHtml(item.roleReason || "")}</div>
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
@@ -750,7 +751,8 @@ function renderSettingsLists() {
   renderSimpleList("settings-templates", data.templates || [], (item) => {
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
-      <div class="mini">模板权重高 / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
+      <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
+      <div class="mini">${escapeHtml(item.roleReason || "模板以高权重参与生成。")}</div>
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
@@ -2652,6 +2654,7 @@ async function runSettingsAction(action, button) {
       body: JSON.stringify({ path }),
     });
     setSettingsResult(`${title || "材料"} - 重分析完成`, result);
+    setInfo(`已完成材料重分析：${result.roleLabel || "参考材料"}${result.roleReason ? `，${result.roleReason}` : ""}`);
     await loadDashboard();
     return;
   }

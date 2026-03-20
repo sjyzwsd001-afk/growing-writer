@@ -171,6 +171,51 @@ function isTemplateMaterial(input: { tags?: string[]; source?: string; docType?:
   return source.includes("template") || source.includes("模板") || docType.includes("模板");
 }
 
+function classifyMaterialRole(input: {
+  isTemplate: boolean;
+  source?: string;
+  quality?: string;
+  docType?: string;
+  scenario?: string;
+}) {
+  if (input.isTemplate) {
+    return {
+      roleLabel: "模板",
+      roleReason: "会以高权重参与结构和表达约束。",
+    };
+  }
+
+  const source = String(input.source || "").toLowerCase();
+  const docType = String(input.docType || "").toLowerCase();
+  const scenario = String(input.scenario || "").toLowerCase();
+  const quality = String(input.quality || "").toLowerCase();
+
+  if (
+    source.includes("background") ||
+    source.includes("upload") ||
+    source.includes("上传") ||
+    docType.includes("背景") ||
+    scenario.includes("背景")
+  ) {
+    return {
+      roleLabel: "背景素材",
+      roleReason: "主要提供事实、数据和本次任务上下文。",
+    };
+  }
+
+  if (quality === "high") {
+    return {
+      roleLabel: "历史范文",
+      roleReason: "更适合提炼结构、语气和常用表达。",
+    };
+  }
+
+  return {
+    roleLabel: "参考材料",
+    roleReason: "作为一般补充信息参与检索和引用。",
+  };
+}
+
 type TaskCreateRequest = {
   title: string;
   docType: string;
@@ -1998,6 +2043,19 @@ async function buildDashboard(vaultRoot: string) {
   const materialItems = materials
     .map((item) => {
       const summary = summarizeMaterial(item);
+      const source = typeof item.frontmatter.source === "string" ? item.frontmatter.source : "";
+      const isTemplate = isTemplateMaterial({
+        tags: item.tags,
+        source,
+        docType: item.docType,
+      });
+      const role = classifyMaterialRole({
+        isTemplate,
+        source,
+        quality: item.quality,
+        docType: item.docType,
+        scenario: item.scenario,
+      });
       return {
         id: item.id,
         title: item.title,
@@ -2005,13 +2063,11 @@ async function buildDashboard(vaultRoot: string) {
         audience: item.audience,
         scenario: item.scenario,
         quality: item.quality,
-        source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+        source,
         tags: item.tags,
-        isTemplate: isTemplateMaterial({
-          tags: item.tags,
-          source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
-          docType: item.docType,
-        }),
+        isTemplate,
+        roleLabel: role.roleLabel,
+        roleReason: role.roleReason,
         structureSummary: summary.structure_summary,
         styleSummary: summary.style_summary,
         usefulPhrases: summary.useful_phrases,
@@ -2927,7 +2983,28 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         await analyzeImportedMaterial(resolve(body.path), {
           analyze: createMaterialAnalyzer(createLlmClient(vaultRoot)),
         });
-        sendJson(res, 200, { path: resolve(body.path), status: "analyzed" });
+        const repo = new VaultRepository(vaultRoot);
+        const material = await repo.loadMaterial(resolve(body.path));
+        const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
+        const isTemplate = isTemplateMaterial({
+          tags: material.tags,
+          source,
+          docType: material.docType,
+        });
+        const role = classifyMaterialRole({
+          isTemplate,
+          source,
+          quality: material.quality,
+          docType: material.docType,
+          scenario: material.scenario,
+        });
+        sendJson(res, 200, {
+          path: resolve(body.path),
+          status: "analyzed",
+          title: material.title,
+          roleLabel: role.roleLabel,
+          roleReason: role.roleReason,
+        });
         return;
       }
 
