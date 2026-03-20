@@ -818,6 +818,7 @@ function renderSettingsLists() {
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
       <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
+      <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转模板</button>
     </div>`;
   });
 
@@ -829,6 +830,7 @@ function renderSettingsLists() {
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
+      <button type="button" class="mini-btn" data-action="material-mark-history" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转历史材料</button>
     </div>`;
   });
 
@@ -2787,6 +2789,22 @@ async function runSettingsAction(action, button) {
     });
     setSettingsResult(`${title || "材料"} - 重分析完成`, result);
     setInfo(`已完成材料重分析：${result.roleLabel || "参考材料"}${result.roleReason ? `，${result.roleReason}` : ""}`);
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "material-mark-template" || action === "material-mark-history") {
+    const role = action === "material-mark-template" ? "template" : "history";
+    const result = await api("/api/materials/role", {
+      method: "POST",
+      body: JSON.stringify({
+        path,
+        role,
+        reason: action === "material-mark-template" ? "通过设置页转为模板材料" : "通过设置页转为历史材料",
+      }),
+    });
+    setSettingsResult(`${title || "材料"} - 角色已更新`, result);
+    setInfo(`已将材料调整为${result.roleLabel || (role === "template" ? "模板" : "历史材料")}。`);
     await loadDashboard();
     return;
   }

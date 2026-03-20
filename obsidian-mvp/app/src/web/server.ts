@@ -216,6 +216,71 @@ function classifyMaterialRole(input: {
   };
 }
 
+async function updateMaterialRole(input: {
+  vaultRoot: string;
+  materialPath: string;
+  role: "template" | "history";
+  reason?: string;
+}) {
+  const doc = await readMarkdownDocument(input.materialPath);
+  const currentTags = Array.isArray(doc.frontmatter.tags)
+    ? doc.frontmatter.tags.filter((item): item is string => typeof item === "string")
+    : [];
+  const nextTags = currentTags.filter((tag) => !/template|模板/i.test(tag));
+  if (input.role === "template") {
+    nextTags.push("template");
+  }
+  const dedupedTags = [...new Set(nextTags)];
+  const now = new Date().toISOString();
+  const currentSource = typeof doc.frontmatter.source === "string" ? doc.frontmatter.source : "";
+  const sourcePrefix = input.role === "template" ? "template" : "history";
+  const nextSource = currentSource
+    ? /^(template|history)[:：]/i.test(currentSource)
+      ? currentSource.replace(/^(template|history)[:：]\s*/i, `${sourcePrefix}: `)
+      : `${sourcePrefix}: ${currentSource}`
+    : sourcePrefix;
+
+  await writeMarkdownDocument(
+    input.materialPath,
+    {
+      ...doc.frontmatter,
+      tags: dedupedTags,
+      quality: input.role === "template" ? "high" : doc.frontmatter.quality ?? "high",
+      source: nextSource,
+      updated_at: now,
+      role_reason: input.reason || (input.role === "template" ? "通过设置页切换为模板材料" : "通过设置页切换为历史材料"),
+    },
+    doc.content,
+  );
+
+  const repo = new VaultRepository(input.vaultRoot);
+  const materials = await repo.loadMaterials();
+  const material = materials.find((item) => item.path === input.materialPath);
+  if (!material) {
+    throw new Error("更新后未找到材料。");
+  }
+  const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
+  const isTemplate = isTemplateMaterial({
+    tags: material.tags,
+    source,
+    docType: material.docType,
+  });
+  const role = classifyMaterialRole({
+    isTemplate,
+    source,
+    quality: material.quality,
+    docType: material.docType,
+    scenario: material.scenario,
+  });
+
+  return {
+    path: input.materialPath,
+    title: material.title,
+    roleLabel: role.roleLabel,
+    roleReason: role.roleReason,
+  };
+}
+
 type TaskCreateRequest = {
   title: string;
   docType: string;
@@ -3011,6 +3076,22 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           roleLabel: role.roleLabel,
           roleReason: role.roleReason,
         });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/materials/role") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        if (!body.path || !body.role) {
+          sendJson(res, 400, { error: "Missing material path or role." });
+          return;
+        }
+        const result = await updateMaterialRole({
+          vaultRoot,
+          materialPath: resolve(body.path),
+          role: body.role === "template" ? "template" : "history",
+          reason: typeof body.reason === "string" ? body.reason : "",
+        });
+        sendJson(res, 200, result);
         return;
       }
 
