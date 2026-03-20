@@ -554,6 +554,30 @@ legend {
   line-height: 1.45;
 }
 
+.inline-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.mini-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: #fffaf2;
+  color: var(--muted);
+}
+
+.mini-chip.priority {
+  background: #fff4de;
+  color: #8a5a0a;
+  border-color: rgba(170, 119, 31, 0.18);
+}
+
 .row-main {
   display: grid;
   gap: 3px;

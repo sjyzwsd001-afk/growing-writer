@@ -522,7 +522,24 @@ function renderGroupedRuleList(containerId, items) {
 
   container.innerHTML = `<div class="grouped-list">${groups
     .map((group) => {
-      const entries = rules.filter((item) => item.status === group.key);
+      const entries = rules
+        .filter((item) => item.status === group.key)
+        .sort((a, b) => {
+          if (group.key === "candidate") {
+            return (
+              Number(b.linkedFeedbackCount || 0) - Number(a.linkedFeedbackCount || 0) ||
+              Number(b.confidence || 0) - Number(a.confidence || 0) ||
+              String(b.latestVersionAt || "").localeCompare(String(a.latestVersionAt || ""))
+            );
+          }
+          if (group.key === "confirmed") {
+            return (
+              Number(b.linkedTaskCount || 0) - Number(a.linkedTaskCount || 0) ||
+              String(b.latestVersionAt || "").localeCompare(String(a.latestVersionAt || ""))
+            );
+          }
+          return String(b.latestVersionAt || "").localeCompare(String(a.latestVersionAt || ""));
+        });
       if (!entries.length) {
         return "";
       }
@@ -536,11 +553,24 @@ function renderGroupedRuleList(containerId, items) {
             const docTypes = Array.isArray(item.docTypes) ? item.docTypes.join(", ") : "";
             const audiences = Array.isArray(item.audiences) ? item.audiences.join(", ") : "";
             const sourceTitles = Array.isArray(item.sourceMaterialTitles) ? item.sourceMaterialTitles.slice(0, 3) : [];
+            const feedbackIds = Array.isArray(item.linkedFeedbackIds) ? item.linkedFeedbackIds : [];
+            const priorityHint =
+              group.key === "candidate" && Number(item.linkedFeedbackCount || 0) > 0
+                ? `<span class="mini-chip priority">建议优先确认</span>`
+                : "";
             return `<div class="row-item">
               <div class="row-main">
                 <strong>${escapeHtml(item.title)}</strong>
                 <div class="mini">scope=${escapeHtml(item.scope || "-")} / 文体=${escapeHtml(docTypes || "-")} / 受众=${escapeHtml(audiences || "-")}</div>
-                <div class="mini">版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 命中任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次</div>
+                <div class="mini">版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 命中任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次 / 关联反馈 ${escapeHtml(String(item.linkedFeedbackCount ?? 0))} 次</div>
+                <div class="inline-chips">
+                  ${priorityHint}
+                  ${
+                    feedbackIds.length
+                      ? feedbackIds.map((id) => `<span class="mini-chip">${escapeHtml(id)}</span>`).join("")
+                      : ""
+                  }
+                </div>
                 <div class="rule-provenance">
                   <div class="mini">来源材料：${escapeHtml(sourceTitles.join(" / ") || "暂无来源记录")}</div>
                   <div class="mini">最近版本：${escapeHtml(item.latestVersionAt || "-")}</div>

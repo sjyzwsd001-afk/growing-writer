@@ -2026,6 +2026,10 @@ async function buildDashboard(vaultRoot: string) {
     rules.map(async (item) => {
       const versions = await listRuleVersions(vaultRoot, item.id);
       const linkedTaskCount = tasks.filter((task) => Array.isArray(task.matchedRules) && task.matchedRules.includes(item.id)).length;
+      const linkedFeedbacks = feedbackEntries.filter((feedback) =>
+        Array.isArray(feedback.relatedRuleIds) && feedback.relatedRuleIds.includes(item.id),
+      );
+      const linkedFeedbackCount = linkedFeedbacks.length;
       return {
         id: item.id,
         title: item.title,
@@ -2041,6 +2045,8 @@ async function buildDashboard(vaultRoot: string) {
         versionCount: versions.length,
         latestVersionAt: versions[0]?.createdAt || "",
         linkedTaskCount,
+        linkedFeedbackCount,
+        linkedFeedbackIds: linkedFeedbacks.slice(0, 3).map((feedback) => feedback.id),
         path: item.path,
       };
     }),
