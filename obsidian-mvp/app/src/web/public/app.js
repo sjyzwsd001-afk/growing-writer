@@ -623,6 +623,47 @@ function renderGroupedFeedbackList(containerId, items) {
     .join("")}</div>`;
 }
 
+function renderProfileList(containerId, items) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    return;
+  }
+  const profiles = Array.isArray(items) ? items : [];
+  if (!profiles.length) {
+    container.innerHTML = `<div class="empty">暂无数据</div>`;
+    return;
+  }
+
+  container.innerHTML = profiles
+    .map((item) => {
+      const highlights = [
+        ...(Array.isArray(item.highPriorityPreferences) ? item.highPriorityPreferences.slice(0, 2) : []),
+        ...(Array.isArray(item.commonTaboos) ? item.commonTaboos.slice(0, 1).map((value) => `禁忌：${value}`) : []),
+      ].slice(0, 3);
+      const leadership = Array.isArray(item.scenarioGuidance?.leadershipReport)
+        ? item.scenarioGuidance.leadershipReport.slice(0, 2)
+        : [];
+      return `<div class="row-item">
+        <div class="row-main">
+          <strong>${escapeHtml(item.name)}</strong>
+          <div class="mini">版本 ${escapeHtml(String(item.version || 1))} / ${escapeHtml(item.generatedBy || "unknown")} / ${escapeHtml(item.updatedAt || "-")}</div>
+          <div class="mini">语气：${escapeHtml(item.overview?.tone || "未提炼")} / 结构：${escapeHtml(item.overview?.body || "未提炼")}</div>
+          <div class="mini">开头：${escapeHtml(item.overview?.opening || "未提炼")}</div>
+          <div class="mini">结尾：${escapeHtml(item.overview?.ending || "未提炼")}</div>
+          <div class="rule-provenance">
+            <div class="mini">高优先偏好：${escapeHtml(highlights.join(" / ") || "暂无")}</div>
+            <div class="mini">领导汇报倾向：${escapeHtml(leadership.join(" / ") || "暂无")}</div>
+            <div class="mini">稳定规则摘要：${escapeHtml((item.stableRuleSummary || []).slice(0, 2).join(" / ") || "暂无")}</div>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button type="button" class="mini-btn" data-action="view-profile" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)}">查看</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
 function renderSettingsLists() {
   const data = state.dashboard || {};
   renderSimpleList("settings-materials", data.materials || [], (item) => {
@@ -648,15 +689,7 @@ function renderSettingsLists() {
 
   renderGroupedRuleList("settings-rules", data.rules || []);
 
-  renderSimpleList("settings-profiles", data.profiles || [], (item) => {
-    return `<div class="row-main">
-      <strong>${escapeHtml(item.name)}</strong>
-      <div class="mini">版本 ${escapeHtml(String(item.version || 1))}</div>
-    </div>
-    <div class="row-actions">
-      <button type="button" class="mini-btn" data-action="view-profile" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)}">查看</button>
-    </div>`;
-  });
+  renderProfileList("settings-profiles", data.profiles || []);
 
   renderGroupedFeedbackList("settings-feedback", data.feedback || []);
 
