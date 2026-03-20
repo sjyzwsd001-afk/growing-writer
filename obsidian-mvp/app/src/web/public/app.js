@@ -451,6 +451,54 @@ function renderTemplateSelector(items) {
   renderTemplatePreview();
 }
 
+function getCurrentWizardTemplateSignals() {
+  const form = document.getElementById("wizard-form");
+  const formData = form ? new FormData(form) : new FormData();
+  return {
+    docType: String(formData.get("docType") || "").trim(),
+    background: String(formData.get("background") || "").trim(),
+    mustInclude: String(formData.get("mustInclude") || "").trim(),
+    specialRequirements: String(formData.get("specialRequirements") || "").trim(),
+  };
+}
+
+function scoreTemplateForCurrentTask(template, signals) {
+  let score = 0;
+  const reasons = [];
+  const templateDocType = String(template?.docType || "").trim();
+  const scenario = String(template?.scenario || "").trim();
+  const roleLabel = String(template?.roleLabel || "").trim();
+  const signalText = `${signals.background} ${signals.mustInclude} ${signals.specialRequirements}`.toLowerCase();
+
+  if (signals.docType && templateDocType && templateDocType === signals.docType) {
+    score += 3;
+    reasons.push(`文种一致：${templateDocType}`);
+  } else if (signals.docType && templateDocType && signals.docType.includes(templateDocType)) {
+    score += 2;
+    reasons.push(`文种接近：${templateDocType}`);
+  }
+
+  if (scenario && signalText && signalText.includes(scenario.toLowerCase())) {
+    score += 2;
+    reasons.push(`场景贴近：${scenario}`);
+  }
+
+  if (roleLabel === "模板") {
+    score += 1.5;
+  }
+
+  if (String(template?.quality || "") === "high") {
+    score += 1;
+    reasons.push("质量较高");
+  }
+
+  if (!reasons.length) {
+    reasons.push("可作为通用结构参考");
+  }
+
+  return { score, reasons };
+}
+
 function renderTemplatePreview() {
   const container = document.getElementById("template-preview");
   if (!container) {
@@ -460,16 +508,40 @@ function renderTemplatePreview() {
   const templateId = String(document.getElementById("template-selector")?.value || "").trim();
   const templateMode = String(document.querySelector("[name='templateMode']")?.value || "hybrid");
   const templates = Array.isArray(state.dashboard?.templates) ? state.dashboard.templates : [];
+  const signals = getCurrentWizardTemplateSignals();
+  const rankedTemplates = templates
+    .map((item) => ({
+      item,
+      recommendation: scoreTemplateForCurrentTask(item, signals),
+    }))
+    .sort((a, b) => b.recommendation.score - a.recommendation.score);
   const selected = templates.find((item) => item.id === templateId) || null;
 
   if (!selected) {
+    const recommended = rankedTemplates.filter((entry) => entry.recommendation.score > 0).slice(0, 3);
     container.innerHTML = `
       <div>未选择模板。本次会主要依据历史材料、规则库和当前背景生成。</div>
       <div class="mini">如果你有特别固定的结构或语气，建议在这一步选择模板。</div>
+      ${
+        recommended.length
+          ? `<div class="template-recommend-list">${recommended
+              .map(
+                ({ item, recommendation }, index) => `
+                <div class="template-recommend-item">
+                  <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
+                  <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))} / ${escapeHtml(
+                    recommendation.reasons.join(" / "),
+                  )}</div>
+                </div>`,
+              )
+              .join("")}</div>`
+          : `<div class="mini">当前信息还不足以推荐更合适的模板，系统会按常规规则和材料生成。</div>`
+      }
     `;
     return;
   }
 
+  const recommendation = scoreTemplateForCurrentTask(selected, signals);
   const modeHint =
     templateMode === "strict"
       ? "强继承模板结构，适合格式很固定的材料。"
@@ -482,6 +554,7 @@ function renderTemplatePreview() {
   container.innerHTML = `
     <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
+    <div class="mini">推荐理由：${escapeHtml(recommendation.reasons.join(" / "))}（匹配度 ${escapeHtml(recommendation.score.toFixed(1))}）</div>
     <div class="mini">${escapeHtml(modeHint)}</div>
     <div class="mini">结构提示：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
     <div class="mini">表达参考：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
@@ -2026,7 +2099,7 @@ function bindWizard() {
           renderWizardCheckResult(null);
         }
       }
-      if ((target.name || target.id) === "templateId" || (target.name || target.id) === "templateMode") {
+      if (["templateId", "templateMode", "docType", "background", "mustInclude", "specialRequirements"].includes(target.name || target.id)) {
         renderTemplatePreview();
       }
     }

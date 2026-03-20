@@ -891,6 +891,21 @@ legend {
   line-height: 1.5;
 }
 
+.template-recommend-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.template-recommend-item {
+  border: 1px solid rgba(214, 197, 169, 0.7);
+  border-radius: 12px;
+  background: #fffef9;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
 .workflow-preview {
   margin-top: 14px;
   border: 1px solid var(--border);
