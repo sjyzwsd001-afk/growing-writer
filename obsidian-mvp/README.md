@@ -33,3 +33,8 @@
 - 规则不要自动永久生效，先以候选规则形式出现
 - 每次任务都要能追溯“参考了哪些材料、用了哪些规则”
 - 反馈要区分一次性修改和长期规则
+
+## 文档入口
+
+- 用户手册：[USER_MANUAL_ZH.md](/Users/zw/Documents/growing writer/obsidian-mvp/USER_MANUAL_ZH.md)
+- 下一阶段路线图：见用户手册第 21 节“下一阶段产品路线图”
