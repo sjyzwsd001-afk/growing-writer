@@ -647,6 +647,7 @@ function renderProfileList(containerId, items) {
         <div class="row-main">
           <strong>${escapeHtml(item.name)}</strong>
           <div class="mini">版本 ${escapeHtml(String(item.version || 1))} / ${escapeHtml(item.generatedBy || "unknown")} / ${escapeHtml(item.updatedAt || "-")}</div>
+          <div class="mini">画像来源：规则 ${escapeHtml(String(item.sourceStats?.confirmed_rules ?? 0))} / 材料 ${escapeHtml(String(item.sourceStats?.materials ?? 0))} / 反馈 ${escapeHtml(String(item.sourceStats?.feedback_entries ?? 0))}</div>
           <div class="mini">语气：${escapeHtml(item.overview?.tone || "未提炼")} / 结构：${escapeHtml(item.overview?.body || "未提炼")}</div>
           <div class="mini">开头：${escapeHtml(item.overview?.opening || "未提炼")}</div>
           <div class="mini">结尾：${escapeHtml(item.overview?.ending || "未提炼")}</div>

@@ -2140,6 +2140,10 @@ async function buildDashboard(vaultRoot: string) {
         typeof item.frontmatter.generated_by === "string" ? item.frontmatter.generated_by : "unknown",
       updatedAt:
         typeof item.frontmatter.updated_at === "string" ? item.frontmatter.updated_at : "",
+      sourceStats:
+        item.frontmatter.source_stats && typeof item.frontmatter.source_stats === "object"
+          ? item.frontmatter.source_stats
+          : null,
       overview: {
         tone: extractProfileField(item.content, "语气特点："),
         sentenceStyle: extractProfileField(item.content, "句式特点："),
