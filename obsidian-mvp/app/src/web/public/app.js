@@ -627,22 +627,45 @@ function renderGroupedFeedbackList(containerId, items) {
         </div>
         ${entries
           .map((item) => {
+            const relatedRules = Array.isArray(item.relatedRules) ? item.relatedRules.filter(Boolean) : [];
             const ruleTitles = Array.isArray(item.relatedRuleTitles) ? item.relatedRuleTitles.slice(0, 3) : [];
             const candidateRules = Array.isArray(item.relatedRules)
               ? item.relatedRules.filter((rule) => rule && rule.status === "candidate").slice(0, 2)
               : [];
+            const confirmedRules = relatedRules.filter((rule) => rule.status === "confirmed");
+            const disabledRules = relatedRules.filter((rule) => rule.status === "disabled");
             const reusableText =
               item.reusableSuggestion === true
                 ? "建议入规则"
                 : item.reusableSuggestion === false
                   ? "更像一次性修改"
                   : "待学习";
+            const processStatus =
+              confirmedRules.length > 0
+                ? "已入规则"
+                : candidateRules.length > 0
+                  ? "待确认"
+                  : disabledRules.length > 0
+                    ? "已停用"
+                    : "未关联规则";
             return `<div class="row-item">
               <div class="row-main">
                 <strong>${escapeHtml(item.id)}</strong>
                 <div class="mini">${escapeHtml(item.feedbackType || "-")} / 位置=${escapeHtml(item.affectedParagraph || "全文")} / ${escapeHtml(reusableText)}</div>
+                <div class="mini">处理状态：<span class="status-chip ${processStatus === "已入规则" ? "status-confirmed" : processStatus === "待确认" ? "status-candidate" : processStatus === "已停用" ? "status-disabled" : "status-neutral"}">${escapeHtml(processStatus)}</span></div>
                 <div class="mini">候选规则：${escapeHtml(item.candidateRuleTitle || "暂无")} ${item.candidateRuleScope ? `/ ${escapeHtml(item.candidateRuleScope)}` : ""}</div>
                 <div class="mini">关联规则：${escapeHtml(ruleTitles.join(" / ") || "暂无")}</div>
+                ${
+                  relatedRules.length
+                    ? `<div class="inline-chips">${relatedRules
+                        .slice(0, 4)
+                        .map(
+                          (rule) =>
+                            `<span class="mini-chip ${rule.status === "confirmed" ? "priority" : ""}">${escapeHtml(rule.title)} · ${escapeHtml(rule.status === "confirmed" ? "已确认" : rule.status === "candidate" ? "待确认" : "已停用")}</span>`,
+                        )
+                        .join("")}</div>`
+                    : ""
+                }
                 <div class="mini">时间：${escapeHtml(item.createdAt || "-")}</div>
               </div>
               <div class="row-actions">
@@ -2587,6 +2610,10 @@ async function runSettingsAction(action, button) {
       body: JSON.stringify({ path, action: mappedAction, reason: "通过设置页操作" }),
     });
     setSettingsResult(`规则操作完成：${mappedAction}`, result);
+    const updatedCount = Array.isArray(result.updatedTasks) ? result.updatedTasks.length : 0;
+    setInfo(
+      `规则已${mappedAction === "confirm" ? "确认" : mappedAction === "disable" ? "停用" : "拒绝"}，已同步 ${updatedCount} 个任务${result.profilePath ? "，并刷新写作画像" : ""}。`,
+    );
     await loadDashboard();
     return;
   }
@@ -2597,6 +2624,8 @@ async function runSettingsAction(action, button) {
       body: JSON.stringify({ path, action: "confirm", reason: "通过反馈记录快捷确认候选规则" }),
     });
     setSettingsResult(`规则操作完成：confirm`, result);
+    const updatedCount = Array.isArray(result.updatedTasks) ? result.updatedTasks.length : 0;
+    setInfo(`已从反馈记录确认规则，已同步 ${updatedCount} 个任务${result.profilePath ? "，并刷新写作画像" : ""}。`);
     await loadDashboard();
     return;
   }
