@@ -503,6 +503,66 @@ function renderSimpleList(containerId, items, renderItem) {
   }
 }
 
+function renderGroupedRuleList(containerId, items) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    return;
+  }
+  const rules = Array.isArray(items) ? items : [];
+  if (!rules.length) {
+    container.innerHTML = `<div class="empty">暂无数据</div>`;
+    return;
+  }
+
+  const groups = [
+    { key: "confirmed", label: "已确认规则" },
+    { key: "candidate", label: "候选规则" },
+    { key: "disabled", label: "已停用规则" },
+  ];
+
+  container.innerHTML = `<div class="grouped-list">${groups
+    .map((group) => {
+      const entries = rules.filter((item) => item.status === group.key);
+      if (!entries.length) {
+        return "";
+      }
+      return `<section class="list-group">
+        <div class="list-group-head">
+          <strong>${escapeHtml(group.label)}</strong>
+          <span class="list-group-count">${escapeHtml(String(entries.length))} 条</span>
+        </div>
+        ${entries
+          .map((item) => {
+            const docTypes = Array.isArray(item.docTypes) ? item.docTypes.join(", ") : "";
+            const audiences = Array.isArray(item.audiences) ? item.audiences.join(", ") : "";
+            const sourceTitles = Array.isArray(item.sourceMaterialTitles) ? item.sourceMaterialTitles.slice(0, 3) : [];
+            return `<div class="row-item">
+              <div class="row-main">
+                <strong>${escapeHtml(item.title)}</strong>
+                <div class="mini">scope=${escapeHtml(item.scope || "-")} / 文体=${escapeHtml(docTypes || "-")} / 受众=${escapeHtml(audiences || "-")}</div>
+                <div class="mini">版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 命中任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次</div>
+                <div class="rule-provenance">
+                  <div class="mini">来源材料：${escapeHtml(sourceTitles.join(" / ") || "暂无来源记录")}</div>
+                  <div class="mini">最近版本：${escapeHtml(item.latestVersionAt || "-")}</div>
+                </div>
+              </div>
+              <div class="row-actions">
+                <button type="button" class="mini-btn" data-action="view-rule" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+                <button type="button" class="mini-btn" data-action="rule-set-scope" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">设范围</button>
+                <button type="button" class="mini-btn" data-action="rule-view-versions" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">版本</button>
+                <button type="button" class="mini-btn" data-action="rule-rollback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">回滚</button>
+                <button type="button" class="mini-btn" data-action="rule-confirm" data-path="${escapeHtml(item.path)}">确认</button>
+                <button type="button" class="mini-btn" data-action="rule-disable" data-path="${escapeHtml(item.path)}">停用</button>
+                <button type="button" class="mini-btn" data-action="rule-reject" data-path="${escapeHtml(item.path)}">拒绝</button>
+              </div>
+            </div>`;
+          })
+          .join("")}
+      </section>`;
+    })
+    .join("")}</div>`;
+}
+
 function renderSettingsLists() {
   const data = state.dashboard || {};
   renderSimpleList("settings-materials", data.materials || [], (item) => {
@@ -526,23 +586,7 @@ function renderSettingsLists() {
     </div>`;
   });
 
-  renderSimpleList("settings-rules", data.rules || [], (item) => {
-    const docTypes = Array.isArray(item.docTypes) ? item.docTypes.join(", ") : "";
-    const audiences = Array.isArray(item.audiences) ? item.audiences.join(", ") : "";
-    return `<div class="row-main">
-      <strong>${escapeHtml(item.title)}</strong>
-      <div class="mini">${escapeHtml(item.status)} / scope=${escapeHtml(item.scope || "-")} / 文体=${escapeHtml(docTypes || "-")} / 受众=${escapeHtml(audiences || "-")} / 版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))}</div>
-    </div>
-    <div class="row-actions">
-      <button type="button" class="mini-btn" data-action="view-rule" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
-      <button type="button" class="mini-btn" data-action="rule-set-scope" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">设范围</button>
-      <button type="button" class="mini-btn" data-action="rule-view-versions" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">版本</button>
-      <button type="button" class="mini-btn" data-action="rule-rollback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">回滚</button>
-      <button type="button" class="mini-btn" data-action="rule-confirm" data-path="${escapeHtml(item.path)}">确认</button>
-      <button type="button" class="mini-btn" data-action="rule-disable" data-path="${escapeHtml(item.path)}">停用</button>
-      <button type="button" class="mini-btn" data-action="rule-reject" data-path="${escapeHtml(item.path)}">拒绝</button>
-    </div>`;
-  });
+  renderGroupedRuleList("settings-rules", data.rules || []);
 
   renderSimpleList("settings-profiles", data.profiles || [], (item) => {
     return `<div class="row-main">

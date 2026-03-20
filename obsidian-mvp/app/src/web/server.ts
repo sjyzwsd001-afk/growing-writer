@@ -1981,10 +1981,12 @@ async function buildDashboard(vaultRoot: string) {
       };
     })
     .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
+  const materialTitleById = new Map(materialItems.map((item) => [item.id, item.title]));
 
   const ruleItems = await Promise.all(
     rules.map(async (item) => {
       const versions = await listRuleVersions(vaultRoot, item.id);
+      const linkedTaskCount = tasks.filter((task) => Array.isArray(task.matchedRules) && task.matchedRules.includes(item.id)).length;
       return {
         id: item.id,
         title: item.title,
@@ -1992,9 +1994,14 @@ async function buildDashboard(vaultRoot: string) {
         scope: item.scope,
         docTypes: item.docTypes,
         audiences: item.audiences,
+        sourceMaterials: item.sourceMaterials,
+        sourceMaterialTitles: item.sourceMaterials
+          .map((materialId) => materialTitleById.get(materialId) || materialId)
+          .filter(Boolean),
         confidence: item.confidence,
         versionCount: versions.length,
         latestVersionAt: versions[0]?.createdAt || "",
+        linkedTaskCount,
         path: item.path,
       };
     }),

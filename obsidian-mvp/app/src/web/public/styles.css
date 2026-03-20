@@ -518,6 +518,42 @@ legend {
   gap: 8px;
 }
 
+.grouped-list {
+  display: grid;
+  gap: 14px;
+}
+
+.list-group {
+  display: grid;
+  gap: 8px;
+}
+
+.list-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.list-group-head strong {
+  font-size: 14px;
+}
+
+.list-group-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.rule-provenance {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.rule-provenance .mini {
+  line-height: 1.45;
+}
+
 .row-main {
   display: grid;
   gap: 3px;
