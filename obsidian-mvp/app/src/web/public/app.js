@@ -11,6 +11,7 @@ const state = {
   latestFeedbackByLocation: {},
   pendingAnnotations: [],
   generatedDraftBaseline: "",
+  latestFeedbackLearnResult: null,
   workflowDefinition: null,
   workflowEditorDefinition: null,
   oauthStartAttempt: 0,
@@ -792,6 +793,42 @@ function renderPendingAnnotations() {
   summarizeDraftChanges();
 }
 
+function renderFeedbackLearnResult() {
+  const container = document.getElementById("feedback-learn-result");
+  if (!container) {
+    return;
+  }
+  const result = state.latestFeedbackLearnResult;
+  if (!result?.analysis) {
+    container.textContent = "提交反馈并再次生成后，这里会显示系统对本轮修改的学习结论。";
+    return;
+  }
+
+  const analysis = result.analysis;
+  const reusableText = analysis.is_reusable_rule ? "建议入规则" : "更像一次性修改";
+  const candidateRule = result.candidateRulePath
+    ? `<div class="editor-actions">
+        <button type="button" class="btn primary" data-action="confirm-generated-rule" data-path="${escapeHtml(result.candidateRulePath)}">确认入规则</button>
+        <button type="button" class="btn ghost" data-action="reject-generated-rule" data-path="${escapeHtml(result.candidateRulePath)}">暂不入库</button>
+      </div>`
+    : "";
+
+  container.innerHTML = `<div class="learn-result">
+    <div class="learn-result-grid">
+      <div class="learn-result-item"><strong>反馈类型：</strong>${escapeHtml(analysis.feedback_type || "-")}</div>
+      <div class="learn-result-item"><strong>系统判断：</strong>${escapeHtml(reusableText)}</div>
+      <div class="learn-result-item"><strong>修改建议：</strong>${escapeHtml(analysis.suggested_update || "-")}</div>
+      <div class="learn-result-item"><strong>判断原因：</strong>${escapeHtml(analysis.reasoning || "-")}</div>
+      ${
+        analysis.candidate_rule
+          ? `<div class="learn-result-item"><strong>候选规则：</strong>${escapeHtml(analysis.candidate_rule.title || "-")}<br /><span class="mini">${escapeHtml(analysis.candidate_rule.content || "")}</span></div>`
+          : ""
+      }
+    </div>
+    ${candidateRule}
+  </div>`;
+}
+
 function collectCurrentAnnotation({ strictSelection = true, persist = false } = {}) {
   const location = normalizeLocation(document.getElementById("feedback-location").value);
   const reason = String(document.getElementById("feedback-reason").value || "").trim();
@@ -1333,10 +1370,12 @@ async function createAndRunTask() {
     document.getElementById("draft-editor").value = draftText;
     state.generatedDraftBaseline = draftText;
     state.pendingAnnotations = [];
+    state.latestFeedbackLearnResult = null;
     state.feedbackSelection = null;
     updateSelectionPreview(null);
     renderPendingAnnotations();
     summarizeDraftChanges();
+    renderFeedbackLearnResult();
 
     state.currentTask = {
       id: created.taskId,
@@ -1465,10 +1504,11 @@ async function submitFeedbackAndRegenerate() {
     }),
   });
 
-  await api("/api/feedback/learn", {
+  const learnResult = await api("/api/feedback/learn", {
     method: "POST",
     body: JSON.stringify({ path: feedback.path }),
   });
+  state.latestFeedbackLearnResult = learnResult;
 
   const generated = state.currentTask.runId
     ? await api("/api/workflow/advance", {
@@ -1533,6 +1573,7 @@ async function submitFeedbackAndRegenerate() {
   renderPendingAnnotations();
   clearFeedbackInputs();
   state.generatedDraftBaseline = latestDraft;
+  renderFeedbackLearnResult();
   renderWorkflowStageTracker();
   return evaluation;
 }
@@ -1694,6 +1735,45 @@ function bindEditorActions() {
     if (action === "annotation-priority" && target instanceof HTMLSelectElement) {
       state.pendingAnnotations[index].priority = target.value;
       summarizeDraftChanges();
+    }
+  });
+
+  document.getElementById("feedback-learn-result").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) {
+      return;
+    }
+    const action = button.dataset.action || "";
+    const path = button.dataset.path || "";
+    if (!path) {
+      return;
+    }
+
+    try {
+      if (action === "confirm-generated-rule" || action === "reject-generated-rule") {
+        const result = await api("/api/rules/action", {
+          method: "POST",
+          body: JSON.stringify({
+            path,
+            action: action === "confirm-generated-rule" ? "confirm" : "reject",
+            reason: action === "confirm-generated-rule" ? "通过编辑区学习结论确认入库" : "通过编辑区学习结论暂不入库",
+          }),
+        });
+        setInfo(
+          action === "confirm-generated-rule" ? "已确认候选规则并入库。" : "已将候选规则标记为暂不入库。",
+        );
+        setSettingsResult(
+          action === "confirm-generated-rule" ? "规则确认完成" : "规则暂不入库",
+          result,
+        );
+        if (state.latestFeedbackLearnResult) {
+          state.latestFeedbackLearnResult.candidateRulePath = null;
+        }
+        renderFeedbackLearnResult();
+        await loadDashboard();
+      }
+    } catch (error) {
+      setInfo(`规则处理失败：${error.message}`, true);
     }
   });
 

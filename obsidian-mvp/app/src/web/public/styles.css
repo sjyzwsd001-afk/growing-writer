@@ -483,6 +483,24 @@ legend {
   padding: 10px 12px;
 }
 
+.learn-result {
+  display: grid;
+  gap: 10px;
+}
+
+.learn-result-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.learn-result-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 9px 10px;
+  line-height: 1.5;
+}
+
 .simple-list {
   display: grid;
   gap: 8px;
