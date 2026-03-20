@@ -2979,12 +2979,18 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           sendJson(res, 400, { error: "Missing material path." });
           return;
         }
+        const materialPath = resolve(body.path);
 
-        await analyzeImportedMaterial(resolve(body.path), {
+        await analyzeImportedMaterial(materialPath, {
           analyze: createMaterialAnalyzer(createLlmClient(vaultRoot)),
         });
         const repo = new VaultRepository(vaultRoot);
-        const material = await repo.loadMaterial(resolve(body.path));
+        const materials = await repo.loadMaterials();
+        const material = materials.find((item) => item.path === materialPath);
+        if (!material) {
+          sendJson(res, 404, { error: "Material not found after analysis." });
+          return;
+        }
         const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
         const isTemplate = isTemplateMaterial({
           tags: material.tags,
@@ -2999,7 +3005,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           scenario: material.scenario,
         });
         sendJson(res, 200, {
-          path: resolve(body.path),
+          path: materialPath,
           status: "analyzed",
           title: material.title,
           roleLabel: role.roleLabel,
