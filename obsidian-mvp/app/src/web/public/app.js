@@ -598,6 +598,9 @@ function renderGroupedFeedbackList(containerId, items) {
         ${entries
           .map((item) => {
             const ruleTitles = Array.isArray(item.relatedRuleTitles) ? item.relatedRuleTitles.slice(0, 3) : [];
+            const candidateRules = Array.isArray(item.relatedRules)
+              ? item.relatedRules.filter((rule) => rule && rule.status === "candidate").slice(0, 2)
+              : [];
             const reusableText =
               item.reusableSuggestion === true
                 ? "建议入规则"
@@ -608,12 +611,19 @@ function renderGroupedFeedbackList(containerId, items) {
               <div class="row-main">
                 <strong>${escapeHtml(item.id)}</strong>
                 <div class="mini">${escapeHtml(item.feedbackType || "-")} / 位置=${escapeHtml(item.affectedParagraph || "全文")} / ${escapeHtml(reusableText)}</div>
+                <div class="mini">候选规则：${escapeHtml(item.candidateRuleTitle || "暂无")} ${item.candidateRuleScope ? `/ ${escapeHtml(item.candidateRuleScope)}` : ""}</div>
                 <div class="mini">关联规则：${escapeHtml(ruleTitles.join(" / ") || "暂无")}</div>
                 <div class="mini">时间：${escapeHtml(item.createdAt || "-")}</div>
               </div>
               <div class="row-actions">
                 <button type="button" class="mini-btn" data-action="view-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">查看</button>
                 <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
+                ${candidateRules
+                  .map(
+                    (rule) =>
+                      `<button type="button" class="mini-btn" data-action="feedback-confirm-rule" data-path="${escapeHtml(rule.path)}" data-title="${escapeHtml(rule.title)}">确认规则</button>`,
+                  )
+                  .join("")}
               </div>
             </div>`;
           })
@@ -2547,6 +2557,16 @@ async function runSettingsAction(action, button) {
       body: JSON.stringify({ path, action: mappedAction, reason: "通过设置页操作" }),
     });
     setSettingsResult(`规则操作完成：${mappedAction}`, result);
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "feedback-confirm-rule") {
+    const result = await api("/api/rules/action", {
+      method: "POST",
+      body: JSON.stringify({ path, action: "confirm", reason: "通过反馈记录快捷确认候选规则" }),
+    });
+    setSettingsResult(`规则操作完成：confirm`, result);
     await loadDashboard();
     return;
   }

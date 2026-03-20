@@ -2120,12 +2120,30 @@ async function buildDashboard(vaultRoot: string) {
         relatedRuleTitles: item.relatedRuleIds
           .map((ruleId) => ruleTitleById.get(ruleId) || ruleId)
           .filter(Boolean),
+        relatedRules: item.relatedRuleIds
+          .map((ruleId) => {
+            const hit = ruleItems.find((rule) => rule.id === ruleId);
+            if (!hit) {
+              return null;
+            }
+            return {
+              id: hit.id,
+              title: hit.title,
+              status: hit.status,
+              path: hit.path,
+            };
+          })
+          .filter(Boolean),
         reusableSuggestion:
           typeof item.frontmatter.is_reusable_rule === "boolean"
             ? item.frontmatter.is_reusable_rule
             : typeof item.frontmatter.reusable_suggestion === "boolean"
               ? item.frontmatter.reusable_suggestion
               : null,
+        candidateRuleTitle:
+          typeof item.frontmatter.candidate_rule_title === "string" ? item.frontmatter.candidate_rule_title : "",
+        candidateRuleScope:
+          typeof item.frontmatter.candidate_rule_scope === "string" ? item.frontmatter.candidate_rule_scope : "",
         affectedParagraph:
           typeof item.frontmatter.affected_paragraph === "string" ? item.frontmatter.affected_paragraph : "",
         createdAt: item.createdAt,

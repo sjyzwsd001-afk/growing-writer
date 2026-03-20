@@ -26,6 +26,9 @@ export async function writeFeedbackResult(input: {
   const nextFrontmatter = {
     ...input.feedback.frontmatter,
     feedback_type: input.analysis.feedback_type,
+    is_reusable_rule: input.analysis.is_reusable_rule,
+    candidate_rule_title: input.analysis.candidate_rule?.title ?? "",
+    candidate_rule_scope: input.analysis.candidate_rule?.scope ?? "",
     related_rule_ids: uniqueStrings([
       ...(Array.isArray(input.feedback.frontmatter.related_rule_ids)
         ? input.feedback.frontmatter.related_rule_ids.filter((item): item is string => typeof item === "string")
