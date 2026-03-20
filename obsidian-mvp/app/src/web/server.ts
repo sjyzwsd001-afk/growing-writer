@@ -1982,6 +1982,7 @@ async function buildDashboard(vaultRoot: string) {
     })
     .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
   const materialTitleById = new Map(materialItems.map((item) => [item.id, item.title]));
+  const taskTitleById = new Map(tasks.map((item) => [item.id, item.title]));
 
   const ruleItems = await Promise.all(
     rules.map(async (item) => {
@@ -2006,6 +2007,7 @@ async function buildDashboard(vaultRoot: string) {
       };
     }),
   );
+  const ruleTitleById = new Map(ruleItems.map((item) => [item.id, item.title]));
 
   return {
     vaultRoot,
@@ -2074,8 +2076,21 @@ async function buildDashboard(vaultRoot: string) {
       .map((item) => ({
         id: item.id,
         taskId: item.taskId,
+        taskTitle: taskTitleById.get(item.taskId) || item.taskId,
         feedbackType: item.feedbackType,
         relatedRuleIds: item.relatedRuleIds,
+        relatedRuleTitles: item.relatedRuleIds
+          .map((ruleId) => ruleTitleById.get(ruleId) || ruleId)
+          .filter(Boolean),
+        reusableSuggestion:
+          typeof item.frontmatter.is_reusable_rule === "boolean"
+            ? item.frontmatter.is_reusable_rule
+            : typeof item.frontmatter.reusable_suggestion === "boolean"
+              ? item.frontmatter.reusable_suggestion
+              : null,
+        affectedParagraph:
+          typeof item.frontmatter.affected_paragraph === "string" ? item.frontmatter.affected_paragraph : "",
+        createdAt: item.createdAt,
         path: item.path,
       }))
       .sort((a, b) => a.id.localeCompare(b.id, "zh-CN")),

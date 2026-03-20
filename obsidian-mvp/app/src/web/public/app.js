@@ -563,6 +563,66 @@ function renderGroupedRuleList(containerId, items) {
     .join("")}</div>`;
 }
 
+function renderGroupedFeedbackList(containerId, items) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    return;
+  }
+  const feedbackEntries = Array.isArray(items) ? items : [];
+  if (!feedbackEntries.length) {
+    container.innerHTML = `<div class="empty">暂无数据</div>`;
+    return;
+  }
+
+  const groups = new Map();
+  feedbackEntries.forEach((item) => {
+    const key = item.taskId || "unlinked";
+    if (!groups.has(key)) {
+      groups.set(key, {
+        taskId: item.taskId || "",
+        taskTitle: item.taskTitle || item.taskId || "未关联任务",
+        entries: [],
+      });
+    }
+    groups.get(key).entries.push(item);
+  });
+
+  container.innerHTML = `<div class="grouped-list">${[...groups.values()]
+    .map((group) => {
+      const entries = [...group.entries].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+      return `<section class="list-group">
+        <div class="list-group-head">
+          <strong>${escapeHtml(group.taskTitle)}</strong>
+          <span class="list-group-count">${escapeHtml(String(entries.length))} 条反馈</span>
+        </div>
+        ${entries
+          .map((item) => {
+            const ruleTitles = Array.isArray(item.relatedRuleTitles) ? item.relatedRuleTitles.slice(0, 3) : [];
+            const reusableText =
+              item.reusableSuggestion === true
+                ? "建议入规则"
+                : item.reusableSuggestion === false
+                  ? "更像一次性修改"
+                  : "待学习";
+            return `<div class="row-item">
+              <div class="row-main">
+                <strong>${escapeHtml(item.id)}</strong>
+                <div class="mini">${escapeHtml(item.feedbackType || "-")} / 位置=${escapeHtml(item.affectedParagraph || "全文")} / ${escapeHtml(reusableText)}</div>
+                <div class="mini">关联规则：${escapeHtml(ruleTitles.join(" / ") || "暂无")}</div>
+                <div class="mini">时间：${escapeHtml(item.createdAt || "-")}</div>
+              </div>
+              <div class="row-actions">
+                <button type="button" class="mini-btn" data-action="view-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">查看</button>
+                <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
+              </div>
+            </div>`;
+          })
+          .join("")}
+      </section>`;
+    })
+    .join("")}</div>`;
+}
+
 function renderSettingsLists() {
   const data = state.dashboard || {};
   renderSimpleList("settings-materials", data.materials || [], (item) => {
@@ -598,16 +658,7 @@ function renderSettingsLists() {
     </div>`;
   });
 
-  renderSimpleList("settings-feedback", data.feedback || [], (item) => {
-    return `<div class="row-main">
-      <strong>${escapeHtml(item.id)}</strong>
-      <div class="mini">${escapeHtml(item.feedbackType || "-")} / 任务 ${escapeHtml(item.taskId || "-")}</div>
-    </div>
-    <div class="row-actions">
-      <button type="button" class="mini-btn" data-action="view-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">查看</button>
-      <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
-    </div>`;
-  });
+  renderGroupedFeedbackList("settings-feedback", data.feedback || []);
 
   renderSimpleList("settings-workflows", data.workflowRuns || [], (item) => {
     return `<div class="row-main">
