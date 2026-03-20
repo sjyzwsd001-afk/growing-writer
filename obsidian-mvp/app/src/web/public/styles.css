@@ -372,6 +372,11 @@ legend {
   gap: 10px;
 }
 
+.compact-panel {
+  padding: 0;
+  margin-top: 4px;
+}
+
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
@@ -428,6 +433,43 @@ legend {
   padding: 6px 9px;
   background: #fff;
   flex: 1;
+}
+
+.annotation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.annotation-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fffdf9;
+  padding: 9px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.annotation-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.annotation-text {
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid rgba(218, 200, 172, 0.6);
+  padding: 7px 8px;
+  line-height: 1.45;
+}
+
+.annotation-empty {
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
 }
 
 .simple-list {

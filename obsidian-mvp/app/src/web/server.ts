@@ -2946,6 +2946,26 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
               : Number.isFinite(Number(body.selectionEnd))
                 ? Number(body.selectionEnd)
                 : undefined,
+          annotations: Array.isArray(body.annotations)
+            ? body.annotations.map((item) => ({
+                location: typeof item?.location === "string" ? item.location : "",
+                reason: typeof item?.reason === "string" ? item.reason : "",
+                comment: typeof item?.comment === "string" ? item.comment : "",
+                selectedText: typeof item?.selectedText === "string" ? item.selectedText : "",
+                selectionStart:
+                  typeof item?.selectionStart === "number"
+                    ? item.selectionStart
+                    : Number.isFinite(Number(item?.selectionStart))
+                      ? Number(item.selectionStart)
+                      : undefined,
+                selectionEnd:
+                  typeof item?.selectionEnd === "number"
+                    ? item.selectionEnd
+                    : Number.isFinite(Number(item?.selectionEnd))
+                      ? Number(item.selectionEnd)
+                      : undefined,
+              }))
+            : [],
         });
 
         sendJson(res, 200, result);

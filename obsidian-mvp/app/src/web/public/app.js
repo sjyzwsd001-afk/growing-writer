@@ -9,6 +9,8 @@ const state = {
   feedbackSelection: null,
   feedbackHistory: [],
   latestFeedbackByLocation: {},
+  pendingAnnotations: [],
+  generatedDraftBaseline: "",
   workflowDefinition: null,
   workflowEditorDefinition: null,
   oauthStartAttempt: 0,
@@ -660,7 +662,7 @@ function renderFeedbackHistory() {
   const latestRows = Object.values(state.latestFeedbackByLocation)
     .map(
       (item) =>
-        `<li><strong>${escapeHtml(item.location)}</strong>：${escapeHtml(item.reason || "未填原因")}（最新版本 ${escapeHtml(item.version || "-")} / 吸收评分 ${escapeHtml(String(item.absorptionScore ?? "-"))}）</li>`,
+        `<li><strong>${escapeHtml(item.location)}</strong>：${escapeHtml(item.reason || "未填原因")}（最新版本 ${escapeHtml(item.version || "-")} / 吸收评分 ${escapeHtml(String(item.absorptionScore ?? "-"))} / 批注 ${escapeHtml(String(item.annotationCount ?? 0))} 条）</li>`,
     )
     .join("");
 
@@ -671,6 +673,7 @@ function renderFeedbackHistory() {
         <div><strong>${escapeHtml(item.version || "-")}</strong> ${escapeHtml(item.createdAt || "")}</div>
         <div>位置：${escapeHtml(item.location)}</div>
         <div>原因：${escapeHtml(item.reason || "-")}</div>
+        <div>批注条数：${escapeHtml(String(item.annotationCount ?? 0))}</div>
         <div>吸收评分：${escapeHtml(String(item.absorptionScore ?? "-"))}（${escapeHtml(item.absorptionLevel || "-")}）</div>
         <div class="mini">${escapeHtml(item.comment || "")}</div>
       </li>`,
@@ -705,6 +708,101 @@ function updateSelectionPreview(selection) {
   const compact = selection.text.replace(/\s+/g, " ").trim();
   const text = compact.length > 120 ? `${compact.slice(0, 120)}...` : compact;
   preview.textContent = `已选区 [${selection.start}-${selection.end}]：${text}`;
+}
+
+function clearFeedbackInputs() {
+  document.getElementById("feedback-location").value = "";
+  document.getElementById("feedback-reason").value = "";
+  document.getElementById("feedback-comment").value = "";
+}
+
+function summarizeDraftChanges() {
+  const baseline = String(state.generatedDraftBaseline || "");
+  const current = String(document.getElementById("draft-editor")?.value || "");
+  const container = document.getElementById("draft-change-summary");
+  if (!container) {
+    return;
+  }
+  if (!baseline.trim() && !current.trim()) {
+    container.textContent = "生成初稿后会显示改动摘要。";
+    return;
+  }
+
+  const baselineLines = baseline.split(/\r?\n/);
+  const currentLines = current.split(/\r?\n/);
+  const changedLineCount = Math.max(baselineLines.length, currentLines.length)
+    ? baselineLines.reduce((count, line, index) => {
+        return count + (line !== (currentLines[index] ?? "") ? 1 : 0);
+      }, 0) + Math.max(0, currentLines.length - baselineLines.length)
+    : 0;
+  const charDelta = current.length - baseline.length;
+  const summary = [
+    `基线长度：${baseline.length} 字`,
+    `当前长度：${current.length} 字`,
+    `字数变化：${charDelta >= 0 ? "+" : ""}${charDelta}`,
+    `变化行数：约 ${changedLineCount} 行`,
+    `本轮批注：${state.pendingAnnotations.length} 条`,
+  ];
+  container.innerHTML = summary.map((item) => `<div>${escapeHtml(item)}</div>`).join("");
+}
+
+function renderPendingAnnotations() {
+  const container = document.getElementById("annotation-list");
+  if (!container) {
+    return;
+  }
+  if (!state.pendingAnnotations.length) {
+    container.innerHTML = `<div class="annotation-empty">还没有加入本轮批注。先在正文里选中一段，再写修改原因或批注说明。</div>`;
+    summarizeDraftChanges();
+    return;
+  }
+
+  container.innerHTML = state.pendingAnnotations
+    .map(
+      (item, index) => `<div class="annotation-item">
+        <div class="annotation-head">
+          <strong>${escapeHtml(item.location || `批注 ${index + 1}`)}</strong>
+          <button type="button" class="mini-btn danger" data-action="remove-annotation" data-index="${index}">删除</button>
+        </div>
+        <div class="mini">原因：${escapeHtml(item.reason || "未填写")}</div>
+        <div class="mini">说明：${escapeHtml(item.comment || "未填写")}</div>
+        <div class="mini">选区：${escapeHtml(item.selection ? `${item.selection.start}-${item.selection.end}` : "未选择")}</div>
+        ${
+          item.selection?.text
+            ? `<div class="annotation-text">${escapeHtml(item.selection.text)}</div>`
+            : ""
+        }
+      </div>`,
+    )
+    .join("");
+  summarizeDraftChanges();
+}
+
+function collectCurrentAnnotation({ strictSelection = true, persist = false } = {}) {
+  const location = normalizeLocation(document.getElementById("feedback-location").value);
+  const reason = String(document.getElementById("feedback-reason").value || "").trim();
+  const comment = String(document.getElementById("feedback-comment").value || "").trim();
+  const selection = captureDraftSelection({ strict: strictSelection });
+  if (!reason && !comment) {
+    throw new Error("请至少填写“修改原因”或“批注说明”。");
+  }
+
+  const annotation = {
+    location,
+    reason,
+    comment,
+    selection,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (persist) {
+    state.pendingAnnotations.push(annotation);
+    renderPendingAnnotations();
+    clearFeedbackInputs();
+    state.feedbackSelection = null;
+    updateSelectionPreview(null);
+  }
+  return annotation;
 }
 
 function captureDraftSelection(options = { strict: false }) {
@@ -1217,8 +1315,12 @@ async function createAndRunTask() {
     const draftText =
       generated?.draft?.draft_markdown || (await getTaskDraftFromFile(created.path)) || "生成完成，但未找到正文。";
     document.getElementById("draft-editor").value = draftText;
+    state.generatedDraftBaseline = draftText;
+    state.pendingAnnotations = [];
     state.feedbackSelection = null;
     updateSelectionPreview(null);
+    renderPendingAnnotations();
+    summarizeDraftChanges();
 
     state.currentTask = {
       id: created.taskId,
@@ -1272,14 +1374,25 @@ async function submitFeedbackAndRegenerate() {
   }
 
   const draft = document.getElementById("draft-editor").value.trim();
-  const location = normalizeLocation(document.getElementById("feedback-location").value);
-  const reason = String(document.getElementById("feedback-reason").value || "").trim();
-  const comment = String(document.getElementById("feedback-comment").value || "").trim();
-  const selection = captureDraftSelection({ strict: false });
-
-  if (!reason && !comment) {
-    throw new Error("请至少填写“修改原因”或“批注说明”。");
+  const unsavedReason = String(document.getElementById("feedback-reason").value || "").trim();
+  const unsavedComment = String(document.getElementById("feedback-comment").value || "").trim();
+  const hasUnsavedInput =
+    normalizeLocation(document.getElementById("feedback-location").value) !== "全文" ||
+    Boolean(unsavedReason) ||
+    Boolean(unsavedComment);
+  const annotations = [...state.pendingAnnotations];
+  if (hasUnsavedInput) {
+    annotations.push(collectCurrentAnnotation({ strictSelection: false, persist: false }));
   }
+  if (!annotations.length) {
+    throw new Error("请至少加入一条本轮批注，或填写修改原因/批注说明。");
+  }
+
+  const primaryAnnotation = annotations[annotations.length - 1];
+  const location = primaryAnnotation.location;
+  const reason = primaryAnnotation.reason;
+  const comment = primaryAnnotation.comment;
+  const selection = primaryAnnotation.selection;
 
   await saveCurrentDraft(false);
 
@@ -1289,6 +1402,15 @@ async function submitFeedbackAndRegenerate() {
     `批注说明：${comment || "未填写"}`,
     `选区范围：${selection ? `${selection.start}-${selection.end}` : "未选择"}`,
     `选区原文：${selection?.text || "未选择"}`,
+    "",
+    "本轮批注清单：",
+    ...annotations.flatMap((item, index) => [
+      `${index + 1}. 位置：${item.location}`,
+      `   原因：${item.reason || "未填写"}`,
+      `   说明：${item.comment || "未填写"}`,
+      `   选区：${item.selection ? `${item.selection.start}-${item.selection.end}` : "未选择"}`,
+      `   原文：${item.selection?.text || "未选择"}`,
+    ]),
     "",
     "用户修改后正文：",
     draft,
@@ -1304,10 +1426,22 @@ async function submitFeedbackAndRegenerate() {
       rawFeedback: feedbackText,
       affectedParagraph: location,
       affectedSection: selection ? `正文偏移 ${selection.start}-${selection.end}` : location,
-      affectsStructure: /结构|顺序|层次/.test(`${location} ${reason} ${comment}`) ? "是" : "否",
+      affectsStructure: /结构|顺序|层次/.test(
+        annotations.map((item) => `${item.location} ${item.reason} ${item.comment}`).join(" "),
+      )
+        ? "是"
+        : "否",
       selectedText: selection?.text || "",
       selectionStart: selection?.start,
       selectionEnd: selection?.end,
+      annotations: annotations.map((item) => ({
+        location: item.location,
+        reason: item.reason,
+        comment: item.comment,
+        selectedText: item.selection?.text || "",
+        selectionStart: item.selection?.start,
+        selectionEnd: item.selection?.end,
+      })),
     }),
   });
 
@@ -1344,9 +1478,12 @@ async function submitFeedbackAndRegenerate() {
       feedbackPath: feedback.path,
       beforeDraft: draft,
       afterDraft: latestDraft,
-      reason,
-      comment,
-      selectedText: selection?.text || "",
+      reason: annotations.map((item) => item.reason).filter(Boolean).join("；"),
+      comment: annotations.map((item) => item.comment).filter(Boolean).join("；"),
+      selectedText: annotations
+        .map((item) => item.selection?.text || "")
+        .filter(Boolean)
+        .join("\n"),
     }),
   });
   const evaluation = evalResult?.evaluation || null;
@@ -1363,6 +1500,7 @@ async function submitFeedbackAndRegenerate() {
     comment,
     version: `v${state.feedbackHistory.length + 1}`,
     createdAt: new Date().toISOString(),
+    annotationCount: annotations.length,
     absorptionScore: evaluation?.score ?? null,
     absorptionLevel: evaluation?.level ?? "",
   };
@@ -1370,6 +1508,10 @@ async function submitFeedbackAndRegenerate() {
   state.latestFeedbackByLocation[location] = entry;
   saveFeedbackHistoryToStorage(state.currentTask.id);
   renderFeedbackHistory();
+  state.pendingAnnotations = [];
+  renderPendingAnnotations();
+  clearFeedbackInputs();
+  state.generatedDraftBaseline = latestDraft;
   renderWorkflowStageTracker();
   return evaluation;
 }
@@ -1477,6 +1619,38 @@ function bindEditorActions() {
 
   document.getElementById("draft-editor").addEventListener("mouseup", () => {
     captureDraftSelection({ strict: false });
+  });
+
+  document.getElementById("draft-editor").addEventListener("input", () => {
+    summarizeDraftChanges();
+  });
+
+  document.getElementById("add-annotation").addEventListener("click", () => {
+    try {
+      collectCurrentAnnotation({ strictSelection: true, persist: true });
+      setInfo("已加入本轮批注清单。");
+    } catch (error) {
+      setInfo(error.message, true);
+    }
+  });
+
+  document.getElementById("clear-annotations").addEventListener("click", () => {
+    state.pendingAnnotations = [];
+    renderPendingAnnotations();
+    setInfo("已清空本轮批注清单。");
+  });
+
+  document.getElementById("annotation-list").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action='remove-annotation']");
+    if (!button) {
+      return;
+    }
+    const index = Number(button.dataset.index);
+    if (!Number.isInteger(index) || index < 0) {
+      return;
+    }
+    state.pendingAnnotations.splice(index, 1);
+    renderPendingAnnotations();
   });
 
   document.getElementById("save-draft").addEventListener("click", async () => {

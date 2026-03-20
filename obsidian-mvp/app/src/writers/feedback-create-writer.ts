@@ -24,6 +24,14 @@ export async function createFeedback(input: {
   selectedText?: string;
   selectionStart?: number;
   selectionEnd?: number;
+  annotations?: Array<{
+    location?: string;
+    reason?: string;
+    comment?: string;
+    selectedText?: string;
+    selectionStart?: number;
+    selectionEnd?: number;
+  }>;
 }): Promise<{ path: string; feedbackId: string }> {
   const now = new Date().toISOString();
   const timestamp = now.replace(/[:.]/g, "-");
@@ -44,8 +52,20 @@ export async function createFeedback(input: {
     selected_text: input.selectedText ?? "",
     selection_start: typeof input.selectionStart === "number" ? input.selectionStart : null,
     selection_end: typeof input.selectionEnd === "number" ? input.selectionEnd : null,
+    annotation_count: Array.isArray(input.annotations) ? input.annotations.length : 0,
     created_at: now,
   };
+
+  const annotationLines = Array.isArray(input.annotations) && input.annotations.length
+    ? input.annotations.flatMap((item, index) => [
+        `- 批注 ${index + 1}`,
+        `  - 位置：${item.location ?? ""}`,
+        `  - 原因：${item.reason ?? ""}`,
+        `  - 说明：${item.comment ?? ""}`,
+        `  - 选区偏移：${typeof item.selectionStart === "number" && typeof item.selectionEnd === "number" ? `${item.selectionStart}-${item.selectionEnd}` : ""}`,
+        `  - 选区原文：${item.selectedText ?? ""}`,
+      ]).join("\n")
+    : "- ";
 
   const content = `# 原始反馈
 
@@ -63,6 +83,10 @@ ${input.rawFeedback.trim()}
 - 影响整体结构：${input.affectsStructure ?? ""}
 - 选区偏移：${typeof input.selectionStart === "number" && typeof input.selectionEnd === "number" ? `${input.selectionStart}-${input.selectionEnd}` : ""}
 - 选区原文：${input.selectedText ?? ""}
+
+# 本轮批注清单
+
+${annotationLines}
 
 # 系统建议提炼
 
