@@ -1506,7 +1506,15 @@ async function runTaskAction(input: {
       evidenceCards,
       decisionLog: withRoutingDecisionLog,
     });
-    return { analysis, diagnosis, evidenceCards, modelRouting: routeMetas, ruleDecisionLog: withRoutingDecisionLog };
+    return {
+      analysis,
+      diagnosis,
+      evidenceCards,
+      modelRouting: routeMetas,
+      ruleDecisionLog: withRoutingDecisionLog,
+      matchedRules,
+      matchedMaterials,
+    };
   }
 
   const outlineInput = {
@@ -1558,7 +1566,16 @@ async function runTaskAction(input: {
       evidenceCards,
       decisionLog: withRoutingDecisionLog,
     });
-    return { analysis, diagnosis, outline, evidenceCards, modelRouting: routeMetas, ruleDecisionLog: withRoutingDecisionLog };
+    return {
+      analysis,
+      diagnosis,
+      outline,
+      evidenceCards,
+      modelRouting: routeMetas,
+      ruleDecisionLog: withRoutingDecisionLog,
+      matchedRules,
+      matchedMaterials,
+    };
   }
 
   const draftResult = await executeWithModelRouting({
@@ -1618,7 +1635,17 @@ async function runTaskAction(input: {
     decisionLog: withRoutingDecisionLog,
   });
 
-  return { analysis, diagnosis, outline, draft, evidenceCards, modelRouting: routeMetas, ruleDecisionLog: withRoutingDecisionLog };
+  return {
+    analysis,
+    diagnosis,
+    outline,
+    draft,
+    evidenceCards,
+    modelRouting: routeMetas,
+    ruleDecisionLog: withRoutingDecisionLog,
+    matchedRules,
+    matchedMaterials,
+  };
 }
 
 async function createTaskFromRequest(input: {

@@ -12,6 +12,7 @@ const state = {
   pendingAnnotations: [],
   generatedDraftBaseline: "",
   latestFeedbackLearnResult: null,
+  currentGenerationContext: null,
   workflowDefinition: null,
   workflowEditorDefinition: null,
   oauthStartAttempt: 0,
@@ -829,6 +830,100 @@ function renderFeedbackLearnResult() {
   </div>`;
 }
 
+function buildGenerationContextFromPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const matchedRules = Array.isArray(payload.matchedRules) ? payload.matchedRules : [];
+  const matchedMaterials = Array.isArray(payload.matchedMaterials) ? payload.matchedMaterials : [];
+  const ruleDecisionLog = Array.isArray(payload.ruleDecisionLog) ? payload.ruleDecisionLog : [];
+  const modelRouting = Array.isArray(payload.modelRouting) ? payload.modelRouting : [];
+  const templateRule = matchedRules.find((item) => String(item?.source || "") === "template") || null;
+  const templateMaterial =
+    matchedMaterials.find(
+      (item) => Array.isArray(item?.tags) && item.tags.some((tag) => /template|模板/i.test(String(tag))),
+    ) ||
+    matchedMaterials.find((item) => /template|模板/i.test(String(item?.docType || ""))) ||
+    null;
+
+  return {
+    matchedRules,
+    matchedMaterials,
+    ruleDecisionLog,
+    modelRouting,
+    templateRule,
+    templateMaterial,
+  };
+}
+
+function renderTaskContextSummary() {
+  const container = document.getElementById("task-context-summary");
+  if (!container) {
+    return;
+  }
+
+  const context = state.currentGenerationContext;
+  if (!context) {
+    container.textContent = "生成后会显示本次命中的模板、规则和参考材料。";
+    return;
+  }
+
+  const templateTitle = context.templateMaterial?.title || context.templateRule?.title || "未启用模板";
+  const templateReason = context.templateRule?.reason || "本次按常规规则与材料匹配生成。";
+  const topRules = context.matchedRules
+    .filter((item) => String(item?.source || "") !== "template")
+    .slice(0, 4);
+  const topMaterials = context.matchedMaterials
+    .filter((item) => item?.id !== context.templateMaterial?.id)
+    .slice(0, 3);
+  const routeSummary = context.modelRouting.length
+    ? context.modelRouting.map((item) => `${item.stage}: ${item.usedModel || "-"}`)
+    : ["本次未记录模型路由"];
+  const decisionTail = context.ruleDecisionLog.slice(-3);
+
+  container.innerHTML = `<div class="context-summary">
+    <div class="context-summary-grid">
+      <div class="context-card">
+        <strong>模板继承</strong>
+        <div>${escapeHtml(templateTitle)}</div>
+        <div class="mini">${escapeHtml(templateReason)}</div>
+      </div>
+      <div class="context-card">
+        <strong>高优先规则</strong>
+        <ul>
+          ${
+            topRules.length
+              ? topRules.map((item) => `<li>${escapeHtml(item.title || "-")}</li>`).join("")
+              : "<li>本次未命中额外高优先规则</li>"
+          }
+        </ul>
+      </div>
+      <div class="context-card">
+        <strong>参考材料</strong>
+        <ul>
+          ${
+            topMaterials.length
+              ? topMaterials.map((item) => `<li>${escapeHtml(item.title || "-")}</li>`).join("")
+              : "<li>仅使用当前任务输入与模板</li>"
+          }
+        </ul>
+      </div>
+      <div class="context-card">
+        <strong>模型路由</strong>
+        <ul>${routeSummary.map((item) => `<li><code>${escapeHtml(item)}</code></li>`).join("")}</ul>
+      </div>
+    </div>
+    <div class="context-log">
+      ${
+        decisionTail.length
+          ? decisionTail.map((item) => `<div class="context-log-item">${escapeHtml(item)}</div>`).join("")
+          : `<div class="context-log-item">本次未记录额外裁决日志。</div>`
+      }
+    </div>
+  </div>`;
+}
+
 function collectCurrentAnnotation({ strictSelection = true, persist = false } = {}) {
   const location = normalizeLocation(document.getElementById("feedback-location").value);
   const reason = String(document.getElementById("feedback-reason").value || "").trim();
@@ -1282,6 +1377,7 @@ async function loadDashboard() {
   await loadWorkflowDefinitionEditor();
   updateWizardSummary();
   renderWorkflowStageTracker();
+  renderTaskContextSummary();
 }
 
 async function importBackgroundMaterialIfNeeded(formData) {
@@ -1371,11 +1467,13 @@ async function createAndRunTask() {
     state.generatedDraftBaseline = draftText;
     state.pendingAnnotations = [];
     state.latestFeedbackLearnResult = null;
+    state.currentGenerationContext = buildGenerationContextFromPayload(generated);
     state.feedbackSelection = null;
     updateSelectionPreview(null);
     renderPendingAnnotations();
     summarizeDraftChanges();
     renderFeedbackLearnResult();
+    renderTaskContextSummary();
 
     state.currentTask = {
       id: created.taskId,
@@ -1551,6 +1649,7 @@ async function submitFeedbackAndRegenerate() {
     state.currentWorkflowRun = generated.run;
   }
   document.getElementById("draft-editor").value = latestDraft;
+  state.currentGenerationContext = buildGenerationContextFromPayload(generated?.generated || generated);
 
   const entry = {
     id: feedback.feedbackId,
@@ -1574,6 +1673,7 @@ async function submitFeedbackAndRegenerate() {
   clearFeedbackInputs();
   state.generatedDraftBaseline = latestDraft;
   renderFeedbackLearnResult();
+  renderTaskContextSummary();
   renderWorkflowStageTracker();
   return evaluation;
 }
