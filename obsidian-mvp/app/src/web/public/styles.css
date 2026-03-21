@@ -827,6 +827,26 @@ legend {
   margin-bottom: 10px;
 }
 
+.result-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.result-summary-item {
+  border: 1px solid var(--border);
+  background: rgba(255, 252, 246, 0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.result-summary-label {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
 .result-viewer pre {
   margin: 0;
   white-space: pre-wrap;

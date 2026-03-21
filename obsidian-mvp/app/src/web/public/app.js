@@ -65,6 +65,32 @@ function setInfo(message, isError = false) {
   summary.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
 }
 
+function buildSettingsResultSummary(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  if ("roleLabel" in payload && "roleReason" in payload) {
+    const summaryItems = [
+      { label: "当前角色", value: payload.roleLabel || "-" },
+      { label: "当前定位", value: payload.isTemplate ? "正式模板" : payload.recommendTemplatePromotion ? "候选模板" : "普通材料" },
+      { label: "作用方式", value: payload.roleReason || "-" },
+    ];
+    return `<div class="result-summary-grid">
+      ${summaryItems
+        .map(
+          (item) => `<div class="result-summary-item">
+            <div class="result-summary-label">${escapeHtml(item.label)}</div>
+            <strong>${escapeHtml(item.value)}</strong>
+          </div>`,
+        )
+        .join("")}
+    </div>`;
+  }
+
+  return "";
+}
+
 function setSettingsResult(title, payload) {
   const container = document.getElementById("settings-result");
   if (!container) {
@@ -72,7 +98,8 @@ function setSettingsResult(title, payload) {
   }
 
   const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-  container.innerHTML = `<h3>${escapeHtml(title)}</h3><pre>${escapeHtml(content)}</pre>`;
+  const summary = buildSettingsResultSummary(payload);
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3>${summary}${summary ? "<div class=\"mini\">原始返回</div>" : ""}<pre>${escapeHtml(content)}</pre>`;
 }
 
 function setTaskBadge(text, isError = false) {
