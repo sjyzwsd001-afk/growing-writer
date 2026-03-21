@@ -505,6 +505,11 @@ function scoreTemplateForCurrentTask(template, signals) {
     reasons.push("已归类为模板");
   }
 
+  if (Boolean(template?.recommendTemplatePromotion)) {
+    score += 1.2;
+    reasons.push("系统建议升为模板");
+  }
+
   if (String(template?.quality || "") === "high") {
     score += 1;
     reasons.push("质量较高");
