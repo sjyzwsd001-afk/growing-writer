@@ -441,12 +441,29 @@ function renderCheckOptions(containerId, items, name) {
 
 function renderTemplateSelector(items) {
   const select = document.getElementById("template-selector");
+  const currentValue = String(select?.value || "").trim();
+  const signals = getCurrentWizardTemplateSignals();
+  const sortedItems = [...items].sort((a, b) => {
+    const scoreDelta = scoreTemplateForCurrentTask(b, signals).score - scoreTemplateForCurrentTask(a, signals).score;
+    if (scoreDelta !== 0) {
+      return scoreDelta;
+    }
+    if (Boolean(b.isTemplate) !== Boolean(a.isTemplate)) {
+      return Number(Boolean(b.isTemplate)) - Number(Boolean(a.isTemplate));
+    }
+    return String(a.title || "").localeCompare(String(b.title || ""), "zh-CN");
+  });
   select.innerHTML = `<option value="">不使用模板</option>`;
-  for (const item of items) {
+  for (const item of sortedItems) {
     const option = document.createElement("option");
     option.value = item.id;
-    option.textContent = `${item.title}${item.docType ? `（${item.docType}）` : ""}`;
+    const prefix = item.isTemplate ? "★" : "";
+    const suffix = item.roleLabel ? ` · ${item.roleLabel}` : "";
+    option.textContent = `${prefix}${item.title}${item.docType ? `（${item.docType}）` : ""}${suffix}`;
     select.append(option);
+  }
+  if (currentValue) {
+    select.value = currentValue;
   }
   renderTemplatePreview();
 }
@@ -2152,7 +2169,11 @@ function bindWizard() {
         }
       }
       if (["templateId", "templateMode", "docType", "background", "mustInclude", "specialRequirements"].includes(target.name || target.id)) {
-        renderTemplatePreview();
+        if ((target.name || target.id) === "templateId" || (target.name || target.id) === "templateMode") {
+          renderTemplatePreview();
+        } else {
+          renderTemplateSelector(Array.isArray(state.dashboard?.templates) ? state.dashboard.templates : []);
+        }
       }
     }
     if (state.wizardStep >= 6) {
