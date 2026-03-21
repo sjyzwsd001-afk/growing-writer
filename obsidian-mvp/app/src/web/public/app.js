@@ -512,6 +512,26 @@ function scoreTemplateForCurrentTask(template, signals) {
   return { score, reasons };
 }
 
+function renderTemplateQualityChips(template) {
+  const chips = [];
+  if (String(template?.roleLabel || "") === "模板") {
+    chips.push("高权重模板");
+  }
+  if (String(template?.quality || "") === "high") {
+    chips.push("高质量");
+  }
+  if (Number(template?.candidateRuleCount || 0) > 0) {
+    chips.push(`规则提示 ${Number(template.candidateRuleCount)} 条`);
+  }
+  if (Number(template?.structureBlockCount || 0) > 0) {
+    chips.push(`结构块 ${Number(template.structureBlockCount)} 段`);
+  }
+  if (!chips.length) {
+    return "";
+  }
+  return `<div class="inline-chips">${chips.map((item) => `<span class="mini-chip priority">${escapeHtml(item)}</span>`).join("")}</div>`;
+}
+
 function renderTemplatePreview() {
   const container = document.getElementById("template-preview");
   if (!container) {
@@ -542,6 +562,7 @@ function renderTemplatePreview() {
                 ({ item, recommendation }, index) => `
                 <div class="template-recommend-item">
                   <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
+                  ${renderTemplateQualityChips(item)}
                   <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))} / ${escapeHtml(
                     recommendation.reasons.join(" / "),
                   )}</div>
@@ -566,6 +587,7 @@ function renderTemplatePreview() {
 
   container.innerHTML = `
     <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
+    ${renderTemplateQualityChips(selected)}
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
     <div class="mini">推荐理由：${escapeHtml(recommendation.reasons.join(" / "))}（匹配度 ${escapeHtml(recommendation.score.toFixed(1))}）</div>
     <div class="mini">${escapeHtml(modeHint)}</div>
@@ -840,6 +862,7 @@ function renderSettingsLists() {
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
       <div class="mini">${escapeHtml(item.roleReason || "模板以高权重参与生成。")}</div>
+      ${renderTemplateQualityChips(item)}
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
