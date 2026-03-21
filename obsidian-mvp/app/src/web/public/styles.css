@@ -906,6 +906,16 @@ legend {
   gap: 4px;
 }
 
+.template-recommend-item.strong {
+  border-color: rgba(72, 143, 86, 0.26);
+  background: linear-gradient(180deg, #f6fff7 0%, #fffef9 100%);
+}
+
+.template-recommend-item.medium {
+  border-color: rgba(194, 120, 64, 0.24);
+  background: linear-gradient(180deg, #fffaf0 0%, #fffef9 100%);
+}
+
 .workflow-preview {
   margin-top: 14px;
   border: 1px solid var(--border);

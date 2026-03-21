@@ -559,14 +559,25 @@ function renderTemplatePreview() {
         recommended.length
           ? `<div class="template-recommend-list">${recommended
               .map(
-                ({ item, recommendation }, index) => `
-                <div class="template-recommend-item">
+                ({ item, recommendation }, index) => {
+                  const level =
+                    index === 0 || recommendation.score >= 5
+                      ? "strong"
+                      : recommendation.score >= 3
+                        ? "medium"
+                        : "light";
+                  const levelLabel =
+                    level === "strong" ? "优先推荐" : level === "medium" ? "可作为备选" : "仅作参考";
+                  return `
+                <div class="template-recommend-item ${level}">
                   <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
+                  <div class="mini"><span class="status-chip ${level === "strong" ? "status-confirmed" : level === "medium" ? "status-candidate" : "status-neutral"}">${levelLabel}</span></div>
                   ${renderTemplateQualityChips(item)}
                   <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))} / ${escapeHtml(
                     recommendation.reasons.join(" / "),
                   )}</div>
-                </div>`,
+                </div>`;
+                },
               )
               .join("")}</div>`
           : `<div class="mini">当前信息还不足以推荐更合适的模板，系统会按常规规则和材料生成。</div>`
@@ -576,6 +587,8 @@ function renderTemplatePreview() {
   }
 
   const recommendation = scoreTemplateForCurrentTask(selected, signals);
+  const recommendationLabel =
+    recommendation.score >= 5 ? "优先推荐" : recommendation.score >= 3 ? "可作为备选" : "仅作参考";
   const modeHint =
     templateMode === "strict"
       ? "强继承模板结构，适合格式很固定的材料。"
@@ -587,6 +600,7 @@ function renderTemplatePreview() {
 
   container.innerHTML = `
     <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
+    <div class="mini"><span class="status-chip ${recommendation.score >= 5 ? "status-confirmed" : recommendation.score >= 3 ? "status-candidate" : "status-neutral"}">${escapeHtml(recommendationLabel)}</span></div>
     ${renderTemplateQualityChips(selected)}
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
     <div class="mini">推荐理由：${escapeHtml(recommendation.reasons.join(" / "))}（匹配度 ${escapeHtml(recommendation.score.toFixed(1))}）</div>
