@@ -665,8 +665,8 @@ function renderTemplatePreview() {
   if (!selected) {
     const recommended = rankedTemplates.filter((entry) => entry.recommendation.score > 0).slice(0, 3);
     container.innerHTML = `
-      <div>未选择模板。本次会主要依据历史材料、规则库和当前背景生成。</div>
-      <div class="mini">如果你有特别固定的结构或语气，建议在这一步选择模板。</div>
+      <div>当前不使用模板。系统照样会生成，只是结构会更灵活，更多依赖历史材料、规则库和本次背景。</div>
+      <div class="mini">如果你希望它更像你过去常用的写法、排版顺序或套话风格，建议在这里选一个模板。</div>
       ${
         recommended.length
           ? `<div class="template-recommend-list">${recommended
@@ -703,10 +703,10 @@ function renderTemplatePreview() {
     recommendation.score >= 5 ? "优先推荐" : recommendation.score >= 3 ? "可作为备选" : "仅作参考";
   const modeHint =
     templateMode === "strict"
-      ? "强继承模板结构，适合格式很固定的材料。"
+      ? "会尽量按模板原有顺序和结构来写，适合格式非常固定的材料。"
       : templateMode === "light"
-        ? "主要借模板语气与风格，结构会更自由。"
-        : "兼顾模板骨架与本次事实，适合大多数情况。";
+        ? "主要借模板的语气和表达方式，结构会更自由。"
+        : "会保留模板骨架，同时结合这次的新事实，适合大多数情况。";
   const structure = Array.isArray(selected.structureSummary) ? selected.structureSummary.slice(0, 3) : [];
   const phrases = Array.isArray(selected.usefulPhrases) ? selected.usefulPhrases.slice(0, 2) : [];
 
@@ -718,7 +718,7 @@ function renderTemplatePreview() {
     <div class="mini">${escapeHtml(getTemplateKindHint(selected))}</div>
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
     <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
-    <div class="mini">${escapeHtml(modeHint)}</div>
+    <div class="mini">当前模式：${escapeHtml(modeHint)}</div>
     <div class="mini">结构提示：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
     <div class="mini">表达参考：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
   `;
