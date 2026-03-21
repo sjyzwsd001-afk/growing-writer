@@ -2560,24 +2560,28 @@ function bindMaterialImport() {
     const combined = `${title} ${docType} ${source} ${tags}`.toLowerCase();
 
     let suggestedMode = "normal";
-    let reason = "当前更像一般历史材料，适合先进入材料库供后续检索和学习。";
+    let reason = "这份内容更适合先作为历史材料保存。";
+    let usage = "系统后续会主要从中提炼表达习惯、结构参考和常用写法。";
 
     if (/模板|范式|框架|标准|固定结构|固定格式|套话|通用版|v\d+/i.test(combined)) {
       suggestedMode = "template";
-      reason = "标题或标签显示它更像固定结构/高复用模板，适合高权重参与生成。";
+      reason = "标题、标签或命名方式显示它更像一份可反复套用的固定模板。";
+      usage = "导入后会进入模板库，并在新建写作时以更高权重影响结构和语气。";
     } else if (/最佳稿|优秀稿|成熟稿|历史最佳|定稿/i.test(combined)) {
       suggestedMode = "normal";
-      reason = "这更像高质量历史范文，适合沉淀结构和表达习惯，但不一定要作为硬模板。";
+      reason = "这更像一份成熟定稿，适合学习写法，但不一定需要当成硬模板。";
+      usage = "导入后会优先用于沉淀你的结构习惯、表达偏好和可复用规则。";
     }
 
     const currentMode = String(modeSelect.value || "normal");
     hintContainer.innerHTML = `
-      <div><strong>建议模式：${escapeHtml(suggestedMode === "template" ? "模板（高权重）" : "历史材料")}</strong></div>
+      <div><strong>建议导入为：${escapeHtml(suggestedMode === "template" ? "模板（高权重）" : "历史材料")}</strong></div>
       <div class="mini">${escapeHtml(reason)}</div>
+      <div class="mini">${escapeHtml(usage)}</div>
       ${
         currentMode !== suggestedMode
-          ? `<div class="editor-actions"><button type="button" id="apply-material-mode-hint" class="mini-btn">按建议切换</button></div>`
-          : `<div class="mini">当前选择已与建议一致。</div>`
+          ? `<div class="editor-actions"><button type="button" id="apply-material-mode-hint" class="mini-btn">按这个建议切换</button></div>`
+          : `<div class="mini">你当前的选择已经和建议一致。</div>`
       }
     `;
 
