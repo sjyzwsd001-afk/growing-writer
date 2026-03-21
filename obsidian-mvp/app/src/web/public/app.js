@@ -122,6 +122,20 @@ function setSettingsResult(title, payload) {
     }`;
 }
 
+function setSettingsResultPreview(title, summaryHtml, rawText = "") {
+  const container = document.getElementById("settings-result");
+  if (!container) {
+    return;
+  }
+
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3>
+    ${summaryHtml}
+    <details class="raw-result-details">
+      <summary>查看原文</summary>
+      <pre>${escapeHtml(rawText)}</pre>
+    </details>`;
+}
+
 function setTaskBadge(text, isError = false) {
   const badge = document.getElementById("task-badge");
   if (!badge) {
@@ -237,6 +251,139 @@ function parseTopLevelSections(raw) {
     heading: match[1].trim(),
     body: match[2].trim(),
   }));
+}
+
+function parseFrontmatter(raw) {
+  const match = String(raw || "").match(/^---\n([\s\S]*?)\n---/);
+  if (!match) {
+    return {};
+  }
+
+  return match[1]
+    .split(/\r?\n/)
+    .reduce((acc, line) => {
+      const item = line.match(/^([A-Za-z0-9_]+):\s*(.+)$/);
+      if (!item) {
+        return acc;
+      }
+      acc[item[1]] = item[2].trim();
+      return acc;
+    }, {});
+}
+
+function takePreviewLines(text, limit = 3) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^#+\s*/, "")
+        .replace(/^[-*]\s*/, "")
+        .replace(/^>\s*/, ""),
+    )
+    .filter((line) => line && !/^待补充|待人工确认/.test(line))
+    .slice(0, limit);
+}
+
+function cleanMetaValue(value) {
+  return normalizeTemplateUiCopy(
+    String(value || "")
+      .replace(/^['"]+|['"]+$/g, "")
+      .replace(/^template$/i, "正式模板")
+      .replace(/^history$/i, "历史材料")
+      .replace(/^high$/i, "高质量")
+      .replace(/^medium$/i, "中等")
+      .replace(/^low$/i, "待提升"),
+  );
+}
+
+function buildPreviewGrid(items) {
+  return `<div class="result-summary-grid">
+    ${items
+      .filter((item) => item && item.value)
+      .map(
+        (item) => `<div class="result-summary-item">
+          <div class="result-summary-label">${escapeHtml(item.label)}</div>
+          <strong>${escapeHtml(item.value)}</strong>
+        </div>`,
+      )
+      .join("")}
+  </div>`;
+}
+
+function buildDocumentPreview(title, raw, kind) {
+  const frontmatter = parseFrontmatter(raw);
+  const sections = parseTopLevelSections(raw);
+  const getSection = (heading) => sections.find((item) => item.heading === heading)?.body || "";
+  const baseMeta = [
+    { label: "标题", value: frontmatter.title || title || "未命名" },
+    { label: "类型", value: frontmatter.doc_type || frontmatter.feedback_type || kind },
+    { label: "更新时间", value: frontmatter.updated_at || frontmatter.created_at || "-" },
+  ];
+
+  if (kind === "material") {
+    const bodyPreview = takePreviewLines(getSection("原文内容") || getSection("文档信息"), 4).join(" / ");
+    const structurePreview = takePreviewLines(getSection("结构拆解"), 3).join(" / ");
+    return `
+      ${buildPreviewGrid([
+        ...baseMeta,
+        { label: "定位", value: cleanMetaValue(frontmatter.source || "普通材料") },
+        { label: "质量", value: cleanMetaValue(frontmatter.quality || "-") },
+      ])}
+      <div class="result-summary-item"><div class="result-summary-label">内容摘要</div><strong>${escapeHtml(bodyPreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">结构线索</div><strong>${escapeHtml(structurePreview || "暂无结构摘要")}</strong></div>
+    `;
+  }
+
+  if (kind === "rule") {
+    const contentPreview = takePreviewLines(getSection("规则内容") || getSection("内容") || raw, 4).join(" / ");
+    return `
+      ${buildPreviewGrid([
+        ...baseMeta,
+        { label: "适用范围", value: cleanMetaValue(frontmatter.scope || "通用") },
+        { label: "状态", value: cleanMetaValue(frontmatter.status || "-") },
+      ])}
+      <div class="result-summary-item"><div class="result-summary-label">规则说明</div><strong>${escapeHtml(contentPreview || "暂无摘要")}</strong></div>
+    `;
+  }
+
+  if (kind === "feedback") {
+    const changePreview = takePreviewLines(getSection("修改原因") || getSection("批注说明") || getSection("内容") || raw, 4).join(" / ");
+    return `
+      ${buildPreviewGrid([
+        ...baseMeta,
+        { label: "修改位置", value: cleanMetaValue(frontmatter.affected_paragraph || "全文") },
+        { label: "建议类型", value: frontmatter.is_reusable_rule === "true" ? "建议入规则" : "本次修改" },
+      ])}
+      <div class="result-summary-item"><div class="result-summary-label">本次反馈重点</div><strong>${escapeHtml(changePreview || "暂无摘要")}</strong></div>
+    `;
+  }
+
+  if (kind === "profile") {
+    const overview = [
+      getSection("概览"),
+      getSection("语气"),
+      getSection("结构"),
+      getSection("高优先偏好"),
+    ]
+      .map((item) => takePreviewLines(item, 1).join(""))
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(" / ");
+    return `
+      ${buildPreviewGrid([
+        ...baseMeta,
+        { label: "生成方式", value: cleanMetaValue(frontmatter.generated_by || "-") },
+        { label: "版本", value: cleanMetaValue(frontmatter.version || "1") },
+      ])}
+      <div class="result-summary-item"><div class="result-summary-label">画像摘要</div><strong>${escapeHtml(overview || "暂无摘要")}</strong></div>
+    `;
+  }
+
+  return `
+    ${buildPreviewGrid(baseMeta)}
+    <div class="result-summary-item"><div class="result-summary-label">内容摘要</div><strong>${escapeHtml(takePreviewLines(raw, 4).join(" / ") || "暂无摘要")}</strong></div>
+  `;
 }
 
 async function getTaskDraftFromFile(path) {
@@ -3038,7 +3185,15 @@ async function runSettingsAction(action, button) {
 
   if (action === "view-material" || action === "view-rule" || action === "view-profile" || action === "view-feedback") {
     const data = await api(`/api/document?path=${encodeURIComponent(path)}`);
-    setSettingsResult(`${title || "文档"} - 内容预览`, data.raw);
+    const kind =
+      action === "view-material"
+        ? "material"
+        : action === "view-rule"
+          ? "rule"
+          : action === "view-profile"
+            ? "profile"
+            : "feedback";
+    setSettingsResultPreview(`${title || "文档"} - 内容预览`, buildDocumentPreview(title, data.raw, kind), data.raw);
     return;
   }
 
