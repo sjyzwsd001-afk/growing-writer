@@ -99,7 +99,16 @@ function setSettingsResult(title, payload) {
 
   const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   const summary = buildSettingsResultSummary(payload);
-  container.innerHTML = `<h3>${escapeHtml(title)}</h3>${summary}${summary ? "<div class=\"mini\">原始返回</div>" : ""}<pre>${escapeHtml(content)}</pre>`;
+  container.innerHTML = `<h3>${escapeHtml(title)}</h3>
+    ${summary}
+    ${
+      summary
+        ? `<details class="raw-result-details">
+            <summary>查看原始返回</summary>
+            <pre>${escapeHtml(content)}</pre>
+          </details>`
+        : `<pre>${escapeHtml(content)}</pre>`
+    }`;
 }
 
 function setTaskBadge(text, isError = false) {

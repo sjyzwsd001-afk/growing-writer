@@ -1111,6 +1111,20 @@ legend {
   margin: 0 12px 12px;
 }
 
+.raw-result-details {
+  margin-top: 10px;
+}
+
+.raw-result-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.raw-result-details pre {
+  margin-top: 8px;
+}
+
 @media (max-width: 980px) {
   .grid.two {
     grid-template-columns: 1fr;
