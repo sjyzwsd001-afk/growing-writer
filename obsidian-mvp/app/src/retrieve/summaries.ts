@@ -1,10 +1,30 @@
 import type { EvidenceCard, Material, MaterialSummary, Task } from "../types/domain.js";
 
-function takeLines(content: string, count: number): string[] {
+function normalizeSummarySource(content: string): string {
+  const rawContentSection = content.match(/# 原文内容\s*\n+([\s\S]*?)(?=\n# |\Z)/)?.[1]?.trim();
+  if (rawContentSection) {
+    return rawContentSection;
+  }
   return content
+    .replace(/^---[\s\S]*?---\s*/m, "")
+    .replace(/^#\s+文档信息[\s\S]*?(?=^#\s+|\Z)/m, "")
+    .trim();
+}
+
+function shouldIgnoreSummaryLine(line: string): boolean {
+  return (
+    !line ||
+    /^#\s+文档信息/.test(line) ||
+    /^-\s*(标题|类型|来源|质量|标签|面向对象|场景)：/.test(line) ||
+    /待补充|待人工确认/.test(line)
+  );
+}
+
+function takeLines(content: string, count: number): string[] {
+  return normalizeSummarySource(content)
     .split("\n")
     .map((line) => line.trim())
-    .filter(Boolean)
+    .filter((line) => !shouldIgnoreSummaryLine(line))
     .slice(0, count);
 }
 
