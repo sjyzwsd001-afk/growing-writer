@@ -919,7 +919,15 @@ function renderSettingsLists() {
     </div>`;
   });
 
-  renderSimpleList("settings-templates", data.templates || [], (item) => {
+  const sortedTemplates = [...(data.templates || [])].sort((a, b) => {
+    return (
+      Number(b.isTemplate) - Number(a.isTemplate) ||
+      Number(b.candidateRuleCount || 0) - Number(a.candidateRuleCount || 0) ||
+      Number(b.structureBlockCount || 0) - Number(a.structureBlockCount || 0) ||
+      String(a.title || "").localeCompare(String(b.title || ""), "zh-CN")
+    );
+  });
+  renderSimpleList("settings-templates", sortedTemplates, (item) => {
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
