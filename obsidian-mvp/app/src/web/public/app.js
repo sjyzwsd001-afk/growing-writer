@@ -438,7 +438,8 @@ function renderCheckOptions(containerId, items, name) {
     label.className = "check-item";
     const hintChips = [
       item.recommendTemplatePromotion ? "建议升模板" : "",
-      String(item.roleLabel || "") === "模板" ? "模板候选" : "",
+      item.isTemplate ? "真实模板" : "",
+      !item.isTemplate && String(item.roleLabel || "") === "模板" ? "候选模板" : "",
       Number(item.candidateRuleCount || 0) > 0 ? `候选规则 ${Number(item.candidateRuleCount)} 条` : "",
     ].filter(Boolean);
     label.innerHTML = `
@@ -472,7 +473,7 @@ function renderTemplateSelector(items) {
     const option = document.createElement("option");
     option.value = item.id;
     const prefix = item.isTemplate ? "★" : "";
-    const suffix = item.roleLabel ? ` · ${item.roleLabel}` : "";
+    const suffix = item.isTemplate ? " · 真实模板" : " · 候选模板";
     option.textContent = `${prefix}${item.title}${item.docType ? `（${item.docType}）` : ""}${suffix}`;
     select.append(option);
   }
@@ -548,10 +549,16 @@ function scoreTemplateForCurrentTask(template, signals) {
   return { score, reasons };
 }
 
+function getTemplateKindLabel(item) {
+  return item?.isTemplate ? "真实模板" : "候选模板";
+}
+
 function renderTemplateQualityChips(template) {
   const chips = [];
-  if (String(template?.roleLabel || "") === "模板") {
+  if (Boolean(template?.isTemplate) || String(template?.roleLabel || "") === "模板") {
     chips.push("高权重模板");
+  } else if (Boolean(template?.recommendTemplatePromotion) || String(template?.quality || "") === "high") {
+    chips.push("候选模板");
   }
   if (String(template?.quality || "") === "high") {
     chips.push("高质量");
@@ -634,7 +641,7 @@ function renderTemplatePreview() {
                   return `
                 <div class="template-recommend-item ${level}">
                   <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
-                  <div class="mini"><span class="status-chip ${level === "strong" ? "status-confirmed" : level === "medium" ? "status-candidate" : "status-neutral"}">${levelLabel}</span></div>
+                  <div class="mini"><span class="status-chip ${level === "strong" ? "status-confirmed" : level === "medium" ? "status-candidate" : "status-neutral"}">${levelLabel}</span> / ${escapeHtml(getTemplateKindLabel(item))}</div>
                   ${renderTemplateQualityChips(item)}
                   <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))} / ${escapeHtml(
                     recommendation.reasons.join(" / "),
@@ -663,7 +670,7 @@ function renderTemplatePreview() {
 
   container.innerHTML = `
     <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
-    <div class="mini"><span class="status-chip ${recommendation.score >= 5 ? "status-confirmed" : recommendation.score >= 3 ? "status-candidate" : "status-neutral"}">${escapeHtml(recommendationLabel)}</span></div>
+    <div class="mini"><span class="status-chip ${recommendation.score >= 5 ? "status-confirmed" : recommendation.score >= 3 ? "status-candidate" : "status-neutral"}">${escapeHtml(recommendationLabel)}</span> / ${escapeHtml(getTemplateKindLabel(selected))}</div>
     ${renderTemplateQualityChips(selected)}
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
     <div class="mini">推荐理由：${escapeHtml(recommendation.reasons.join(" / "))}（匹配度 ${escapeHtml(recommendation.score.toFixed(1))}）</div>
@@ -921,7 +928,9 @@ function renderProfileList(containerId, items) {
 
 function renderSettingsLists() {
   const data = state.dashboard || {};
-  const sortedMaterials = [...(data.materials || [])].sort((a, b) => {
+  const sortedMaterials = [...(data.materials || [])]
+    .filter((item) => !item.isTemplate)
+    .sort((a, b) => {
     const promotionDelta = Number(Boolean(b.recommendTemplatePromotion)) - Number(Boolean(a.recommendTemplatePromotion));
     if (promotionDelta !== 0) {
       return promotionDelta;
@@ -934,7 +943,7 @@ function renderSettingsLists() {
       Number(b.candidateRuleCount || 0) - Number(a.candidateRuleCount || 0) ||
       Number(b.structureBlockCount || 0) - Number(a.structureBlockCount || 0)
     );
-  });
+    });
   renderSimpleList("settings-materials", sortedMaterials, (item) => {
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
@@ -1869,7 +1878,11 @@ async function loadDashboard() {
   updateTopStatus(data);
   hydrateLlmSettings(data);
   renderTemplateSelector(data.templateCandidates || data.templates || []);
-  renderCheckOptions("wizard-material-options", data.materials || [], "sourceMaterialIds");
+  renderCheckOptions(
+    "wizard-material-options",
+    (data.materials || []).filter((item) => !item.isTemplate),
+    "sourceMaterialIds",
+  );
   renderSettingsLists();
   await loadWorkflowDefinitionEditor();
   updateWizardSummary();
