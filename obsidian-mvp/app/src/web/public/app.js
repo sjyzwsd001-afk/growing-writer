@@ -57,6 +57,17 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function normalizeTemplateUiCopy(value) {
+  return String(value || "")
+    .replaceAll("会以高权重参与", "会优先参与")
+    .replaceAll("会以高优先级参与", "会优先参与")
+    .replaceAll("高权重", "优先")
+    .replaceAll("高优先级", "优先")
+    .replaceAll("真实模板", "正式模板")
+    .replaceAll("建议升模板", "建议转为模板")
+    .replaceAll("模板候选", "候选模板");
+}
+
 function setInfo(message, isError = false) {
   const summary = document.getElementById("wizard-summary");
   if (!summary) {
@@ -73,7 +84,7 @@ function buildSettingsResultSummary(payload) {
   if ("roleLabel" in payload && "roleReason" in payload) {
     const summaryItems = [
       { label: "当前角色", value: payload.roleLabel || "-" },
-      { label: "当前定位", value: payload.isTemplate ? "正式模板" : payload.recommendTemplatePromotion ? "候选模板" : "普通材料" },
+      { label: "当前定位", value: payload.isTemplate ? "正式模板" : payload.recommendTemplatePromotion ? "建议转为模板" : "普通材料" },
       { label: "作用方式", value: payload.roleReason || "-" },
     ];
     return `<div class="result-summary-grid">
@@ -473,8 +484,8 @@ function renderCheckOptions(containerId, items, name) {
     const label = document.createElement("label");
     label.className = "check-item";
     const hintChips = [
-      item.recommendTemplatePromotion ? "建议升模板" : "",
-      item.isTemplate ? "真实模板" : "",
+      item.recommendTemplatePromotion ? "建议转为模板" : "",
+      item.isTemplate ? "正式模板" : "",
       !item.isTemplate && String(item.roleLabel || "") === "模板" ? "候选模板" : "",
       Number(item.candidateRuleCount || 0) > 0 ? `候选规则 ${Number(item.candidateRuleCount)} 条` : "",
     ].filter(Boolean);
@@ -509,7 +520,7 @@ function renderTemplateSelector(items) {
     const option = document.createElement("option");
     option.value = item.id;
     const prefix = item.isTemplate ? "★" : "";
-    const suffix = item.isTemplate ? " · 真实模板" : " · 候选模板";
+    const suffix = item.isTemplate ? " · 正式模板" : " · 候选模板";
     option.textContent = `${prefix}${item.title}${item.docType ? `（${item.docType}）` : ""}${suffix}`;
     select.append(option);
   }
@@ -586,14 +597,14 @@ function scoreTemplateForCurrentTask(template, signals) {
 }
 
 function getTemplateKindLabel(item) {
-  return item?.isTemplate ? "真实模板" : "候选模板";
+  return item?.isTemplate ? "正式模板" : "候选模板";
 }
 
 function getTemplateKindHint(item) {
   if (item?.isTemplate) {
-    return "已正式进入模板库，会以高权重参与结构和语气约束。";
+    return "已正式进入模板库，生成时会优先参考它的结构和语气。";
   }
-  return "当前仍是候选模板，会参考其结构与表达；如果后续多次复用稳定，建议先在设置页转为正式模板。";
+  return "当前仍是候选模板，系统会参考它的结构与表达；如果后续多次复用稳定，建议在设置页转成正式模板。";
 }
 
 function renderRecommendationReasonChips(recommendation) {
@@ -607,7 +618,7 @@ function renderRecommendationReasonChips(recommendation) {
 function renderTemplateQualityChips(template) {
   const chips = [];
   if (Boolean(template?.isTemplate) || String(template?.roleLabel || "") === "模板") {
-    chips.push("高权重模板");
+    chips.push("正式模板");
   } else if (Boolean(template?.recommendTemplatePromotion) || String(template?.quality || "") === "high") {
     chips.push("候选模板");
   }
@@ -629,10 +640,10 @@ function renderTemplateQualityChips(template) {
 function renderMaterialQualityChips(item) {
   const chips = [];
   if (Boolean(item?.recommendTemplatePromotion)) {
-    chips.push("建议升模板");
+    chips.push("建议转为模板");
   }
   if (String(item?.roleLabel || "") === "模板") {
-    chips.push("模板候选");
+    chips.push("候选模板");
   }
   if (String(item?.quality || "") === "high") {
     chips.push("高质量");
@@ -1042,7 +1053,7 @@ function renderSettingsLists() {
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
-      <div class="mini">${escapeHtml(item.roleReason || "模板以高权重参与生成。")}</div>
+      <div class="mini">${escapeHtml(normalizeTemplateUiCopy(item.roleReason || "正式模板会优先参与生成。"))}</div>
       ${renderTemplateQualityChips(item)}
     </div>
     <div class="row-actions">
@@ -2594,7 +2605,7 @@ function bindMaterialImport() {
     if (/模板|范式|框架|标准|固定结构|固定格式|套话|通用版|v\d+/i.test(combined)) {
       suggestedMode = "template";
       reason = "标题、标签或命名方式显示它更像一份可反复套用的固定模板。";
-      usage = "导入后会进入模板库，并在新建写作时以更高权重影响结构和语气。";
+      usage = "导入后会进入模板库，并在新建写作时优先影响结构和语气。";
     } else if (/最佳稿|优秀稿|成熟稿|历史最佳|定稿/i.test(combined)) {
       suggestedMode = "normal";
       reason = "这更像一份成熟定稿，适合学习写法，但不一定需要当成硬模板。";
@@ -2603,7 +2614,7 @@ function bindMaterialImport() {
 
     const currentMode = String(modeSelect.value || "normal");
     hintContainer.innerHTML = `
-      <div><strong>建议导入为：${escapeHtml(suggestedMode === "template" ? "模板（高优先级）" : "历史材料")}</strong></div>
+      <div><strong>建议导入为：${escapeHtml(suggestedMode === "template" ? "正式模板" : "历史材料")}</strong></div>
       <div class="mini">${escapeHtml(reason)}</div>
       <div class="mini">${escapeHtml(usage)}</div>
       ${
@@ -2618,7 +2629,7 @@ function bindMaterialImport() {
       applyButton.addEventListener("click", () => {
         modeSelect.value = suggestedMode;
         analyzeMaterialImportMode();
-        setInfo(`已切换为${suggestedMode === "template" ? "模板（高优先级）" : "历史材料"}模式。`);
+        setInfo(`已切换为${suggestedMode === "template" ? "正式模板" : "历史材料"}模式。`);
       });
     }
   }
@@ -2668,7 +2679,7 @@ function bindMaterialImport() {
       });
       form.reset();
       await loadDashboard();
-      setInfo(mode === "template" ? "模板材料已导入（高优先级）。" : "历史材料导入完成。");
+      setInfo(mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
       toggleView("settings");
     } catch (error) {
       setInfo(`材料导入失败：${error.message}`, true);
@@ -3080,7 +3091,7 @@ async function runSettingsAction(action, button) {
     });
     setSettingsResult(`${title || "材料"} - 角色已更新`, result);
     const statusText = result.isTemplate
-      ? "已进入模板库，会以高权重参与生成。"
+      ? "已进入模板库，后续生成会优先参考它。"
       : result.recommendTemplatePromotion
         ? "已转为历史范文，当前仍会作为候选模板参与推荐。"
         : `已转为${result.roleLabel || "历史材料"}。`;
