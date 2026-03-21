@@ -255,6 +255,13 @@ function parseTopLevelSections(raw) {
   }));
 }
 
+function getMarkdownSection(raw, heading) {
+  const text = String(raw || "").replace(/^---[\s\S]*?---\n?/, "").trim();
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = text.match(new RegExp(`^#{1,6}\\s+${escapedHeading}\\s*\\n([\\s\\S]*?)(?=^#{1,6}\\s+|\\Z)`, "m"));
+  return match?.[1]?.trim() || "";
+}
+
 function parseFrontmatter(raw) {
   const match = String(raw || "").match(/^---\n([\s\S]*?)\n---/);
   if (!match) {
@@ -327,8 +334,8 @@ function buildDocumentPreview(title, raw, kind) {
   const getSection = (heading) => sections.find((item) => item.heading === heading)?.body || "";
   const baseMeta = [
     { label: "标题", value: frontmatter.title || title || "未命名" },
-    { label: "类型", value: frontmatter.doc_type || frontmatter.feedback_type || kind },
-    { label: "更新时间", value: frontmatter.updated_at || frontmatter.created_at || "-" },
+    { label: "类型", value: cleanMetaValue(frontmatter.doc_type || frontmatter.feedback_type || kind) },
+    { label: "更新时间", value: cleanMetaValue(frontmatter.updated_at || frontmatter.created_at || "-") },
   ];
 
   if (kind === "material") {
@@ -378,18 +385,20 @@ function buildDocumentPreview(title, raw, kind) {
   }
 
   if (kind === "profile") {
-    const tonePreview = takePreviewLines(getSection("语气") || getSection("风格观察"), 2).join(" / ");
-    const structurePreview = takePreviewLines(getSection("结构") || getSection("主体结构"), 2).join(" / ");
-    const preferencePreview = takePreviewLines(getSection("高优先偏好") || getSection("稳定规则摘要"), 2).join(" / ");
+    const stylePreview = takePreviewLines(getMarkdownSection(raw, "总体风格"), 3).join(" / ");
+    const structurePreview = takePreviewLines(getMarkdownSection(raw, "结构习惯"), 3).join(" / ");
+    const preferencePreview = takePreviewLines(getMarkdownSection(raw, "高优先级偏好") || getMarkdownSection(raw, "当前稳定规则摘要"), 2).join(" / ");
+    const pendingPreview = takePreviewLines(getMarkdownSection(raw, "待确认观察"), 2).join(" / ");
     return `
       ${buildPreviewGrid([
         ...baseMeta,
         { label: "生成方式", value: cleanMetaValue(frontmatter.generated_by || "-") },
         { label: "版本", value: cleanMetaValue(frontmatter.version || "1") },
       ])}
-      <div class="result-summary-item"><div class="result-summary-label">语气总结</div><strong>${escapeHtml(tonePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">总体风格</div><strong>${escapeHtml(stylePreview || "暂无摘要")}</strong></div>
       <div class="result-summary-item"><div class="result-summary-label">结构习惯</div><strong>${escapeHtml(structurePreview || "暂无摘要")}</strong></div>
-      <div class="result-summary-item"><div class="result-summary-label">稳定偏好</div><strong>${escapeHtml(preferencePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">高优先级偏好</div><strong>${escapeHtml(preferencePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">当前待确认观察</div><strong>${escapeHtml(pendingPreview || "暂无")}</strong></div>
     `;
   }
 
