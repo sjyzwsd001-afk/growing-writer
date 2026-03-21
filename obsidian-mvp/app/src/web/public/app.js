@@ -553,6 +553,13 @@ function getTemplateKindLabel(item) {
   return item?.isTemplate ? "真实模板" : "候选模板";
 }
 
+function getTemplateKindHint(item) {
+  if (item?.isTemplate) {
+    return "已正式进入模板库，会以高权重参与结构和语气约束。";
+  }
+  return "当前仍是候选模板，会参考其结构与表达；如果后续多次复用稳定，建议先在设置页转为正式模板。";
+}
+
 function renderTemplateQualityChips(template) {
   const chips = [];
   if (Boolean(template?.isTemplate) || String(template?.roleLabel || "") === "模板") {
@@ -643,6 +650,7 @@ function renderTemplatePreview() {
                   <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
                   <div class="mini"><span class="status-chip ${level === "strong" ? "status-confirmed" : level === "medium" ? "status-candidate" : "status-neutral"}">${levelLabel}</span> / ${escapeHtml(getTemplateKindLabel(item))}</div>
                   ${renderTemplateQualityChips(item)}
+                  <div class="mini">${escapeHtml(getTemplateKindHint(item))}</div>
                   <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))} / ${escapeHtml(
                     recommendation.reasons.join(" / "),
                   )}</div>
@@ -672,6 +680,7 @@ function renderTemplatePreview() {
     <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
     <div class="mini"><span class="status-chip ${recommendation.score >= 5 ? "status-confirmed" : recommendation.score >= 3 ? "status-candidate" : "status-neutral"}">${escapeHtml(recommendationLabel)}</span> / ${escapeHtml(getTemplateKindLabel(selected))}</div>
     ${renderTemplateQualityChips(selected)}
+    <div class="mini">${escapeHtml(getTemplateKindHint(selected))}</div>
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
     <div class="mini">推荐理由：${escapeHtml(recommendation.reasons.join(" / "))}（匹配度 ${escapeHtml(recommendation.score.toFixed(1))}）</div>
     <div class="mini">${escapeHtml(modeHint)}</div>

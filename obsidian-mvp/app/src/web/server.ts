@@ -160,6 +160,21 @@ function normalizeTagList(input: unknown): string[] {
   return [];
 }
 
+function parseMaterialSourceRole(source: string): "template" | "history" | "" {
+  const normalized = source.trim().toLowerCase();
+  if (normalized === "template" || normalized.startsWith("template:")) {
+    return "template";
+  }
+  if (normalized === "history" || normalized.startsWith("history:")) {
+    return "history";
+  }
+  return "";
+}
+
+function stripMaterialSourceRole(source: string): string {
+  return source.replace(/^(template|history)[:：]\s*/i, "").trim();
+}
+
 function isTemplateMaterial(input: { tags?: string[]; source?: string; docType?: string }): boolean {
   const tags = (input.tags ?? []).map((item) => item.toLowerCase());
   if (tags.includes("template") || tags.includes("模板")) {
@@ -168,7 +183,8 @@ function isTemplateMaterial(input: { tags?: string[]; source?: string; docType?:
 
   const source = (input.source ?? "").toLowerCase();
   const docType = (input.docType ?? "").toLowerCase();
-  return source.includes("template") || source.includes("模板") || docType.includes("模板");
+  const sourceRole = parseMaterialSourceRole(source);
+  return sourceRole === "template" || (sourceRole === "" && (source.includes("template") || source.includes("模板"))) || docType.includes("模板");
 }
 
 function classifyMaterialRole(input: {
@@ -234,11 +250,8 @@ async function updateMaterialRole(input: {
   const now = new Date().toISOString();
   const currentSource = typeof doc.frontmatter.source === "string" ? doc.frontmatter.source : "";
   const sourcePrefix = input.role === "template" ? "template" : "history";
-  const nextSource = currentSource
-    ? /^(template|history)[:：]/i.test(currentSource)
-      ? currentSource.replace(/^(template|history)[:：]\s*/i, `${sourcePrefix}: `)
-      : `${sourcePrefix}: ${currentSource}`
-    : sourcePrefix;
+  const sourceBody = stripMaterialSourceRole(currentSource);
+  const nextSource = sourceBody && sourceBody.toLowerCase() !== sourcePrefix ? `${sourcePrefix}: ${sourceBody}` : sourcePrefix;
 
   await writeMarkdownDocument(
     input.materialPath,
