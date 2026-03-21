@@ -251,8 +251,8 @@ function updateWizardSummary() {
     `任务：${String(formData.get("title") || "").trim() || "未填写"}`,
     `文档类型：${String(formData.get("docType") || "").trim() || "未填写"}`,
     `模板：${templateTitle}`,
-    `模板模式：${templateMode} / 覆盖条目：${overrideCount}`,
-    `历史材料：${selectedCount} 篇`,
+    `模板用法：${templateMode === "strict" ? "严格套用" : templateMode === "light" ? "轻参考" : "平衡模式"} / 额外提醒 ${overrideCount} 条`,
+    `已选历史材料：${selectedCount} 篇`,
     `背景条目：${String(formData.get("background") || "").trim() ? "已填写" : "未填写"}`,
     `检查状态：${state.wizardCheckPassed ? "已通过" : "未通过"}`,
   ];
@@ -666,7 +666,7 @@ function renderTemplatePreview() {
     const recommended = rankedTemplates.filter((entry) => entry.recommendation.score > 0).slice(0, 3);
     container.innerHTML = `
       <div>当前不使用模板。系统照样会生成，只是结构会更灵活，更多依赖历史材料、规则库和本次背景。</div>
-      <div class="mini">如果你希望它更像你过去常用的写法、排版顺序或套话风格，建议在这里选一个模板。</div>
+      <div class="mini">如果你希望它更像你过去常用的写法、段落顺序或固定套路，建议在这里选一个模板。</div>
       ${
         recommended.length
           ? `<div class="template-recommend-list">${recommended
@@ -716,11 +716,11 @@ function renderTemplatePreview() {
     ${renderTemplateQualityChips(selected)}
     ${renderRecommendationReasonChips(recommendation)}
     <div class="mini">${escapeHtml(getTemplateKindHint(selected))}</div>
-    <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
+    <div class="mini">更适合：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
     <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
-    <div class="mini">当前模式：${escapeHtml(modeHint)}</div>
-    <div class="mini">结构提示：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
-    <div class="mini">表达参考：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
+    <div class="mini">这次会这样用：${escapeHtml(modeHint)}</div>
+    <div class="mini">常见结构：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
+    <div class="mini">可参考表达：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
   `;
 }
 
@@ -2575,12 +2575,12 @@ function bindMaterialImport() {
 
     const currentMode = String(modeSelect.value || "normal");
     hintContainer.innerHTML = `
-      <div><strong>建议导入为：${escapeHtml(suggestedMode === "template" ? "模板（高权重）" : "历史材料")}</strong></div>
+      <div><strong>建议导入为：${escapeHtml(suggestedMode === "template" ? "模板（高优先级）" : "历史材料")}</strong></div>
       <div class="mini">${escapeHtml(reason)}</div>
       <div class="mini">${escapeHtml(usage)}</div>
       ${
         currentMode !== suggestedMode
-          ? `<div class="editor-actions"><button type="button" id="apply-material-mode-hint" class="mini-btn">按这个建议切换</button></div>`
+          ? `<div class="editor-actions"><button type="button" id="apply-material-mode-hint" class="mini-btn">按建议切换</button></div>`
           : `<div class="mini">你当前的选择已经和建议一致。</div>`
       }
     `;
@@ -2590,7 +2590,7 @@ function bindMaterialImport() {
       applyButton.addEventListener("click", () => {
         modeSelect.value = suggestedMode;
         analyzeMaterialImportMode();
-        setInfo(`已切换为${suggestedMode === "template" ? "模板（高权重）" : "历史材料"}模式。`);
+        setInfo(`已切换为${suggestedMode === "template" ? "模板（高优先级）" : "历史材料"}模式。`);
       });
     }
   }
@@ -2640,7 +2640,7 @@ function bindMaterialImport() {
       });
       form.reset();
       await loadDashboard();
-      setInfo(mode === "template" ? "模板材料已导入（高权重）。" : "历史材料导入完成。");
+      setInfo(mode === "template" ? "模板材料已导入（高优先级）。" : "历史材料导入完成。");
       toggleView("settings");
     } catch (error) {
       setInfo(`材料导入失败：${error.message}`, true);

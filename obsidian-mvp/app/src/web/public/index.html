@@ -60,6 +60,7 @@
 
               <div class="wizard-step" data-step="2">
                 <h3>Step 2. 问材料（历史素材）</h3>
+                <p class="hint">这里选你以前写过的材料。系统会从中学习你的结构、语气和常用写法；如果暂时没有，也可以先跳过。</p>
                 <fieldset>
                   <legend>补充历史材料</legend>
                   <div id="wizard-material-options" class="check-grid"></div>
@@ -74,16 +75,17 @@
                     <option value="">不使用模板</option>
                   </select>
                 </label>
-                <label>模板继承模式
+                <label>怎么沿用这个模板
                   <select name="templateMode">
                     <option value="hybrid">平衡模式（推荐：模板骨架 + 本次事实）</option>
                     <option value="strict">严格套用（更像按模板直接改）</option>
                     <option value="light">轻参考（只借语气，不强套结构）</option>
                   </select>
                 </label>
-                <label>模板覆盖规则（每行：章节=覆盖要求）
-                  <textarea name="templateOverrides" rows="4" placeholder="例如：开头=先写意义再写现状&#10;风险分析=必须量化到指标"></textarea>
+                <label>如果你想额外提醒系统怎么套这个模板（可留空）
+                  <textarea name="templateOverrides" rows="4" placeholder="每行一条，例如：&#10;开头=先写意义，再写现状&#10;风险分析=必须量化到指标"></textarea>
                 </label>
+                <div class="mini">不会写也没关系。只有当你想特别强调“某一段必须怎么写”时，再填这里。</div>
                 <div id="template-preview" class="summary-box">选择模板后，这里会显示模板摘要与建议。</div>
               </div>
 
