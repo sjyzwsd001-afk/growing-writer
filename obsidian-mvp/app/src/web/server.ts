@@ -2234,7 +2234,10 @@ async function buildDashboard(vaultRoot: string) {
       })),
     },
     materials: materialItems,
-    templates: materialItems.filter((item) => item.isTemplate || item.quality === "high"),
+    templates: materialItems.filter((item) => item.isTemplate),
+    templateCandidates: materialItems.filter(
+      (item) => item.isTemplate || item.recommendTemplatePromotion || item.quality === "high",
+    ),
     tasks: tasks
       .map((item) => ({
         id: item.id,

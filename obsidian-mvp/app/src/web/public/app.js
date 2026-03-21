@@ -599,7 +599,11 @@ function renderTemplatePreview() {
 
   const templateId = String(document.getElementById("template-selector")?.value || "").trim();
   const templateMode = String(document.querySelector("[name='templateMode']")?.value || "hybrid");
-  const templates = Array.isArray(state.dashboard?.templates) ? state.dashboard.templates : [];
+  const templates = Array.isArray(state.dashboard?.templateCandidates)
+    ? state.dashboard.templateCandidates
+    : Array.isArray(state.dashboard?.templates)
+      ? state.dashboard.templates
+      : [];
   const signals = getCurrentWizardTemplateSignals();
   const rankedTemplates = templates
     .map((item) => ({
@@ -1864,7 +1868,7 @@ async function loadDashboard() {
   state.dashboard = data;
   updateTopStatus(data);
   hydrateLlmSettings(data);
-  renderTemplateSelector(data.templates || []);
+  renderTemplateSelector(data.templateCandidates || data.templates || []);
   renderCheckOptions("wizard-material-options", data.materials || [], "sourceMaterialIds");
   renderSettingsLists();
   await loadWorkflowDefinitionEditor();
@@ -2237,7 +2241,13 @@ function bindWizard() {
         if ((target.name || target.id) === "templateId" || (target.name || target.id) === "templateMode") {
           renderTemplatePreview();
         } else {
-          renderTemplateSelector(Array.isArray(state.dashboard?.templates) ? state.dashboard.templates : []);
+          renderTemplateSelector(
+            Array.isArray(state.dashboard?.templateCandidates)
+              ? state.dashboard.templateCandidates
+              : Array.isArray(state.dashboard?.templates)
+                ? state.dashboard.templates
+                : [],
+          );
         }
       }
     }
