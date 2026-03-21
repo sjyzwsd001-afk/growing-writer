@@ -348,13 +348,15 @@ function buildDocumentPreview(title, raw, kind) {
   if (kind === "rule") {
     const contentPreview = takePreviewLines(getSection("规则内容") || getSection("内容") || raw, 4).join(" / ");
     const sourcePreview = takePreviewLines(getSection("来源") || getSection("来源材料"), 2).join(" / ");
+    const effectPreview = takePreviewLines(getSection("适用场景") || getSection("影响") || getSection("说明"), 2).join(" / ");
     return `
       ${buildPreviewGrid([
         ...baseMeta,
         { label: "适用范围", value: cleanMetaValue(frontmatter.scope || "通用") },
         { label: "状态", value: cleanMetaValue(frontmatter.status || "-") },
       ])}
-      <div class="result-summary-item"><div class="result-summary-label">规则说明</div><strong>${escapeHtml(contentPreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">这条规则要求什么</div><strong>${escapeHtml(contentPreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">通常在哪些场景会触发</div><strong>${escapeHtml(effectPreview || "暂无场景摘要")}</strong></div>
       <div class="result-summary-item"><div class="result-summary-label">来源线索</div><strong>${escapeHtml(sourcePreview || "暂无来源摘要")}</strong></div>
     `;
   }
@@ -362,6 +364,7 @@ function buildDocumentPreview(title, raw, kind) {
   if (kind === "feedback") {
     const reasonPreview = takePreviewLines(getSection("修改原因") || getSection("批注说明"), 3).join(" / ");
     const changePreview = takePreviewLines(getSection("修改内容") || getSection("内容") || raw, 4).join(" / ");
+    const learningPreview = takePreviewLines(getSection("学习结论") || getSection("候选规则") || getSection("系统判断"), 3).join(" / ");
     return `
       ${buildPreviewGrid([
         ...baseMeta,
@@ -370,6 +373,7 @@ function buildDocumentPreview(title, raw, kind) {
       ])}
       <div class="result-summary-item"><div class="result-summary-label">你这次主要改了什么</div><strong>${escapeHtml(changePreview || "暂无摘要")}</strong></div>
       <div class="result-summary-item"><div class="result-summary-label">修改原因</div><strong>${escapeHtml(reasonPreview || "暂无说明")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">系统这次学到了什么</div><strong>${escapeHtml(learningPreview || "暂无学习结论")}</strong></div>
     `;
   }
 
