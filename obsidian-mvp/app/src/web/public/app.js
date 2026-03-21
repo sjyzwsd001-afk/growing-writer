@@ -549,6 +549,26 @@ function renderTemplateQualityChips(template) {
   return `<div class="inline-chips">${chips.map((item) => `<span class="mini-chip priority">${escapeHtml(item)}</span>`).join("")}</div>`;
 }
 
+function renderMaterialQualityChips(item) {
+  const chips = [];
+  if (String(item?.roleLabel || "") === "模板") {
+    chips.push("模板候选");
+  }
+  if (String(item?.quality || "") === "high") {
+    chips.push("高质量");
+  }
+  if (Number(item?.candidateRuleCount || 0) > 0) {
+    chips.push(`候选规则 ${Number(item.candidateRuleCount)} 条`);
+  }
+  if (Number(item?.structureBlockCount || 0) > 0) {
+    chips.push(`结构拆解 ${Number(item.structureBlockCount)} 段`);
+  }
+  if (!chips.length) {
+    return "";
+  }
+  return `<div class="inline-chips">${chips.map((chip) => `<span class="mini-chip">${escapeHtml(chip)}</span>`).join("")}</div>`;
+}
+
 function renderTemplatePreview() {
   const container = document.getElementById("template-preview");
   if (!container) {
@@ -875,11 +895,22 @@ function renderProfileList(containerId, items) {
 
 function renderSettingsLists() {
   const data = state.dashboard || {};
-  renderSimpleList("settings-materials", data.materials || [], (item) => {
+  const sortedMaterials = [...(data.materials || [])].sort((a, b) => {
+    const roleDelta = Number(String(b.roleLabel || "") === "模板") - Number(String(a.roleLabel || "") === "模板");
+    if (roleDelta !== 0) {
+      return roleDelta;
+    }
+    return (
+      Number(b.candidateRuleCount || 0) - Number(a.candidateRuleCount || 0) ||
+      Number(b.structureBlockCount || 0) - Number(a.structureBlockCount || 0)
+    );
+  });
+  renderSimpleList("settings-materials", sortedMaterials, (item) => {
     return `<div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.roleLabel || "参考材料")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
       <div class="mini">${escapeHtml(item.roleReason || "")}</div>
+      ${renderMaterialQualityChips(item)}
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
