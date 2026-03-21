@@ -1061,27 +1061,32 @@ function renderSettingsLists() {
 }
 
 function applyMaterialRoleUpdate(result) {
-  if (!state.dashboard?.materials || !result?.path) {
+  if (!state.dashboard || !result?.path) {
     return;
   }
 
-  const updatedMaterials = state.dashboard.materials.map((item) =>
-    item.path === result.path
-      ? {
-          ...item,
-          isTemplate: Boolean(result.isTemplate),
-          roleLabel: result.roleLabel || item.roleLabel,
-          roleReason: result.roleReason || item.roleReason,
-          recommendTemplatePromotion: Boolean(result.recommendTemplatePromotion),
-        }
-      : item,
-  );
+  const allItems = [...(state.dashboard.materials || []), ...(state.dashboard.templates || [])];
+  const itemByPath = new Map(allItems.map((item) => [item.path, item]));
+  const target = itemByPath.get(result.path);
+  if (!target) {
+    return;
+  }
+
+  const updatedTarget = {
+    ...target,
+    isTemplate: Boolean(result.isTemplate),
+    roleLabel: result.roleLabel || target.roleLabel,
+    roleReason: result.roleReason || target.roleReason,
+    recommendTemplatePromotion: Boolean(result.recommendTemplatePromotion),
+  };
+  itemByPath.set(result.path, updatedTarget);
+  const updatedAllItems = [...itemByPath.values()].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "zh-CN"));
 
   state.dashboard = {
     ...state.dashboard,
-    materials: updatedMaterials,
-    templates: updatedMaterials.filter((item) => item.isTemplate),
-    templateCandidates: updatedMaterials.filter(
+    materials: updatedAllItems.filter((item) => !item.isTemplate),
+    templates: updatedAllItems.filter((item) => item.isTemplate),
+    templateCandidates: updatedAllItems.filter(
       (item) => item.isTemplate || item.recommendTemplatePromotion || item.quality === "high",
     ),
   };

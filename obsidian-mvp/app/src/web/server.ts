@@ -2252,7 +2252,7 @@ async function buildDashboard(vaultRoot: string) {
         isActive: profile.id === llmProfiles.activeProfileId,
       })),
     },
-    materials: materialItems,
+    materials: materialItems.filter((item) => !item.isTemplate),
     templates: materialItems.filter((item) => item.isTemplate),
     templateCandidates: materialItems.filter(
       (item) => item.isTemplate || item.recommendTemplatePromotion || item.quality === "high",
