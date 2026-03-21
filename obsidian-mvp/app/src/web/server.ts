@@ -2108,6 +2108,8 @@ async function buildDashboard(vaultRoot: string) {
   const materialItems = materials
     .map((item) => {
       const summary = summarizeMaterial(item);
+      const candidateRuleCount = (item.content.match(/候选规则\s*\d+：/g) || []).length;
+      const structureBlockCount = (item.content.match(/^##\s+/gm) || []).length;
       const source = typeof item.frontmatter.source === "string" ? item.frontmatter.source : "";
       const isTemplate = isTemplateMaterial({
         tags: item.tags,
@@ -2136,6 +2138,8 @@ async function buildDashboard(vaultRoot: string) {
         structureSummary: summary.structure_summary,
         styleSummary: summary.style_summary,
         usefulPhrases: summary.useful_phrases,
+        candidateRuleCount,
+        structureBlockCount,
         path: item.path,
       };
     })

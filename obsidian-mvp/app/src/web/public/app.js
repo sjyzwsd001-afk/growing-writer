@@ -485,11 +485,24 @@ function scoreTemplateForCurrentTask(template, signals) {
 
   if (roleLabel === "模板") {
     score += 1.5;
+    reasons.push("已归类为模板");
   }
 
   if (String(template?.quality || "") === "high") {
     score += 1;
     reasons.push("质量较高");
+  }
+
+  const candidateRuleCount = Number(template?.candidateRuleCount || 0);
+  if (candidateRuleCount >= 2) {
+    score += 1;
+    reasons.push(`可提炼规则较多：${candidateRuleCount} 条`);
+  }
+
+  const structureBlockCount = Number(template?.structureBlockCount || 0);
+  if (structureBlockCount >= 3) {
+    score += 0.8;
+    reasons.push("结构拆解较完整");
   }
 
   if (!reasons.length) {
