@@ -804,11 +804,14 @@ function renderGroupedRuleList(containerId, items) {
               group.key === "candidate" && Number(item.linkedFeedbackCount || 0) > 0
                 ? `<span class="mini-chip priority">建议优先确认</span>`
                 : "";
+            const scopeLabel = item.scope ? `适用范围：${item.scope}` : "适用范围：通用";
+            const docTypeLabel = docTypes || "不限";
+            const audienceLabel = audiences || "不限";
             return `<div class="row-item">
               <div class="row-main">
                 <strong>${escapeHtml(item.title)}</strong>
-                <div class="mini">scope=${escapeHtml(item.scope || "-")} / 文体=${escapeHtml(docTypes || "-")} / 受众=${escapeHtml(audiences || "-")}</div>
-                <div class="mini">版本=${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 命中任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次 / 关联反馈 ${escapeHtml(String(item.linkedFeedbackCount ?? 0))} 次</div>
+                <div class="mini">${escapeHtml(scopeLabel)} / 常见文种：${escapeHtml(docTypeLabel)} / 面向对象：${escapeHtml(audienceLabel)}</div>
+                <div class="mini">已沉淀版本 ${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 已影响任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次 / 来自反馈 ${escapeHtml(String(item.linkedFeedbackCount ?? 0))} 次</div>
                 <div class="inline-chips">
                   ${priorityHint}
                   ${
@@ -891,6 +894,16 @@ function renderGroupedFeedbackList(containerId, items) {
                 : item.reusableSuggestion === false
                   ? "更像一次性修改"
                   : "待学习";
+            const feedbackTypeLabel =
+              item.feedbackType === "structure"
+                ? "结构调整"
+                : item.feedbackType === "logic"
+                  ? "逻辑调整"
+                  : item.feedbackType === "missing_info"
+                    ? "补充信息"
+                    : item.feedbackType === "wording"
+                      ? "措辞调整"
+                      : item.feedbackType || "-";
             const processStatus =
               confirmedRules.length > 0
                 ? "已入规则"
@@ -902,10 +915,10 @@ function renderGroupedFeedbackList(containerId, items) {
             return `<div class="row-item">
               <div class="row-main">
                 <strong>${escapeHtml(item.id)}</strong>
-                <div class="mini">${escapeHtml(item.feedbackType || "-")} / 位置=${escapeHtml(item.affectedParagraph || "全文")} / ${escapeHtml(reusableText)}</div>
+                <div class="mini">${escapeHtml(feedbackTypeLabel)} / 修改位置：${escapeHtml(item.affectedParagraph || "全文")} / ${escapeHtml(reusableText)}</div>
                 <div class="mini">处理状态：<span class="status-chip ${processStatus === "已入规则" ? "status-confirmed" : processStatus === "待确认" ? "status-candidate" : processStatus === "已停用" ? "status-disabled" : "status-neutral"}">${escapeHtml(processStatus)}</span></div>
-                <div class="mini">候选规则：${escapeHtml(item.candidateRuleTitle || "暂无")} ${item.candidateRuleScope ? `/ ${escapeHtml(item.candidateRuleScope)}` : ""}</div>
-                <div class="mini">关联规则：${escapeHtml(ruleTitles.join(" / ") || "暂无")}</div>
+                <div class="mini">系统建议沉淀为：${escapeHtml(item.candidateRuleTitle || "暂无")} ${item.candidateRuleScope ? `/ ${escapeHtml(item.candidateRuleScope)}` : ""}</div>
+                <div class="mini">当前已关联规则：${escapeHtml(ruleTitles.join(" / ") || "暂无")}</div>
                 ${
                   relatedRules.length
                     ? `<div class="inline-chips">${relatedRules
@@ -957,18 +970,24 @@ function renderProfileList(containerId, items) {
       const leadership = Array.isArray(item.scenarioGuidance?.leadershipReport)
         ? item.scenarioGuidance.leadershipReport.slice(0, 2)
         : [];
+      const generatedByLabel =
+        item.generatedBy === "llm"
+          ? "LLM 自动总结"
+          : item.generatedBy === "fallback"
+            ? "本地兜底总结"
+            : item.generatedBy || "unknown";
       return `<div class="row-item">
         <div class="row-main">
           <strong>${escapeHtml(item.name)}</strong>
-          <div class="mini">版本 ${escapeHtml(String(item.version || 1))} / ${escapeHtml(item.generatedBy || "unknown")} / ${escapeHtml(item.updatedAt || "-")}</div>
-          <div class="mini">画像来源：规则 ${escapeHtml(String(item.sourceStats?.confirmed_rules ?? 0))} / 材料 ${escapeHtml(String(item.sourceStats?.materials ?? 0))} / 反馈 ${escapeHtml(String(item.sourceStats?.feedback_entries ?? 0))}</div>
+          <div class="mini">版本 ${escapeHtml(String(item.version || 1))} / ${escapeHtml(generatedByLabel)} / ${escapeHtml(item.updatedAt || "-")}</div>
+          <div class="mini">这份画像目前主要来自：规则 ${escapeHtml(String(item.sourceStats?.confirmed_rules ?? 0))} / 材料 ${escapeHtml(String(item.sourceStats?.materials ?? 0))} / 反馈 ${escapeHtml(String(item.sourceStats?.feedback_entries ?? 0))}</div>
           <div class="mini">语气：${escapeHtml(item.overview?.tone || "未提炼")} / 结构：${escapeHtml(item.overview?.body || "未提炼")}</div>
           <div class="mini">开头：${escapeHtml(item.overview?.opening || "未提炼")}</div>
           <div class="mini">结尾：${escapeHtml(item.overview?.ending || "未提炼")}</div>
           <div class="rule-provenance">
             <div class="mini">高优先偏好：${escapeHtml(highlights.join(" / ") || "暂无")}</div>
             <div class="mini">领导汇报倾向：${escapeHtml(leadership.join(" / ") || "暂无")}</div>
-            <div class="mini">稳定规则摘要：${escapeHtml((item.stableRuleSummary || []).slice(0, 2).join(" / ") || "暂无")}</div>
+            <div class="mini">已经比较稳定的习惯：${escapeHtml((item.stableRuleSummary || []).slice(0, 2).join(" / ") || "暂无")}</div>
           </div>
         </div>
         <div class="row-actions">

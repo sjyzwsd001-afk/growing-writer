@@ -338,7 +338,11 @@
 
           <section class="panel">
             <div class="panel-header"><h2>规则库</h2></div>
-            <div id="settings-rules" class="simple-list"></div>
+            <p class="hint">这里保存系统已经学到的写作规则。你可以把它理解成“以后写这类材料时，默认要遵守的习惯”。</p>
+            <div
+              id="settings-rules"
+              class="simple-list"
+              data-empty="还没有规则。等你导入更多材料、修改几轮稿子后，系统会把稳定偏好逐步沉淀到这里。"></div>
           </section>
 
           <section class="panel">
@@ -346,12 +350,20 @@
               <h2>写作画像</h2>
               <button id="refresh-profile" type="button" class="btn ghost">刷新画像</button>
             </div>
-            <div id="settings-profiles" class="simple-list"></div>
+            <p class="hint">写作画像是系统对你写法的总结，包括语气、结构、开头结尾习惯，以及高优先偏好。</p>
+            <div
+              id="settings-profiles"
+              class="simple-list"
+              data-empty="还没有生成画像。等你导入一些材料后，点“刷新画像”就会看到系统对你写作习惯的总结。"></div>
           </section>
 
           <section class="panel">
             <div class="panel-header"><h2>反馈记录</h2></div>
-            <div id="settings-feedback" class="simple-list"></div>
+            <p class="hint">这里记录你每次怎么改稿、系统学到了什么，以及哪些修改已经准备沉淀成规则。</p>
+            <div
+              id="settings-feedback"
+              class="simple-list"
+              data-empty="还没有反馈记录。等你在正文里改稿并提交反馈后，这里会开始积累你的修改轨迹。"></div>
           </section>
 
           <section class="panel">
