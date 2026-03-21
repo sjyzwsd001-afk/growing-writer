@@ -551,6 +551,9 @@ function renderTemplateQualityChips(template) {
 
 function renderMaterialQualityChips(item) {
   const chips = [];
+  if (Boolean(item?.recommendTemplatePromotion)) {
+    chips.push("建议升模板");
+  }
   if (String(item?.roleLabel || "") === "模板") {
     chips.push("模板候选");
   }
@@ -896,6 +899,10 @@ function renderProfileList(containerId, items) {
 function renderSettingsLists() {
   const data = state.dashboard || {};
   const sortedMaterials = [...(data.materials || [])].sort((a, b) => {
+    const promotionDelta = Number(Boolean(b.recommendTemplatePromotion)) - Number(Boolean(a.recommendTemplatePromotion));
+    if (promotionDelta !== 0) {
+      return promotionDelta;
+    }
     const roleDelta = Number(String(b.roleLabel || "") === "模板") - Number(String(a.roleLabel || "") === "模板");
     if (roleDelta !== 0) {
       return roleDelta;
@@ -915,7 +922,7 @@ function renderSettingsLists() {
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
       <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
-      <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转模板</button>
+      <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">${item.recommendTemplatePromotion ? "按建议转模板" : "转模板"}</button>
     </div>`;
   });
 

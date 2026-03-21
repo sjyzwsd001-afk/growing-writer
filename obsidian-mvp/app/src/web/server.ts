@@ -2123,6 +2123,11 @@ async function buildDashboard(vaultRoot: string) {
         docType: item.docType,
         scenario: item.scenario,
       });
+      const recommendTemplatePromotion =
+        !isTemplate &&
+        String(item.quality || "") === "high" &&
+        candidateRuleCount >= 2 &&
+        structureBlockCount >= 3;
       return {
         id: item.id,
         title: item.title,
@@ -2140,6 +2145,7 @@ async function buildDashboard(vaultRoot: string) {
         usefulPhrases: summary.useful_phrases,
         candidateRuleCount,
         structureBlockCount,
+        recommendTemplatePromotion,
         path: item.path,
       };
     })
