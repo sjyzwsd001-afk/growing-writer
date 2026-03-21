@@ -1033,6 +1033,41 @@ function renderSettingsLists() {
   }
 }
 
+function applyMaterialRoleUpdate(result) {
+  if (!state.dashboard?.materials || !result?.path) {
+    return;
+  }
+
+  const updatedMaterials = state.dashboard.materials.map((item) =>
+    item.path === result.path
+      ? {
+          ...item,
+          isTemplate: Boolean(result.isTemplate),
+          roleLabel: result.roleLabel || item.roleLabel,
+          roleReason: result.roleReason || item.roleReason,
+          recommendTemplatePromotion: Boolean(result.recommendTemplatePromotion),
+        }
+      : item,
+  );
+
+  state.dashboard = {
+    ...state.dashboard,
+    materials: updatedMaterials,
+    templates: updatedMaterials.filter((item) => item.isTemplate),
+    templateCandidates: updatedMaterials.filter(
+      (item) => item.isTemplate || item.recommendTemplatePromotion || item.quality === "high",
+    ),
+  };
+
+  renderTemplateSelector(state.dashboard.templateCandidates || state.dashboard.templates || []);
+  renderCheckOptions(
+    "wizard-material-options",
+    (state.dashboard.materials || []).filter((item) => !item.isTemplate),
+    "sourceMaterialIds",
+  );
+  renderSettingsLists();
+}
+
 function toggleLlmMode(mode) {
   const isOauth = mode === "openai-codex-oauth";
   document.getElementById("oauth-config").classList.toggle("hidden", !isOauth);
@@ -2972,7 +3007,14 @@ async function runSettingsAction(action, button) {
       }),
     });
     setSettingsResult(`${title || "材料"} - 角色已更新`, result);
-    setInfo(`已将材料调整为${result.roleLabel || (role === "template" ? "模板" : "历史材料")}。`);
+    const statusText = result.isTemplate
+      ? "已进入模板库，会以高权重参与生成。"
+      : result.recommendTemplatePromotion
+        ? "已转为历史范文，当前仍会作为候选模板参与推荐。"
+        : `已转为${result.roleLabel || "历史材料"}。`;
+    applyMaterialRoleUpdate(result);
+    setInfo(statusText);
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
     await loadDashboard();
     return;
   }

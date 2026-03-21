@@ -289,8 +289,14 @@ async function updateMaterialRole(input: {
   return {
     path: input.materialPath,
     title: material.title,
+    isTemplate,
     roleLabel: role.roleLabel,
     roleReason: role.roleReason,
+    recommendTemplatePromotion:
+      !isTemplate &&
+      String(material.quality || "") === "high" &&
+      ((material.content.match(/候选规则\s*\d+：/g) || []).length >= 2) &&
+      ((material.content.match(/^##\s+/gm) || []).length >= 3),
   };
 }
 
