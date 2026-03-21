@@ -1076,6 +1076,41 @@ legend {
   font-size: 13px;
 }
 
+.advanced-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.advanced-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 16px 18px;
+  font-weight: 700;
+}
+
+.advanced-summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-summary::before {
+  content: "＋";
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--accent);
+}
+
+.advanced-panel[open] .advanced-summary::before {
+  content: "－";
+}
+
+.advanced-panel[open] {
+  padding-bottom: 12px;
+}
+
+.nested-panel {
+  margin: 0 12px 12px;
+}
+
 @media (max-width: 980px) {
   .grid.two {
     grid-template-columns: 1fr;

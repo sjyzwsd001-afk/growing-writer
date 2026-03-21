@@ -728,7 +728,7 @@ function renderSimpleList(containerId, items, renderItem) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
   if (!items.length) {
-    container.innerHTML = `<div class="empty">暂无数据</div>`;
+    container.innerHTML = `<div class="empty">${escapeHtml(container.dataset.empty || "暂无数据")}</div>`;
     return;
   }
   for (const item of items) {

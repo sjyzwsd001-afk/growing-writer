@@ -356,55 +356,69 @@
 
           <section class="panel">
             <div class="panel-header"><h2>历史材料</h2></div>
-            <div id="settings-materials" class="simple-list"></div>
+            <p class="hint">这里放你过去写过的材料。系统会主要从中学习你的表达习惯、段落结构和写作偏好。</p>
+            <div
+              id="settings-materials"
+              class="simple-list"
+              data-empty="还没有历史材料。你可以先去上面的“材料导入”里导入几篇旧稿，系统后面会从这里学习你的写法。"></div>
           </section>
 
           <section class="panel">
             <div class="panel-header"><h2>模板库（高权重）</h2></div>
-            <div id="settings-templates" class="simple-list"></div>
+            <p class="hint">这里放可反复套用的固定模板。正式模板会优先影响文章结构和语气，比普通历史材料权重更高。</p>
+            <div
+              id="settings-templates"
+              class="simple-list"
+              data-empty="还没有正式模板。你可以先导入固定格式材料，或把高质量历史材料转成模板。"></div>
           </section>
 
-          <section class="panel">
-            <div class="panel-header"><h2>编排运行记录</h2></div>
-            <div id="settings-workflows" class="simple-list"></div>
-          </section>
+          <details class="panel advanced-panel">
+            <summary class="advanced-summary">高级调试区：编排运行记录、模型调用日志、DSL 编辑</summary>
 
-          <section class="panel">
-            <div class="panel-header"><h2>可观测性（模型调用）</h2></div>
-            <div id="settings-observability" class="simple-list"></div>
-          </section>
+            <section class="panel nested-panel">
+              <div class="panel-header"><h2>编排运行记录</h2></div>
+              <p class="hint">这里主要用于排查流程卡点、查看阶段流转。日常写作时可以先不看。</p>
+              <div id="settings-workflows" class="simple-list"></div>
+            </section>
 
-          <section class="panel">
-            <div class="panel-header"><h2>Workflow DSL 编辑</h2></div>
-            <div class="panel-sub">
-              <p class="hint">编辑后保存即生效。服务端按最新 DSL 校验后续流转，无需重启。</p>
-              <label>DSL JSON
-                <textarea id="workflow-definition-editor" rows="14" placeholder='{"id":"...","version":1,"initialStage":"...","stages":[]}'></textarea>
-              </label>
-              <div class="editor-actions">
-                <button id="reload-workflow-definition" type="button" class="btn ghost">重新加载 DSL</button>
-                <button id="save-workflow-definition" type="button" class="btn primary">保存 DSL</button>
-              </div>
-              <div class="workflow-builder">
-                <h3>可视化编排编辑</h3>
-                <p class="hint">可在下方直接维护流程结构，右侧 JSON 会自动同步。</p>
-                <div class="workflow-builder-meta">
-                  <label>流程 ID<input id="wf-meta-id" type="text" placeholder="例如：growing-writer-workflow" /></label>
-                  <label>版本<input id="wf-meta-version" type="number" min="1" step="1" placeholder="1" /></label>
-                  <label>初始阶段
-                    <select id="wf-meta-initial"></select>
-                  </label>
-                  <button id="wf-add-stage" type="button" class="btn ghost">新增阶段</button>
+            <section class="panel nested-panel">
+              <div class="panel-header"><h2>可观测性（模型调用）</h2></div>
+              <p class="hint">这里会记录每次诊断、提纲、初稿用了哪个模型，用来排查“为什么这次没走通”。</p>
+              <div id="settings-observability" class="simple-list"></div>
+            </section>
+
+            <section class="panel nested-panel">
+              <div class="panel-header"><h2>Workflow DSL 编辑</h2></div>
+              <div class="panel-sub">
+                <p class="hint">这是高级编排配置。只有当你想改写“7 步流程”本身时，才需要进入这里。</p>
+                <label>DSL JSON
+                  <textarea id="workflow-definition-editor" rows="14" placeholder='{"id":"...","version":1,"initialStage":"...","stages":[]}'></textarea>
+                </label>
+                <div class="editor-actions">
+                  <button id="reload-workflow-definition" type="button" class="btn ghost">重新加载 DSL</button>
+                  <button id="save-workflow-definition" type="button" class="btn primary">保存 DSL</button>
                 </div>
-                <div id="workflow-stage-list" class="workflow-stage-list"></div>
+                <div class="workflow-builder">
+                  <h3>可视化编排编辑</h3>
+                  <p class="hint">可在下方直接维护流程结构，右侧 JSON 会自动同步。</p>
+                  <div class="workflow-builder-meta">
+                    <label>流程 ID<input id="wf-meta-id" type="text" placeholder="例如：growing-writer-workflow" /></label>
+                    <label>版本<input id="wf-meta-version" type="number" min="1" step="1" placeholder="1" /></label>
+                    <label>初始阶段
+                      <select id="wf-meta-initial"></select>
+                    </label>
+                    <button id="wf-add-stage" type="button" class="btn ghost">新增阶段</button>
+                  </div>
+                  <div id="workflow-stage-list" class="workflow-stage-list"></div>
+                </div>
+                <div class="workflow-preview">
+                  <h3>流程图预览（实时）</h3>
+                  <div id="workflow-graph" class="workflow-graph"></div>
+                  <div id="workflow-graph-hints" class="workflow-graph-hints"></div>
+                </div>
               </div>
-              <div class="workflow-preview">
-                <h3>流程图预览（实时）</h3>
-                <div id="workflow-graph" class="workflow-graph"></div>
-                <div id="workflow-graph-hints" class="workflow-graph-hints"></div>
-              </div>
-            </div>
-          </section>
+            </section>
+          </details>
         </section>
       </main>
     </div>
