@@ -425,14 +425,28 @@ function renderCheckOptions(containerId, items, name) {
     return;
   }
 
-  for (const item of items) {
+  const sortedItems = [...items].sort((a, b) => {
+    return (
+      Number(Boolean(b.recommendTemplatePromotion)) - Number(Boolean(a.recommendTemplatePromotion)) ||
+      Number(String(b.roleLabel || "") === "模板") - Number(String(a.roleLabel || "") === "模板") ||
+      Number(b.candidateRuleCount || 0) - Number(a.candidateRuleCount || 0)
+    );
+  });
+
+  for (const item of sortedItems) {
     const label = document.createElement("label");
     label.className = "check-item";
+    const hintChips = [
+      item.recommendTemplatePromotion ? "建议升模板" : "",
+      String(item.roleLabel || "") === "模板" ? "模板候选" : "",
+      Number(item.candidateRuleCount || 0) > 0 ? `候选规则 ${Number(item.candidateRuleCount)} 条` : "",
+    ].filter(Boolean);
     label.innerHTML = `
       <input type="checkbox" name="${name}" value="${escapeHtml(item.id)}" />
       <span>
         <strong>${escapeHtml(item.title)}</strong>
         <span class="mini">类型：${escapeHtml(item.docType || "-")} / 场景：${escapeHtml(item.scenario || "-")}</span>
+        ${hintChips.length ? `<span class="mini">${escapeHtml(hintChips.join(" / "))}</span>` : ""}
       </span>
     `;
     container.append(label);
