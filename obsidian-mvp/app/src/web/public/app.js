@@ -587,6 +587,14 @@ function getTemplateKindHint(item) {
   return "当前仍是候选模板，会参考其结构与表达；如果后续多次复用稳定，建议先在设置页转为正式模板。";
 }
 
+function renderRecommendationReasonChips(recommendation) {
+  const reasons = Array.isArray(recommendation?.reasons) ? recommendation.reasons.slice(0, 4) : [];
+  if (!reasons.length) {
+    return "";
+  }
+  return `<div class="inline-chips">${reasons.map((reason) => `<span class="mini-chip">${escapeHtml(reason)}</span>`).join("")}</div>`;
+}
+
 function renderTemplateQualityChips(template) {
   const chips = [];
   if (Boolean(template?.isTemplate) || String(template?.roleLabel || "") === "模板") {
@@ -677,10 +685,9 @@ function renderTemplatePreview() {
                   <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
                   <div class="mini"><span class="status-chip ${level === "strong" ? "status-confirmed" : level === "medium" ? "status-candidate" : "status-neutral"}">${levelLabel}</span> / ${escapeHtml(getTemplateKindLabel(item))}</div>
                   ${renderTemplateQualityChips(item)}
+                  ${renderRecommendationReasonChips(recommendation)}
                   <div class="mini">${escapeHtml(getTemplateKindHint(item))}</div>
-                  <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))} / ${escapeHtml(
-                    recommendation.reasons.join(" / "),
-                  )}</div>
+                  <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
                 </div>`;
                 },
               )
@@ -707,9 +714,10 @@ function renderTemplatePreview() {
     <div><strong>${escapeHtml(selected.title || "已选模板")}</strong></div>
     <div class="mini"><span class="status-chip ${recommendation.score >= 5 ? "status-confirmed" : recommendation.score >= 3 ? "status-candidate" : "status-neutral"}">${escapeHtml(recommendationLabel)}</span> / ${escapeHtml(getTemplateKindLabel(selected))}</div>
     ${renderTemplateQualityChips(selected)}
+    ${renderRecommendationReasonChips(recommendation)}
     <div class="mini">${escapeHtml(getTemplateKindHint(selected))}</div>
     <div class="mini">适用：${escapeHtml(selected.docType || "-")} / ${escapeHtml(selected.scenario || "通用场景")} / 质量 ${escapeHtml(selected.quality || "-")}</div>
-    <div class="mini">推荐理由：${escapeHtml(recommendation.reasons.join(" / "))}（匹配度 ${escapeHtml(recommendation.score.toFixed(1))}）</div>
+    <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
     <div class="mini">${escapeHtml(modeHint)}</div>
     <div class="mini">结构提示：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
     <div class="mini">表达参考：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
