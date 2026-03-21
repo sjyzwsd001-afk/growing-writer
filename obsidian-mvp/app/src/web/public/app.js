@@ -120,6 +120,7 @@ function setSettingsResult(title, payload) {
           </details>`
         : `<pre>${escapeHtml(content)}</pre>`
     }`;
+  container.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function setSettingsResultPreview(title, summaryHtml, rawText = "") {
@@ -134,6 +135,7 @@ function setSettingsResultPreview(title, summaryHtml, rawText = "") {
       <summary>查看原文</summary>
       <pre>${escapeHtml(rawText)}</pre>
     </details>`;
+  container.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function setTaskBadge(text, isError = false) {
