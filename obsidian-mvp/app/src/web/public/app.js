@@ -291,6 +291,14 @@ function cleanMetaValue(value) {
       .replace(/^['"]+|['"]+$/g, "")
       .replace(/^template$/i, "正式模板")
       .replace(/^history$/i, "历史材料")
+      .replace(/^rule$/i, "规则")
+      .replace(/^feedback$/i, "反馈")
+      .replace(/^profile$/i, "画像")
+      .replace(/^material$/i, "材料")
+      .replace(/^active$/i, "启用中")
+      .replace(/^disabled$/i, "已停用")
+      .replace(/^candidate$/i, "待确认")
+      .replace(/^confirmed$/i, "已确认")
       .replace(/^high$/i, "高质量")
       .replace(/^medium$/i, "中等")
       .replace(/^low$/i, "待提升"),
@@ -337,6 +345,7 @@ function buildDocumentPreview(title, raw, kind) {
 
   if (kind === "rule") {
     const contentPreview = takePreviewLines(getSection("规则内容") || getSection("内容") || raw, 4).join(" / ");
+    const sourcePreview = takePreviewLines(getSection("来源") || getSection("来源材料"), 2).join(" / ");
     return `
       ${buildPreviewGrid([
         ...baseMeta,
@@ -344,39 +353,37 @@ function buildDocumentPreview(title, raw, kind) {
         { label: "状态", value: cleanMetaValue(frontmatter.status || "-") },
       ])}
       <div class="result-summary-item"><div class="result-summary-label">规则说明</div><strong>${escapeHtml(contentPreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">来源线索</div><strong>${escapeHtml(sourcePreview || "暂无来源摘要")}</strong></div>
     `;
   }
 
   if (kind === "feedback") {
-    const changePreview = takePreviewLines(getSection("修改原因") || getSection("批注说明") || getSection("内容") || raw, 4).join(" / ");
+    const reasonPreview = takePreviewLines(getSection("修改原因") || getSection("批注说明"), 3).join(" / ");
+    const changePreview = takePreviewLines(getSection("修改内容") || getSection("内容") || raw, 4).join(" / ");
     return `
       ${buildPreviewGrid([
         ...baseMeta,
         { label: "修改位置", value: cleanMetaValue(frontmatter.affected_paragraph || "全文") },
         { label: "建议类型", value: frontmatter.is_reusable_rule === "true" ? "建议入规则" : "本次修改" },
       ])}
-      <div class="result-summary-item"><div class="result-summary-label">本次反馈重点</div><strong>${escapeHtml(changePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">你这次主要改了什么</div><strong>${escapeHtml(changePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">修改原因</div><strong>${escapeHtml(reasonPreview || "暂无说明")}</strong></div>
     `;
   }
 
   if (kind === "profile") {
-    const overview = [
-      getSection("概览"),
-      getSection("语气"),
-      getSection("结构"),
-      getSection("高优先偏好"),
-    ]
-      .map((item) => takePreviewLines(item, 1).join(""))
-      .filter(Boolean)
-      .slice(0, 3)
-      .join(" / ");
+    const tonePreview = takePreviewLines(getSection("语气") || getSection("风格观察"), 2).join(" / ");
+    const structurePreview = takePreviewLines(getSection("结构") || getSection("主体结构"), 2).join(" / ");
+    const preferencePreview = takePreviewLines(getSection("高优先偏好") || getSection("稳定规则摘要"), 2).join(" / ");
     return `
       ${buildPreviewGrid([
         ...baseMeta,
         { label: "生成方式", value: cleanMetaValue(frontmatter.generated_by || "-") },
         { label: "版本", value: cleanMetaValue(frontmatter.version || "1") },
       ])}
-      <div class="result-summary-item"><div class="result-summary-label">画像摘要</div><strong>${escapeHtml(overview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">语气总结</div><strong>${escapeHtml(tonePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">结构习惯</div><strong>${escapeHtml(structurePreview || "暂无摘要")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">稳定偏好</div><strong>${escapeHtml(preferencePreview || "暂无摘要")}</strong></div>
     `;
   }
 
