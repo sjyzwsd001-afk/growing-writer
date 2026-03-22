@@ -49,6 +49,87 @@ const WIZARD_STEP_STAGE_MAP = {
   7: "FINALIZE_AND_LEARN",
 };
 
+const BUTTON_TOOLTIP_BY_ACTION = {
+  "view-material": "查看这份材料或模板的摘要与原文。",
+  "view-rule": "查看这条规则的摘要、来源和原文。",
+  "view-profile": "查看这份写作画像的详细内容。",
+  "view-feedback": "查看这条反馈记录的详情与学习结果。",
+  "copy-path": "复制这条记录对应的文件或目录路径。",
+  "analyze-material": "重新分析这份材料，更新角色判断、结构和规则线索。",
+  "material-mark-template": "把这份材料转成正式模板，后续生成会优先参考它。",
+  "material-mark-history": "把这份模板转回历史材料，不再作为正式模板优先使用。",
+  "rule-set-scope": "修改这条规则的适用范围、文种或对象。",
+  "rule-view-versions": "查看这条规则的历史版本和变化记录。",
+  "rule-rollback": "把这条规则回滚到较早版本。",
+  "rule-confirm": "确认这条候选规则，让它正式生效。",
+  "rule-disable": "停用这条规则，后续生成不再默认遵守。",
+  "rule-reject": "拒绝这条候选规则，不再继续采用。",
+  "feedback-confirm-rule": "把这条反馈里沉淀出的候选规则直接确认入库。",
+  "learn-feedback": "重新学习这条反馈，更新候选规则和理解结果。",
+  "view-workflow": "查看这次写作流程的阶段事件与流转记录。",
+  "view-workflow-definition": "查看当前 7 步流程的 DSL 定义。",
+  "view-observability": "查看这次模型调用的耗时、结果和回退情况。",
+  "remove-annotation": "从本轮批注清单里删除这条批注。",
+  "confirm-generated-rule": "确认系统刚生成的候选规则并正式入库。",
+  "reject-generated-rule": "暂不采用这条候选规则，但保留这次学习记录。",
+  "llm-edit": "编辑这张模型卡片的接入配置。",
+  "llm-activate": "切换为当前默认使用的模型卡片。",
+  "llm-delete": "删除这张模型卡片。",
+  "stage-up": "把这个流程阶段向前移动一位。",
+  "stage-down": "把这个流程阶段向后移动一位。",
+  "stage-initial": "把这个阶段设为流程起点。",
+  "stage-delete": "删除这个流程阶段。",
+};
+
+const BUTTON_TOOLTIP_BY_TEXT = {
+  "新建写作": "进入 7 步引导式写作流程。",
+  "设置": "查看模型、知识库、规则、画像和调试信息。",
+  "模型": "查看和管理模型卡片。",
+  "知识库": "查看材料、模板和 Obsidian 对接信息。",
+  "写作大脑": "查看规则库、写作画像和反馈学习结果。",
+  "操作结果": "查看设置操作后的摘要和原始返回。",
+  "调试": "查看流程运行记录、模型调用和 DSL 编辑区。",
+  "新建卡片": "新增一个模型配置卡片。",
+  "开始 OAuth 登录": "发起 OpenAI Codex OAuth 授权登录。",
+  "保存为模型卡片": "保存当前填写的模型配置，生成一张新卡片。",
+  "保存卡片修改": "把当前编辑内容保存回这张模型卡片。",
+  "关闭": "关闭当前弹层或结果区域。",
+  "上一步": "返回前一个写作步骤。",
+  "下一步": "进入下一个写作步骤。",
+  "运行检查": "对当前写作输入做规则和完整性检查。",
+  "去修改正文": "跳转到正文编辑区，继续修改和反馈。",
+  "捕获正文选区": "读取你在正文里选中的文字，自动定位修改位置。",
+  "加入本轮批注清单": "把当前选区、原因和说明加入本轮批注。",
+  "清空本轮批注": "清空当前这一轮待提交的批注。",
+  "保存当前正文": "先保存当前改好的正文，不立即再生成。",
+  "提交反馈并再次生成": "按本轮修改意见学习后，再生成一版新稿。",
+  "直接定稿": "把当前正文定为最终稿，并写回任务文件。",
+  "刷新画像": "根据材料、规则和反馈重新生成写作画像。",
+  "重新加载 DSL": "重新读取当前流程 DSL 定义。",
+  "保存 DSL": "保存当前流程 DSL 改动并立即生效。",
+  "新增阶段": "在流程里新增一个阶段节点。",
+  "查看模板": "查看这份模板的摘要和原文。",
+  "查看": "查看这条内容的详情。",
+  "复制路径": "复制这条内容对应的文件路径。",
+  "编辑": "编辑当前这条配置或内容。",
+  "启用": "切换为当前默认使用项。",
+  "删除": "删除当前这条内容。",
+  "确认": "确认当前候选内容并正式生效。",
+  "停用": "暂时停用这条内容。",
+  "拒绝": "拒绝这条候选内容。",
+  "版本": "查看版本历史。",
+  "回滚": "回退到旧版本。",
+  "设范围": "设置适用范围。",
+  "学习反馈": "重新分析这条反馈并更新学习结果。",
+  "导入材料": "把当前填写的内容导入到知识库。",
+  "复制 Vault 根目录": "复制当前 Obsidian Vault 的根目录路径。",
+  "复制材料目录": "复制 materials 目录路径。",
+  "复制任务目录": "复制 tasks 目录路径。",
+  "复制规则目录": "复制 rules 目录路径。",
+  "复制画像目录": "复制 profiles 目录路径。",
+  "复制反馈目录": "复制 feedback 目录路径。",
+};
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -56,6 +137,69 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function inferButtonTooltip(button) {
+  const view = button.dataset.view || "";
+  if (view === "create") {
+    return BUTTON_TOOLTIP_BY_TEXT["新建写作"];
+  }
+  if (view === "settings") {
+    return BUTTON_TOOLTIP_BY_TEXT["设置"];
+  }
+
+  const settingsPage = button.dataset.settingsPage || "";
+  if (settingsPage && BUTTON_TOOLTIP_BY_TEXT[button.textContent.trim()]) {
+    return BUTTON_TOOLTIP_BY_TEXT[button.textContent.trim()];
+  }
+
+  const label = button.textContent.trim().replace(/\s+/g, " ");
+  if (label && BUTTON_TOOLTIP_BY_TEXT[label]) {
+    return BUTTON_TOOLTIP_BY_TEXT[label];
+  }
+
+  const action = button.dataset.action || "";
+  if (action && BUTTON_TOOLTIP_BY_ACTION[action]) {
+    return BUTTON_TOOLTIP_BY_ACTION[action];
+  }
+
+  if (label) {
+    return `点击执行：${label}`;
+  }
+
+  return "";
+}
+
+function hydrateButtonTooltips(root = document) {
+  const scope = root instanceof Element || root instanceof Document ? root : document;
+  scope.querySelectorAll("button").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const tooltip = inferButtonTooltip(button);
+    if (tooltip) {
+      button.title = tooltip;
+      button.setAttribute("aria-label", tooltip);
+    }
+  });
+}
+
+function startButtonTooltipObserver() {
+  hydrateButtonTooltips(document);
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => {
+        if (node instanceof HTMLButtonElement) {
+          hydrateButtonTooltips(node.parentElement || document);
+          return;
+        }
+        if (node instanceof HTMLElement) {
+          hydrateButtonTooltips(node);
+        }
+      });
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 function normalizeTemplateUiCopy(value) {
@@ -3563,6 +3707,7 @@ bindMaterialImport();
 bindLlmSettings();
 bindWorkflowDefinitionEditor();
 bindSettingsActions();
+startButtonTooltipObserver();
 updateWizardStep();
 setEditorVisible(false);
 
