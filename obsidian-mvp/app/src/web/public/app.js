@@ -298,6 +298,8 @@ function cleanMetaValue(value) {
   return normalizeTemplateUiCopy(
     String(value || "")
       .replace(/^['"]+|['"]+$/g, "")
+      .replace(/^fallback$/i, "本地兜底总结")
+      .replace(/^llm$/i, "LLM 自动总结")
       .replace(/^template$/i, "正式模板")
       .replace(/^history$/i, "历史材料")
       .replace(/^rule$/i, "规则")
