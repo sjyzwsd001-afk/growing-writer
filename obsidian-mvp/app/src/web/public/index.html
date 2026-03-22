@@ -203,66 +203,75 @@
               <h2>修改反馈与迭代</h2>
               <div id="task-badge" class="badge">任务未创建</div>
             </div>
-            <div class="panel-sub">
-              <div id="workflow-editor-stage" class="workflow-editor-stage">当前编排阶段：未开始</div>
+            <div class="panel-sub editor-overview-grid">
+              <div class="editor-overview-card">
+                <h3>当前阶段</h3>
+                <div id="workflow-editor-stage" class="workflow-editor-stage">当前编排阶段：未开始</div>
+              </div>
+              <div class="editor-overview-card">
+                <h3>本次写作约束</h3>
+                <div id="task-context-summary" class="summary-box">生成后会显示本次命中的模板、规则和参考材料。</div>
+              </div>
+              <div class="editor-overview-card">
+                <h3>接下来怎么做</h3>
+                <div id="editor-next-guide" class="summary-box">先看约束和正文，再在右侧补批注、提交反馈或直接定稿。</div>
+              </div>
+              <div class="editor-overview-card">
+                <h3>当前改动摘要</h3>
+                <div id="draft-change-summary" class="summary-box">生成初稿后会显示改动摘要。</div>
+              </div>
             </div>
 
-            <div class="panel-sub">
-              <h3>本次写作约束</h3>
-              <div id="task-context-summary" class="summary-box">生成后会显示本次命中的模板、规则和参考材料。</div>
-            </div>
-
-            <div class="grid one">
-              <label>文章正文（可直接修改）
-                <textarea id="draft-editor" rows="22" placeholder="生成后会显示在这里"></textarea>
-              </label>
-            </div>
-
-            <div class="panel-sub">
-              <h3>当前改动摘要</h3>
-              <div id="draft-change-summary" class="summary-box">生成初稿后会显示改动摘要。</div>
-            </div>
-
-            <div class="feedback-card">
-              <h3>本轮修改反馈</h3>
-              <div class="grid two">
-                <label>修改位置
-                  <input id="feedback-location" placeholder="例如：第二段-风险分析" />
-                </label>
-                <label>修改原因
-                  <input id="feedback-reason" placeholder="例如：这段过于空泛，需要补事实" />
+            <div class="editor-workbench">
+              <div class="editor-main-column">
+                <label>文章正文（可直接修改）
+                  <textarea id="draft-editor" rows="22" placeholder="生成后会显示在这里"></textarea>
                 </label>
               </div>
-              <div class="editor-actions">
-                <button id="capture-selection" type="button" class="btn ghost">从正文选区自动定位</button>
-                <button id="add-annotation" type="button" class="btn ghost">加入本轮批注清单</button>
-                <div id="selection-preview" class="mini">当前未选择正文片段。</div>
-              </div>
-              <label>批注说明
-                <textarea id="feedback-comment" rows="4" placeholder="可写修改意图、约束、希望强化的风格"></textarea>
-              </label>
-              <div class="panel-sub compact-panel">
-                <div class="section-meta">
-                  <h4>本轮批注清单</h4>
-                  <button id="clear-annotations" type="button" class="mini-btn">清空本轮批注</button>
+
+              <div class="editor-side-column">
+                <div class="feedback-card">
+                  <h3>本轮修改反馈</h3>
+                  <div class="grid two">
+                    <label>修改位置
+                      <input id="feedback-location" placeholder="例如：第二段-风险分析" />
+                    </label>
+                    <label>修改原因
+                      <input id="feedback-reason" placeholder="例如：这段过于空泛，需要补事实" />
+                    </label>
+                  </div>
+                  <div class="editor-actions">
+                    <button id="capture-selection" type="button" class="btn ghost">从正文选区自动定位</button>
+                    <button id="add-annotation" type="button" class="btn ghost">加入本轮批注清单</button>
+                    <div id="selection-preview" class="mini">当前未选择正文片段。</div>
+                  </div>
+                  <label>批注说明
+                    <textarea id="feedback-comment" rows="4" placeholder="可写修改意图、约束、希望强化的风格"></textarea>
+                  </label>
+                  <div class="panel-sub compact-panel">
+                    <div class="section-meta">
+                      <h4>本轮批注清单</h4>
+                      <button id="clear-annotations" type="button" class="mini-btn">清空本轮批注</button>
+                    </div>
+                    <div id="annotation-list" class="annotation-list"></div>
+                  </div>
+                  <div class="editor-actions">
+                    <button id="save-draft" type="button" class="btn ghost">仅保存当前正文</button>
+                    <button id="submit-feedback" type="button" class="btn primary">提交反馈并再次生成</button>
+                    <button id="finalize-draft" type="button" class="btn success">直接定稿</button>
+                  </div>
                 </div>
-                <div id="annotation-list" class="annotation-list"></div>
-              </div>
-              <div class="editor-actions">
-                <button id="save-draft" type="button" class="btn ghost">仅保存当前正文</button>
-                <button id="submit-feedback" type="button" class="btn primary">提交反馈并再次生成</button>
-                <button id="finalize-draft" type="button" class="btn success">直接定稿</button>
-              </div>
-            </div>
 
-            <div class="panel-sub">
-              <h3>反馈记录（同位置最新权重最高）</h3>
-              <div id="feedback-history" class="history-list"></div>
-            </div>
+                <div class="panel-sub editor-side-card">
+                  <h3>本轮学习结论</h3>
+                  <div id="feedback-learn-result" class="summary-box">提交反馈并再次生成后，这里会显示系统对本轮修改的学习结论。</div>
+                </div>
 
-            <div class="panel-sub">
-              <h3>本轮学习结论</h3>
-              <div id="feedback-learn-result" class="summary-box">提交反馈并再次生成后，这里会显示系统对本轮修改的学习结论。</div>
+                <div class="panel-sub editor-side-card">
+                  <h3>反馈记录（同位置最新权重最高）</h3>
+                  <div id="feedback-history" class="history-list"></div>
+                </div>
+              </div>
             </div>
           </section>
         </section>
