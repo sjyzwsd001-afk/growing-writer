@@ -216,15 +216,19 @@
 
         <section id="view-settings" class="view">
           <section class="panel">
-            <div class="panel-header"><h2>模型配置</h2></div>
-            <div class="panel-sub">
-              <div class="section-meta">
-                <strong>模型卡片</strong>
-                <button id="new-llm-card" class="mini-btn" type="button">新建卡片</button>
-              </div>
-              <div id="llm-card-list" class="llm-card-list"></div>
+            <div class="panel-header">
+              <h2>设置中心</h2>
+              <div class="mini">把配置、知识库和调试信息分开看，不再全部堆在一页里。</div>
             </div>
-            <div class="meta">最近更新：<span id="llm-updated-at">-</span></div>
+            <div class="panel-sub">
+              <div class="settings-subtabs">
+                <button type="button" class="settings-subtab active" data-settings-page="models">模型</button>
+                <button type="button" class="settings-subtab" data-settings-page="knowledge">知识库</button>
+                <button type="button" class="settings-subtab" data-settings-page="learning">写作大脑</button>
+                <button type="button" class="settings-subtab" data-settings-page="results">操作结果</button>
+                <button type="button" class="settings-subtab" data-settings-page="advanced">调试</button>
+              </div>
+            </div>
           </section>
 
           <div id="llm-editor-modal" class="modal hidden">
@@ -304,87 +308,142 @@
             </section>
           </div>
 
-          <section class="panel">
-            <div class="panel-header"><h2>设置操作结果</h2></div>
-            <div id="settings-result" class="result-viewer">在下方点击“查看/执行”后，这里会显示结果。</div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-header"><h2>材料导入</h2></div>
-            <form id="material-form" class="grid one">
-              <div class="grid two">
-                <label>导入模式
-                  <select name="mode">
-                    <option value="normal">历史材料</option>
-                    <option value="template">正式模板</option>
-                  </select>
-                </label>
-                <label>文档类型<input name="docType" required placeholder="例如：汇报材料" /></label>
+          <div class="settings-page active" data-settings-page="models">
+            <section class="panel">
+              <div class="panel-header"><h2>模型配置</h2></div>
+              <div class="panel-sub">
+                <div class="section-meta">
+                  <strong>模型卡片</strong>
+                  <button id="new-llm-card" class="mini-btn" type="button">新建卡片</button>
+                </div>
+                <div id="llm-card-list" class="llm-card-list"></div>
               </div>
-              <div id="material-mode-hint" class="summary-box">填写标题、来源、标签后，系统会建议更适合的导入模式。</div>
-              <label>标题<input name="title" required placeholder="例如：项目汇报模板V1" /></label>
-              <div class="grid two">
-                <label>面向对象<input name="audience" placeholder="例如：管理层" /></label>
-                <label>场景<input name="scenario" placeholder="例如：月度汇报" /></label>
+              <div class="meta">最近更新：<span id="llm-updated-at">-</span></div>
+            </section>
+          </div>
+
+          <div class="settings-page" data-settings-page="knowledge">
+            <section class="panel">
+              <div class="panel-header"><h2>Obsidian 对接</h2></div>
+              <div class="panel-sub">
+                <p class="hint">Growing Writer 的核心资产本来就适合放进 Obsidian 里管理。当前这套数据已经落在你的 Vault 中，可以直接被 Obsidian 打开、检索、双链和长期积累。</p>
+                <div class="result-summary-grid">
+                  <div class="result-summary-item">
+                    <div class="result-summary-label">历史材料</div>
+                    <strong>`materials/`</strong>
+                  </div>
+                  <div class="result-summary-item">
+                    <div class="result-summary-label">正式模板</div>
+                    <strong>`materials/`（带模板标记）</strong>
+                  </div>
+                  <div class="result-summary-item">
+                    <div class="result-summary-label">成稿任务</div>
+                    <strong>`tasks/`</strong>
+                  </div>
+                  <div class="result-summary-item">
+                    <div class="result-summary-label">写作画像</div>
+                    <strong>`profiles/`</strong>
+                  </div>
+                  <div class="result-summary-item">
+                    <div class="result-summary-label">规则库</div>
+                    <strong>`rules/`</strong>
+                  </div>
+                  <div class="result-summary-item">
+                    <div class="result-summary-label">反馈记录</div>
+                    <strong>`feedback/`</strong>
+                  </div>
+                </div>
+                <p class="hint">这意味着后面完全可以进一步做成“Obsidian 里管理资产，Growing Writer 负责分析、生成、学习”的模式。</p>
               </div>
-              <label>来源<input name="source" placeholder="例如：历史最佳稿" /></label>
-              <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
-              <label>上传文件<input name="uploadFile" type="file" accept=".txt,.md,.docx,.pdf" /></label>
-              <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx" /></label>
-              <label>正文<textarea name="body" rows="6" placeholder="可直接粘贴"></textarea></label>
-              <button class="btn primary" type="submit">导入材料</button>
-            </form>
-          </section>
+            </section>
 
-          <section class="panel">
-            <div class="panel-header"><h2>规则库</h2></div>
-            <p class="hint">这里保存系统已经学到的写作规则。你可以把它理解成“以后写这类材料时，默认要遵守的习惯”。</p>
-            <div
-              id="settings-rules"
-              class="simple-list"
-              data-empty="还没有规则。等你导入更多材料、修改几轮稿子后，系统会把稳定偏好逐步沉淀到这里。"></div>
-          </section>
+            <section class="panel">
+              <div class="panel-header"><h2>材料导入</h2></div>
+              <form id="material-form" class="grid one">
+                <div class="grid two">
+                  <label>导入模式
+                    <select name="mode">
+                      <option value="normal">历史材料</option>
+                      <option value="template">正式模板</option>
+                    </select>
+                  </label>
+                  <label>文档类型<input name="docType" required placeholder="例如：汇报材料" /></label>
+                </div>
+                <div id="material-mode-hint" class="summary-box">填写标题、来源、标签后，系统会建议更适合的导入模式。</div>
+                <label>标题<input name="title" required placeholder="例如：项目汇报模板V1" /></label>
+                <div class="grid two">
+                  <label>面向对象<input name="audience" placeholder="例如：管理层" /></label>
+                  <label>场景<input name="scenario" placeholder="例如：月度汇报" /></label>
+                </div>
+                <label>来源<input name="source" placeholder="例如：历史最佳稿" /></label>
+                <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
+                <label>上传文件<input name="uploadFile" type="file" accept=".txt,.md,.docx,.pdf" /></label>
+                <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx" /></label>
+                <label>正文<textarea name="body" rows="6" placeholder="可直接粘贴"></textarea></label>
+                <button class="btn primary" type="submit">导入材料</button>
+              </form>
+            </section>
 
-          <section class="panel">
-            <div class="panel-header">
-              <h2>写作画像</h2>
-              <button id="refresh-profile" type="button" class="btn ghost">刷新画像</button>
-            </div>
-            <p class="hint">写作画像是系统对你写法的总结，包括语气、结构、开头结尾习惯，以及高优先偏好。</p>
-            <div
-              id="settings-profiles"
-              class="simple-list"
-              data-empty="还没有生成画像。等你导入一些材料后，点“刷新画像”就会看到系统对你写作习惯的总结。"></div>
-          </section>
+            <section class="panel">
+              <div class="panel-header"><h2>历史材料</h2></div>
+              <p class="hint">这里放你过去写过的材料。系统会主要从中学习你的表达习惯、段落结构和写作偏好。</p>
+              <div
+                id="settings-materials"
+                class="simple-list"
+                data-empty="还没有历史材料。你可以先去上面的“材料导入”里导入几篇旧稿，系统后面会从这里学习你的写法。"></div>
+            </section>
 
-          <section class="panel">
-            <div class="panel-header"><h2>反馈记录</h2></div>
-            <p class="hint">这里记录你每次怎么改稿、系统学到了什么，以及哪些修改已经准备沉淀成规则。</p>
-            <div
-              id="settings-feedback"
-              class="simple-list"
-              data-empty="还没有反馈记录。等你在正文里改稿并提交反馈后，这里会开始积累你的修改轨迹。"></div>
-          </section>
+            <section class="panel">
+              <div class="panel-header"><h2>模板库</h2></div>
+              <p class="hint">这里放可反复套用的固定模板。正式模板会优先影响文章结构和语气，比普通历史材料更直接地参与生成。</p>
+              <div
+                id="settings-templates"
+                class="simple-list"
+                data-empty="还没有正式模板。你可以先导入固定格式材料，或把高质量历史材料转成模板。"></div>
+            </section>
+          </div>
 
-          <section class="panel">
-            <div class="panel-header"><h2>历史材料</h2></div>
-            <p class="hint">这里放你过去写过的材料。系统会主要从中学习你的表达习惯、段落结构和写作偏好。</p>
-            <div
-              id="settings-materials"
-              class="simple-list"
-              data-empty="还没有历史材料。你可以先去上面的“材料导入”里导入几篇旧稿，系统后面会从这里学习你的写法。"></div>
-          </section>
+          <div class="settings-page" data-settings-page="learning">
+            <section class="panel">
+              <div class="panel-header"><h2>规则库</h2></div>
+              <p class="hint">这里保存系统已经学到的写作规则。你可以把它理解成“以后写这类材料时，默认要遵守的习惯”。</p>
+              <div
+                id="settings-rules"
+                class="simple-list"
+                data-empty="还没有规则。等你导入更多材料、修改几轮稿子后，系统会把稳定偏好逐步沉淀到这里。"></div>
+            </section>
 
-          <section class="panel">
-            <div class="panel-header"><h2>模板库</h2></div>
-            <p class="hint">这里放可反复套用的固定模板。正式模板会优先影响文章结构和语气，比普通历史材料更直接地参与生成。</p>
-            <div
-              id="settings-templates"
-              class="simple-list"
-              data-empty="还没有正式模板。你可以先导入固定格式材料，或把高质量历史材料转成模板。"></div>
-          </section>
+            <section class="panel">
+              <div class="panel-header">
+                <h2>写作画像</h2>
+                <button id="refresh-profile" type="button" class="btn ghost">刷新画像</button>
+              </div>
+              <p class="hint">写作画像是系统对你写法的总结，包括语气、结构、开头结尾习惯，以及高优先偏好。</p>
+              <div
+                id="settings-profiles"
+                class="simple-list"
+                data-empty="还没有生成画像。等你导入一些材料后，点“刷新画像”就会看到系统对你写作习惯的总结。"></div>
+            </section>
 
-          <details class="panel advanced-panel">
+            <section class="panel">
+              <div class="panel-header"><h2>反馈记录</h2></div>
+              <p class="hint">这里记录你每次怎么改稿、系统学到了什么，以及哪些修改已经准备沉淀成规则。</p>
+              <div
+                id="settings-feedback"
+                class="simple-list"
+                data-empty="还没有反馈记录。等你在正文里改稿并提交反馈后，这里会开始积累你的修改轨迹。"></div>
+            </section>
+          </div>
+
+          <div class="settings-page" data-settings-page="results">
+            <section class="panel">
+              <div class="panel-header"><h2>设置操作结果</h2></div>
+              <div id="settings-result" class="result-viewer">在下方点击“查看/执行”后，这里会显示结果。</div>
+            </section>
+          </div>
+
+          <div class="settings-page" data-settings-page="advanced">
+            <details class="panel advanced-panel" open>
             <summary class="advanced-summary">高级调试区：编排运行记录、模型调用日志、DSL 编辑</summary>
 
             <section class="panel nested-panel">
@@ -430,7 +489,8 @@
                 </div>
               </div>
             </section>
-          </details>
+            </details>
+          </div>
         </section>
       </main>
     </div>

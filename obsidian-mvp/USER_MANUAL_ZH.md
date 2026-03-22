@@ -75,6 +75,24 @@
 
 如果你用 Obsidian，直接把 [obsidian-mvp](/Users/zw/Documents/growing writer/obsidian-mvp) 当成一个 vault 打开就行。
 
+### 2.1 现在和 Obsidian 是怎么对接的
+
+当前这套数据已经天然适合放进 Obsidian 里长期管理，不需要额外做一套独立知识库。
+
+- 历史材料：放在 [materials](/Users/zw/Documents/growing writer/obsidian-mvp/materials)
+- 正式模板：也放在 [materials](/Users/zw/Documents/growing writer/obsidian-mvp/materials)，但会带模板标记
+- 成稿任务：放在 [tasks](/Users/zw/Documents/growing writer/obsidian-mvp/tasks)
+- 写作画像：放在 [profiles](/Users/zw/Documents/growing writer/obsidian-mvp/profiles)
+- 规则库：放在 [rules](/Users/zw/Documents/growing writer/obsidian-mvp/rules)
+- 反馈记录：放在 [feedback](/Users/zw/Documents/growing writer/obsidian-mvp/feedback)
+
+你可以把它理解成：
+
+- `Obsidian` 负责长期保存、浏览、双链、检索
+- `Growing Writer` 负责导入、分析、生成、学习和回写
+
+这也是后面最合理的方向：不另起一套封闭数据库，而是把你的写作资产都沉淀在 Obsidian Vault 里。
+
 ---
 
 ## 3. 开始之前要做什么

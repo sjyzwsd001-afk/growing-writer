@@ -132,6 +132,27 @@ h3 {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
 }
 
+.settings-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-subtab {
+  border: 1px solid var(--border);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.settings-subtab.active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+}
+
 .main {
   margin-top: 12px;
 }
@@ -143,6 +164,15 @@ h3 {
 .view.active {
   display: grid;
   gap: 14px;
+}
+
+.settings-page {
+  display: none;
+  gap: 14px;
+}
+
+.settings-page.active {
+  display: grid;
 }
 
 .panel {

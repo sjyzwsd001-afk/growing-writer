@@ -1,6 +1,7 @@
 const state = {
   dashboard: null,
   currentView: "create",
+  settingsPage: "models",
   wizardStep: 1,
   wizardCheckPassed: false,
   wizardCheckReport: null,
@@ -107,6 +108,7 @@ function setSettingsResult(title, payload) {
   if (!container) {
     return;
   }
+  toggleSettingsPage("results");
 
   const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   const summary = buildSettingsResultSummary(payload);
@@ -128,6 +130,7 @@ function setSettingsResultPreview(title, summaryHtml, rawText = "") {
   if (!container) {
     return;
   }
+  toggleSettingsPage("results");
 
   container.innerHTML = `<h3>${escapeHtml(title)}</h3>
     ${summaryHtml}
@@ -424,6 +427,16 @@ function toggleView(viewName) {
   });
   document.querySelectorAll(".view").forEach((view) => {
     view.classList.toggle("active", view.id === `view-${viewName}`);
+  });
+}
+
+function toggleSettingsPage(pageName) {
+  state.settingsPage = pageName || "models";
+  document.querySelectorAll(".settings-subtab").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.settingsPage === state.settingsPage);
+  });
+  document.querySelectorAll(".settings-page").forEach((page) => {
+    page.classList.toggle("active", page.dataset.settingsPage === state.settingsPage);
   });
 }
 
@@ -2485,6 +2498,9 @@ async function submitFeedbackAndRegenerate() {
 function bindTabs() {
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => toggleView(tab.dataset.view));
+  });
+  document.querySelectorAll(".settings-subtab").forEach((tab) => {
+    tab.addEventListener("click", () => toggleSettingsPage(tab.dataset.settingsPage));
   });
 }
 
