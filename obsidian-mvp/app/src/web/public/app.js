@@ -1791,11 +1791,13 @@ function updateSelectionPreview(selection) {
   }
   if (!selection || !selection.text) {
     preview.textContent = "当前未选择正文片段。";
+    preview.classList.remove("has-selection");
     return;
   }
   const compact = selection.text.replace(/\s+/g, " ").trim();
   const text = compact.length > 120 ? `${compact.slice(0, 120)}...` : compact;
   preview.textContent = `已选区 [${selection.start}-${selection.end}]：${text}`;
+  preview.classList.add("has-selection");
 }
 
 function clearFeedbackInputs() {
@@ -1837,8 +1839,12 @@ function summarizeDraftChanges() {
 
 function renderPendingAnnotations() {
   const container = document.getElementById("annotation-list");
+  const counter = document.getElementById("annotation-count");
   if (!container) {
     return;
+  }
+  if (counter) {
+    counter.textContent = `${state.pendingAnnotations.length} 条`;
   }
   if (!state.pendingAnnotations.length) {
     container.innerHTML = `<div class="annotation-empty">还没有加入本轮批注。先在正文里选中一段，再写修改原因或批注说明。</div>`;

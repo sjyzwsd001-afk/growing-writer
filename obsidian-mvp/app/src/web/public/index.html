@@ -232,6 +232,17 @@
               <div class="editor-side-column">
                 <div class="feedback-card">
                   <h3>本轮修改反馈</h3>
+                  <div class="summary-box editor-feedback-guide">
+                    <strong>建议这样用：</strong>
+                    <div class="mini">1. 先在左侧正文里选中一段</div>
+                    <div class="mini">2. 写“修改原因”和补充说明</div>
+                    <div class="mini">3. 加入本轮批注清单，再统一提交反馈</div>
+                  </div>
+                  <div class="editor-actions">
+                    <button id="capture-selection" type="button" class="btn ghost">从正文选区自动定位</button>
+                    <button id="add-annotation" type="button" class="btn ghost">加入本轮批注清单</button>
+                  </div>
+                  <div id="selection-preview" class="summary-box selection-card">当前未选择正文片段。</div>
                   <div class="grid two">
                     <label>修改位置
                       <input id="feedback-location" placeholder="例如：第二段-风险分析" />
@@ -240,17 +251,12 @@
                       <input id="feedback-reason" placeholder="例如：这段过于空泛，需要补事实" />
                     </label>
                   </div>
-                  <div class="editor-actions">
-                    <button id="capture-selection" type="button" class="btn ghost">从正文选区自动定位</button>
-                    <button id="add-annotation" type="button" class="btn ghost">加入本轮批注清单</button>
-                    <div id="selection-preview" class="mini">当前未选择正文片段。</div>
-                  </div>
                   <label>批注说明
                     <textarea id="feedback-comment" rows="4" placeholder="可写修改意图、约束、希望强化的风格"></textarea>
                   </label>
                   <div class="panel-sub compact-panel">
                     <div class="section-meta">
-                      <h4>本轮批注清单</h4>
+                      <h4>本轮批注清单 <span id="annotation-count" class="mini-chip">0 条</span></h4>
                       <button id="clear-annotations" type="button" class="mini-btn">清空本轮批注</button>
                     </div>
                     <div id="annotation-list" class="annotation-list"></div>
