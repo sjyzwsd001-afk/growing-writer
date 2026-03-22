@@ -75,7 +75,10 @@
                   <h3>Step 2. 选几篇你以前写过的材料</h3>
                   <p class="hint">这里主要是让系统先学你的写法。没有也可以先跳过，后面再慢慢补。</p>
                 </div>
-                <p class="hint">这里选你以前写过的材料。系统会从中学习你的结构、语气和常用写法；如果暂时没有，也可以先跳过。</p>
+                <div class="summary-box wizard-focus-box">
+                  <strong>建议做法：</strong>
+                  <div class="mini">先选 1 到 3 篇最像你“正常发挥”的旧稿，不用一口气全选。</div>
+                </div>
                 <fieldset>
                   <legend>补充历史材料</legend>
                   <div id="wizard-material-options" class="check-grid"></div>
@@ -87,13 +90,18 @@
                   <h3>Step 3. 如果有固定套路，再选模板</h3>
                   <p class="hint">模板更像“这类材料通常怎么写”。有模板时，结果会更接近你的成熟稿。</p>
                 </div>
-                <p class="hint">如果你手头有固定写法、固定结构或常用套版，选模板后系统会更像按你的“老路子”来写；不选也能继续生成。</p>
-                <label>模板选择
+                <div class="summary-box wizard-focus-box">
+                  <strong>怎么理解模板：</strong>
+                  <div class="mini">有模板 = 按你的固定套路写；没模板 = 更自由地综合历史材料和规则来写。</div>
+                </div>
+                <label class="wizard-selector">
+                  <span>模板选择</span>
                   <select id="template-selector" name="templateId">
                     <option value="">不使用模板</option>
                   </select>
                 </label>
-                <label>怎么沿用这个模板
+                <div id="template-choice-cards" class="wizard-choice-cards"></div>
+                <label class="wizard-selector">怎么沿用这个模板
                   <select name="templateMode">
                     <option value="hybrid">平衡模式（推荐：模板骨架 + 本次事实）</option>
                     <option value="strict">严格套用（更像按模板直接改）</option>

@@ -838,7 +838,7 @@ function renderCheckOptions(containerId, items, name) {
 
   for (const item of sortedItems) {
     const label = document.createElement("label");
-    label.className = "check-item";
+    label.className = "check-item check-card";
     const hintChips = [
       item.recommendTemplatePromotion ? "建议转为模板" : "",
       item.isTemplate ? "正式模板" : "",
@@ -850,11 +850,37 @@ function renderCheckOptions(containerId, items, name) {
       <span>
         <strong>${escapeHtml(item.title)}</strong>
         <span class="mini">类型：${escapeHtml(item.docType || "-")} / 场景：${escapeHtml(item.scenario || "-")}</span>
+        <span class="mini">${escapeHtml(item.roleReason || "会作为历史参考材料参与生成。")}</span>
         ${hintChips.length ? `<span class="mini">${escapeHtml(hintChips.join(" / "))}</span>` : ""}
       </span>
     `;
     container.append(label);
   }
+}
+
+function renderTemplateChoiceCards(items, selectedId = "") {
+  const container = document.getElementById("template-choice-cards");
+  if (!container) {
+    return;
+  }
+  if (!items.length) {
+    container.innerHTML = `<div class="empty">暂无模板可选</div>`;
+    return;
+  }
+
+  container.innerHTML = items
+    .slice(0, 3)
+    .map((item) => {
+      const recommendation = scoreTemplateForCurrentTask(item, getCurrentWizardTemplateSignals());
+      const selected = item.id === selectedId;
+      return `<button type="button" class="choice-card ${selected ? "active" : ""}" data-action="pick-template-card" data-template-id="${escapeHtml(item.id)}">
+        <strong>${escapeHtml(item.title || "未命名模板")}</strong>
+        <div class="mini">${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "通用场景")}</div>
+        <div class="mini">${escapeHtml(getTemplateKindHint(item))}</div>
+        <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
+      </button>`;
+    })
+    .join("");
 }
 
 function renderTemplateSelector(items) {
@@ -883,6 +909,7 @@ function renderTemplateSelector(items) {
   if (currentValue) {
     select.value = currentValue;
   }
+  renderTemplateChoiceCards(sortedItems, String(select.value || "").trim());
   renderTemplatePreview();
 }
 
@@ -2785,6 +2812,14 @@ function bindWizard() {
       }
       if (["templateId", "templateMode", "docType", "background", "mustInclude", "specialRequirements"].includes(target.name || target.id)) {
         if ((target.name || target.id) === "templateId" || (target.name || target.id) === "templateMode") {
+          renderTemplateChoiceCards(
+            Array.isArray(state.dashboard?.templateCandidates)
+              ? state.dashboard.templateCandidates
+              : Array.isArray(state.dashboard?.templates)
+                ? state.dashboard.templates
+                : [],
+            String(document.getElementById("template-selector")?.value || "").trim(),
+          );
           renderTemplatePreview();
         } else {
           renderTemplateSelector(
@@ -2822,6 +2857,29 @@ function bindWizard() {
       setInfo(`生成失败：${error.message}`, true);
       setTaskBadge("生成失败", true);
     }
+  });
+
+  document.getElementById("wizard-form").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action='pick-template-card']");
+    if (!button) {
+      return;
+    }
+    const templateId = button.dataset.templateId || "";
+    const select = document.getElementById("template-selector");
+    if (!(select instanceof HTMLSelectElement)) {
+      return;
+    }
+    select.value = templateId;
+    renderTemplateChoiceCards(
+      Array.isArray(state.dashboard?.templateCandidates)
+        ? state.dashboard.templateCandidates
+        : Array.isArray(state.dashboard?.templates)
+          ? state.dashboard.templates
+          : [],
+      templateId,
+    );
+    renderTemplatePreview();
+    setInfo(templateId ? "已选中模板卡片。" : "已取消模板。");
   });
 }
 

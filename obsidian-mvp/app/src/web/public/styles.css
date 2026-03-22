@@ -369,9 +369,42 @@ legend {
   gap: 8px;
 }
 
+.check-card {
+  padding: 12px 12px;
+  background: linear-gradient(180deg, #fffefb 0%, #fff8ef 100%);
+}
+
 .check-item input {
   width: auto;
   margin-top: 3px;
+}
+
+.wizard-selector {
+  gap: 8px;
+}
+
+.wizard-choice-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.choice-card {
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fffefb 0%, #fff7ec 100%);
+  padding: 12px;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.choice-card.active {
+  border-color: rgba(143, 79, 26, 0.45);
+  box-shadow: inset 0 0 0 1px rgba(143, 79, 26, 0.18);
+  background: linear-gradient(180deg, #fff7e8 0%, #ffefd8 100%);
 }
 
 .mini {
