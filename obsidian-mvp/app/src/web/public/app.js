@@ -1055,6 +1055,7 @@ function renderGroupedRuleList(containerId, items) {
               </div>
               <div class="row-actions">
                 <button type="button" class="mini-btn" data-action="view-rule" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+                <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
                 <button type="button" class="mini-btn" data-action="rule-set-scope" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">设范围</button>
                 <button type="button" class="mini-btn" data-action="rule-view-versions" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">版本</button>
                 <button type="button" class="mini-btn" data-action="rule-rollback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">回滚</button>
@@ -1157,6 +1158,7 @@ function renderGroupedFeedbackList(containerId, items) {
               </div>
               <div class="row-actions">
                 <button type="button" class="mini-btn" data-action="view-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">查看</button>
+                <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)} 文件路径">复制路径</button>
                 <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
                 ${candidateRules
                   .map(
@@ -1215,6 +1217,7 @@ function renderProfileList(containerId, items) {
         </div>
         <div class="row-actions">
           <button type="button" class="mini-btn" data-action="view-profile" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)}">查看</button>
+          <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)} 文件路径">复制路径</button>
         </div>
       </div>`;
     })
@@ -1294,6 +1297,7 @@ function renderSettingsLists() {
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+      <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
       <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
       <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">${item.recommendTemplatePromotion ? "按建议转模板" : "转模板"}</button>
     </div>`;
@@ -1316,6 +1320,7 @@ function renderSettingsLists() {
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
+      <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
       <button type="button" class="mini-btn" data-action="material-mark-history" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转历史材料</button>
     </div>`;
   });
