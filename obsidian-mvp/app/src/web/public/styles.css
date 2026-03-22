@@ -259,6 +259,36 @@ h3 {
   display: grid;
 }
 
+.wizard-lead {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.wizard-focus-box {
+  background: linear-gradient(180deg, #fffefb 0%, #fff8ee 100%);
+  border-color: rgba(143, 79, 26, 0.22);
+}
+
+.wizard-optional-panel {
+  border: 1px solid rgba(218, 200, 172, 0.9);
+  border-radius: 14px;
+  background: rgba(255, 252, 247, 0.92);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-optional-panel summary {
+  cursor: pointer;
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.wizard-optional-panel[open] summary {
+  margin-bottom: 4px;
+}
+
 .wizard-actions {
   margin-top: 12px;
   display: flex;

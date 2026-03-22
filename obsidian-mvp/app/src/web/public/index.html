@@ -45,21 +45,36 @@
 
             <form id="wizard-form" class="wizard-form">
               <div class="wizard-step active" data-step="1">
-                <h3>Step 1. 问背景（任务目标与场景）</h3>
+                <div class="wizard-lead">
+                  <h3>Step 1. 先说清楚这次要写什么</h3>
+                  <p class="hint">先填核心信息就够了。其他更细的要求，可以展开后再补。</p>
+                </div>
+                <div class="summary-box wizard-focus-box">
+                  <strong>这一页先回答：</strong>
+                  <div class="mini">写什么 / 给谁看 / 用在什么场景</div>
+                </div>
                 <div class="grid two">
                   <label>任务标题<input name="title" required placeholder="例如：联调阶段风险汇报" /></label>
                   <label>文档类型<input name="docType" required placeholder="例如：风险汇报" /></label>
-                  <label>面向对象<input name="audience" placeholder="例如：领导" /></label>
-                  <label>使用场景<input name="scenario" placeholder="例如：项目阶段汇报" /></label>
-                  <label>目标字数<input name="targetLength" placeholder="例如：1200" /></label>
-                  <label>截止日期<input name="deadline" placeholder="例如：2026-03-20" /></label>
+                  <label>面向对象<input name="audience" placeholder="例如：领导 / 管理层 / 客户" /></label>
+                  <label>使用场景<input name="scenario" placeholder="例如：项目阶段汇报 / 周会 / 专题汇报" /></label>
                 </div>
-                <label>写作目标<input name="goal" placeholder="这次希望表达什么" /></label>
-                <label>预期效果<input name="targetEffect" placeholder="例如：让领导快速决策" /></label>
+                <details class="wizard-optional-panel">
+                  <summary>补充要求（可选）</summary>
+                  <div class="grid two">
+                    <label>目标字数<input name="targetLength" placeholder="例如：1200" /></label>
+                    <label>截止日期<input name="deadline" placeholder="例如：2026-03-20" /></label>
+                  </div>
+                  <label>写作目标<input name="goal" placeholder="例如：希望领导快速了解现状并拍板" /></label>
+                  <label>预期效果<input name="targetEffect" placeholder="例如：让领导快速决策 / 让对方认可方案" /></label>
+                </details>
               </div>
 
               <div class="wizard-step" data-step="2">
-                <h3>Step 2. 问材料（历史素材）</h3>
+                <div class="wizard-lead">
+                  <h3>Step 2. 选几篇你以前写过的材料</h3>
+                  <p class="hint">这里主要是让系统先学你的写法。没有也可以先跳过，后面再慢慢补。</p>
+                </div>
                 <p class="hint">这里选你以前写过的材料。系统会从中学习你的结构、语气和常用写法；如果暂时没有，也可以先跳过。</p>
                 <fieldset>
                   <legend>补充历史材料</legend>
@@ -68,7 +83,10 @@
               </div>
 
               <div class="wizard-step" data-step="3">
-                <h3>Step 3. 选模板（可选，但很有用）</h3>
+                <div class="wizard-lead">
+                  <h3>Step 3. 如果有固定套路，再选模板</h3>
+                  <p class="hint">模板更像“这类材料通常怎么写”。有模板时，结果会更接近你的成熟稿。</p>
+                </div>
                 <p class="hint">如果你手头有固定写法、固定结构或常用套版，选模板后系统会更像按你的“老路子”来写；不选也能继续生成。</p>
                 <label>模板选择
                   <select id="template-selector" name="templateId">
@@ -90,27 +108,39 @@
               </div>
 
               <div class="wizard-step" data-step="4">
-                <h3>Step 4. 写作输入（本次背景与约束）</h3>
-                <p class="hint">可上传文件（txt/md/docx/pdf）或直接粘贴文字。上传内容会作为本次写作背景材料参与生成。</p>
-                <label>背景材料上传
+                <div class="wizard-lead">
+                  <h3>Step 4. 告诉系统这次材料的核心内容</h3>
+                  <p class="hint">这一页只需要把“背景概况 + 关键事实”说清楚。其他细要求可以展开后再补。</p>
+                </div>
+                <div class="summary-box wizard-focus-box">
+                  <strong>建议最少填写：</strong>
+                  <div class="mini">背景说明 1 段 + 关键事实几条</div>
+                </div>
+                <label>本次背景材料上传（可选）
                   <input type="file" name="backgroundUpload" accept=".txt,.md,.docx,.pdf" />
                 </label>
-                <label>背景说明（每行一条）
-                  <textarea name="background" rows="4" placeholder="例如：项目已进入联调阶段"></textarea>
+                <label>背景说明
+                  <textarea name="background" rows="5" placeholder="例如：项目已进入联调阶段，目前整体推进正常，但接口稳定性和测试节奏仍有风险。"></textarea>
                 </label>
-                <label>事实与数据（每行一条）
-                  <textarea name="facts" rows="5" placeholder="例如：核心接口失败率 2.8%"></textarea>
+                <label>关键事实与数据（每行一条）
+                  <textarea name="facts" rows="5" placeholder="例如：&#10;核心接口失败率 2.8%&#10;本周完成 12 个接口联调&#10;还有 3 个接口待对方环境开放"></textarea>
                 </label>
-                <label>必须包含的信息（每行一条）
-                  <textarea name="mustInclude" rows="4" placeholder="例如：风险点、影响范围、应对措施"></textarea>
-                </label>
-                <label>特殊要求（每行一条）
-                  <textarea name="specialRequirements" rows="4" placeholder="例如：先写意义再写措施"></textarea>
-                </label>
+                <details class="wizard-optional-panel">
+                  <summary>补充要求（可选）</summary>
+                  <label>这篇材料必须写到的点（每行一条）
+                    <textarea name="mustInclude" rows="4" placeholder="例如：风险点、影响范围、应对措施、下一步安排"></textarea>
+                  </label>
+                  <label>特殊要求（每行一条）
+                    <textarea name="specialRequirements" rows="4" placeholder="例如：先写意义再写措施 / 不要写空话 / 结尾要落到下一步安排"></textarea>
+                  </label>
+                </details>
               </div>
 
               <div class="wizard-step" data-step="5">
-                <h3>Step 5. 检查（完整性与风险）</h3>
+                <div class="wizard-lead">
+                  <h3>Step 5. 先检查一遍，再开始生成</h3>
+                  <p class="hint">系统会先帮你看有没有缺关键输入，避免直接生成一篇空稿。</p>
+                </div>
                 <p class="hint">系统会检查关键输入完整性。通过检查后才能进入确认步骤。</p>
                 <div id="wizard-check-result" class="summary-box">点击“执行检查”开始。</div>
                 <div class="editor-actions">
@@ -119,7 +149,10 @@
               </div>
 
               <div class="wizard-step" data-step="6">
-                <h3>Step 6. 确认（准备生成）</h3>
+                <div class="wizard-lead">
+                  <h3>Step 6. 最后确认一次，系统就开始写</h3>
+                  <p class="hint">这里不需要你再填很多内容，只是确认前面信息已经够用。</p>
+                </div>
                 <div id="wizard-summary" class="summary-box">确认前 3 步后点击生成。</div>
                 <label class="inline-check">
                   <input type="checkbox" id="wizard-confirm-check" />
@@ -128,7 +161,10 @@
               </div>
 
               <div class="wizard-step" data-step="7">
-                <h3>Step 7. 定稿（完成写作流程）</h3>
+                <div class="wizard-lead">
+                  <h3>Step 7. 进入改稿和定稿</h3>
+                  <p class="hint">生成完成后，下面就是你持续修改、批注、再生成的工作台。</p>
+                </div>
                 <div class="summary-box">
                   初稿已生成。请在下方“修改反馈与迭代”区域完成调整，最后点击“直接定稿”。
                 </div>
