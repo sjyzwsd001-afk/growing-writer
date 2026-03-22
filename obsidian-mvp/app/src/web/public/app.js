@@ -150,6 +150,34 @@ function setTaskBadge(text, isError = false) {
   badge.classList.toggle("danger", isError);
 }
 
+async function copyText(text, successMessage) {
+  const value = String(text || "").trim();
+  if (!value) {
+    throw new Error("没有可复制的路径。");
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+  } else {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+
+  const status = document.getElementById("obsidian-quick-action-status");
+  if (status) {
+    status.textContent = successMessage || "已复制到剪贴板。";
+  } else {
+    setInfo(successMessage || "已复制到剪贴板。");
+  }
+}
+
 function normalizeLocation(value) {
   const cleaned = String(value || "").trim();
   return cleaned || "全文";
@@ -1195,6 +1223,7 @@ function renderProfileList(containerId, items) {
 
 function renderObsidianAssetSummary(data) {
   const container = document.getElementById("obsidian-asset-summary");
+  const quickActions = document.getElementById("obsidian-quick-actions");
   if (!container) {
     return;
   }
@@ -1206,6 +1235,14 @@ function renderObsidianAssetSummary(data) {
   const feedbackCount = Array.isArray(data.feedback) ? data.feedback.length : 0;
   const taskCount = Array.isArray(data.tasks) ? data.tasks.length : 0;
   const vaultRoot = data.vaultRoot || "-";
+  const quickPaths = [
+    { label: "复制 Vault 根目录", path: vaultRoot },
+    { label: "复制材料目录", path: `${vaultRoot}/materials` },
+    { label: "复制任务目录", path: `${vaultRoot}/tasks` },
+    { label: "复制规则目录", path: `${vaultRoot}/rules` },
+    { label: "复制画像目录", path: `${vaultRoot}/profiles` },
+    { label: "复制反馈目录", path: `${vaultRoot}/feedback` },
+  ];
 
   container.innerHTML = `
     <strong>当前 Vault 资产分布</strong>
@@ -1214,6 +1251,19 @@ function renderObsidianAssetSummary(data) {
     <div class="mini">规则 ${escapeHtml(String(ruleCount))} 条 / 画像 ${escapeHtml(String(profileCount))} 份 / 反馈 ${escapeHtml(String(feedbackCount))} 条</div>
     <div class="mini">推荐方式：在 Obsidian 里整理这些资产，在 Growing Writer 里继续分析、生成和学习。</div>
   `;
+
+  if (quickActions) {
+    quickActions.innerHTML = quickPaths
+      .map(
+        (item) =>
+          `<button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</button>`,
+      )
+      .join("");
+  }
+  const status = document.getElementById("obsidian-quick-action-status");
+  if (status && !status.textContent) {
+    status.textContent = "可以直接复制这些目录路径，到 Obsidian、Finder 或其他工具里继续使用。";
+  }
 }
 
 function renderSettingsLists() {
@@ -3247,6 +3297,11 @@ async function runSettingsAction(action, button) {
     return;
   }
 
+  if (action === "copy-path") {
+    await copyText(path, `${title || "路径"}已复制。`);
+    return;
+  }
+
   if (action === "view-material" || action === "view-rule" || action === "view-profile" || action === "view-feedback") {
     const data = await api(`/api/document?path=${encodeURIComponent(path)}`);
     const kind =
@@ -3434,6 +3489,7 @@ async function runSettingsAction(action, button) {
 
 function bindSettingsActions() {
   const containers = [
+    "obsidian-quick-actions",
     "settings-materials",
     "settings-templates",
     "settings-rules",
