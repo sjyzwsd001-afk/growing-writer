@@ -790,8 +790,9 @@ function deriveActiveStageIdByWizardStep(stages) {
 function renderWorkflowStageTracker() {
   const tracker = document.getElementById("workflow-stage-tracker");
   const note = document.getElementById("workflow-stage-note");
+  const nextAction = document.getElementById("workflow-next-action");
   const editorStage = document.getElementById("workflow-editor-stage");
-  if (!tracker || !note || !editorStage) {
+  if (!tracker || !note || !editorStage || !nextAction) {
     return;
   }
 
@@ -799,6 +800,7 @@ function renderWorkflowStageTracker() {
   if (!stages.length) {
     tracker.innerHTML = `<div class="empty">暂无流程定义。</div>`;
     note.textContent = "当前阶段：未定义";
+    nextAction.textContent = "下一步：等待流程定义。";
     editorStage.textContent = "当前编排阶段：未开始";
     return;
   }
@@ -826,10 +828,12 @@ function renderWorkflowStageTracker() {
       } else if (index === activeIndex) {
         status = "active";
       }
+      const statusLabel = status === "active" ? "当前" : status === "completed" ? "已完成" : "待进行";
       return `<div class="workflow-stage-item ${status}">
         <div class="stage-no">第 ${index + 1} 步</div>
         <strong>${escapeHtml(stage.label || stage.id)}</strong>
         <div class="mini">${escapeHtml(stage.description || "")}</div>
+        <div class="stage-status">${escapeHtml(statusLabel)}</div>
       </div>`;
     })
     .join("");
@@ -837,9 +841,37 @@ function renderWorkflowStageTracker() {
   const activeStage = stages[activeIndex] || stages[0];
   const statusText = run ? `（Run: ${run.status || "running"}）` : "（表单引导）";
   note.textContent = `当前阶段：${activeStage.label || activeStage.id}${statusText}`;
+  nextAction.textContent = `下一步：${getNextActionHint(activeIndex, stages, Boolean(run))}`;
   editorStage.textContent = run
     ? `当前编排阶段：${activeStage.label || activeStage.id} / ${run.currentStage || "-"}`
     : "当前编排阶段：未开始（先完成前4步并生成）";
+}
+
+function getNextActionHint(activeIndex, stages, hasRun) {
+  if (hasRun) {
+    const active = stages[activeIndex];
+    if (!active) {
+      return "查看当前运行状态。";
+    }
+    if (active.id === "USER_CONFIRM_OR_EDIT") {
+      return "修改正文、补批注，或直接定稿。";
+    }
+    if (active.id === "FINALIZE_AND_LEARN") {
+      return "当前流程已到定稿阶段，可以继续回看和复盘。";
+    }
+    return `等待当前阶段完成：${active.label || active.id}。`;
+  }
+
+  const hintsByStep = {
+    1: "先填写任务标题和文档类型。",
+    2: "挑 1 到 3 篇最像你写法的历史材料，或者直接跳过。",
+    3: "如果这类材料有固定套路，选一个模板。",
+    4: "补一段背景说明，再写几条关键事实。",
+    5: "点击“执行检查”，先看有没有关键内容缺失。",
+    6: "确认准备状态无误后，勾选并开始生成。",
+    7: "到下方编辑区继续改稿和定稿。",
+  };
+  return hintsByStep[state.wizardStep] || "继续完成当前步骤。";
 }
 
 function updateWizardStep() {
