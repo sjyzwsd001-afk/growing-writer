@@ -1193,8 +1193,32 @@ function renderProfileList(containerId, items) {
     .join("");
 }
 
+function renderObsidianAssetSummary(data) {
+  const container = document.getElementById("obsidian-asset-summary");
+  if (!container) {
+    return;
+  }
+
+  const materialCount = Array.isArray(data.materials) ? data.materials.length : 0;
+  const templateCount = Array.isArray(data.templates) ? data.templates.length : 0;
+  const ruleCount = Array.isArray(data.rules) ? data.rules.length : 0;
+  const profileCount = Array.isArray(data.profiles) ? data.profiles.length : 0;
+  const feedbackCount = Array.isArray(data.feedback) ? data.feedback.length : 0;
+  const taskCount = Array.isArray(data.tasks) ? data.tasks.length : 0;
+  const vaultRoot = data.vaultRoot || "-";
+
+  container.innerHTML = `
+    <strong>当前 Vault 资产分布</strong>
+    <div class="mini">Vault：${escapeHtml(vaultRoot)}</div>
+    <div class="mini">历史材料 ${escapeHtml(String(materialCount))} 篇 / 正式模板 ${escapeHtml(String(templateCount))} 份 / 任务成稿 ${escapeHtml(String(taskCount))} 份</div>
+    <div class="mini">规则 ${escapeHtml(String(ruleCount))} 条 / 画像 ${escapeHtml(String(profileCount))} 份 / 反馈 ${escapeHtml(String(feedbackCount))} 条</div>
+    <div class="mini">推荐方式：在 Obsidian 里整理这些资产，在 Growing Writer 里继续分析、生成和学习。</div>
+  `;
+}
+
 function renderSettingsLists() {
   const data = state.dashboard || {};
+  renderObsidianAssetSummary(data);
   const sortedMaterials = [...(data.materials || [])]
     .filter((item) => !item.isTemplate)
     .sort((a, b) => {
