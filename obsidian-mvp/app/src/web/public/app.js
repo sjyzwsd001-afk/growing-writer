@@ -616,6 +616,12 @@ function updateWizardSummary() {
   const form = document.getElementById("wizard-form");
   const formData = new FormData(form);
   const selectedCount = formData.getAll("sourceMaterialIds").length;
+  const title = String(formData.get("title") || "").trim();
+  const docType = String(formData.get("docType") || "").trim();
+  const background = String(formData.get("background") || "").trim();
+  const facts = String(formData.get("facts") || "").trim();
+  const hasUpload =
+    formData.get("backgroundUpload") instanceof File && formData.get("backgroundUpload").size > 0;
   const templateTitle =
     document.querySelector("#template-selector option:checked")?.textContent || "不使用模板";
   const templateMode = String(formData.get("templateMode") || "hybrid");
@@ -623,16 +629,33 @@ function updateWizardSummary() {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean).length;
-  const lines = [
-    `任务：${String(formData.get("title") || "").trim() || "未填写"}`,
-    `文档类型：${String(formData.get("docType") || "").trim() || "未填写"}`,
-    `模板：${templateTitle}`,
-    `模板用法：${templateMode === "strict" ? "严格套用" : templateMode === "light" ? "轻参考" : "平衡模式"} / 额外提醒 ${overrideCount} 条`,
-    `已选历史材料：${selectedCount} 篇`,
-    `背景条目：${String(formData.get("background") || "").trim() ? "已填写" : "未填写"}`,
-    `检查状态：${state.wizardCheckPassed ? "已通过" : "未通过"}`,
+  const readiness = [
+    { label: "任务标题", ok: Boolean(title), detail: title || "未填写" },
+    { label: "文档类型", ok: Boolean(docType), detail: docType || "未填写" },
+    { label: "本次背景", ok: Boolean(background || facts || hasUpload), detail: background || facts || (hasUpload ? "已上传背景文件" : "未填写") },
+    { label: "检查结果", ok: state.wizardCheckPassed, detail: state.wizardCheckPassed ? "已通过" : "尚未通过" },
+    { label: "人工确认", ok: document.getElementById("wizard-confirm-check")?.checked, detail: document.getElementById("wizard-confirm-check")?.checked ? "已勾选" : "未勾选" },
   ];
-  document.getElementById("wizard-summary").innerHTML = lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+  const modeLabel = templateMode === "strict" ? "严格套用" : templateMode === "light" ? "轻参考" : "平衡模式";
+  document.getElementById("wizard-summary").innerHTML = `
+    <div class="result-summary-grid">
+      <div class="result-summary-item"><div class="result-summary-label">任务</div><strong>${escapeHtml(title || "未填写")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">文档类型</div><strong>${escapeHtml(docType || "未填写")}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">模板</div><strong>${escapeHtml(templateTitle)}</strong></div>
+      <div class="result-summary-item"><div class="result-summary-label">历史材料</div><strong>${escapeHtml(String(selectedCount))} 篇</strong></div>
+    </div>
+    <div class="mini">模板用法：${escapeHtml(modeLabel)} / 额外提醒 ${escapeHtml(String(overrideCount))} 条</div>
+    <div class="wizard-readiness-list">
+      ${readiness
+        .map(
+          (item) => `<div class="wizard-readiness-item ${item.ok ? "ok" : "pending"}">
+            <strong>${escapeHtml(item.label)}</strong>
+            <div class="mini">${escapeHtml(item.detail)}</div>
+          </div>`,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function runWizardCheck() {
@@ -681,6 +704,7 @@ function runWizardCheck() {
 
 function renderWizardCheckResult(report) {
   const container = document.getElementById("wizard-check-result");
+  const form = document.getElementById("wizard-form");
   if (!container) {
     return;
   }
@@ -690,10 +714,25 @@ function renderWizardCheckResult(report) {
     return;
   }
 
+  const formData = form ? new FormData(form) : new FormData();
+  const summaryItems = [
+    { label: "阻塞项", value: String(report.blockers.length) },
+    { label: "提醒项", value: String(report.warnings.length) },
+    { label: "背景输入", value: String(formData.get("background") || "").trim() || String(formData.get("facts") || "").trim() ? "已提供" : "偏少" },
+    { label: "历史材料", value: `${formData.getAll("sourceMaterialIds").length} 篇` },
+  ];
+
   const blockerLines = report.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const warningLines = report.warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   container.innerHTML = `
     <div class="${report.ok ? "msg" : "msg error"}">${report.ok ? "检查通过，可进入确认步骤。" : "检查未通过，请先修复阻塞项。"}</div>
+    <div class="result-summary-grid">
+      ${summaryItems
+        .map(
+          (item) => `<div class="result-summary-item"><div class="result-summary-label">${escapeHtml(item.label)}</div><strong>${escapeHtml(item.value)}</strong></div>`,
+        )
+        .join("")}
+    </div>
     <div><strong>阻塞项</strong></div>
     <ul>${blockerLines || "<li>无</li>"}</ul>
     <div><strong>提醒项</strong></div>

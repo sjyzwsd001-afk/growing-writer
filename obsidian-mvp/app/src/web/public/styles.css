@@ -289,6 +289,30 @@ h3 {
   margin-bottom: 4px;
 }
 
+.wizard-readiness-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.wizard-readiness-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fffefb;
+  padding: 10px 11px;
+}
+
+.wizard-readiness-item.ok {
+  border-color: rgba(31, 107, 70, 0.28);
+  background: #f5fbf7;
+}
+
+.wizard-readiness-item.pending {
+  border-color: rgba(143, 79, 26, 0.22);
+  background: #fff9f0;
+}
+
 .wizard-actions {
   margin-top: 12px;
   display: flex;
