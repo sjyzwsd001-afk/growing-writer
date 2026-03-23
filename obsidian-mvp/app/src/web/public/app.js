@@ -1966,6 +1966,9 @@ function renderPendingAnnotations() {
   }
   summarizeDraftChanges();
   renderAnnotationSubmissionSummary();
+  if (!state.latestFeedbackLearnResult?.analysis) {
+    renderFeedbackLearnResult();
+  }
 }
 
 function refillAnnotationForm(annotation) {
@@ -1998,7 +2001,30 @@ function renderFeedbackLearnResult() {
   }
   const result = state.latestFeedbackLearnResult;
   if (!result?.analysis) {
-    container.textContent = "提交反馈并再次生成后，这里会显示系统对本轮修改的学习结论。";
+    if (!state.pendingAnnotations.length) {
+      container.textContent = "提交反馈并再次生成后，这里会显示系统对本轮修改的学习结论。";
+      return;
+    }
+
+    const reusableCount = state.pendingAnnotations.filter((item) => item.isReusable).length;
+    const highPriorityCount = state.pendingAnnotations.filter((item) => item.priority === "high").length;
+    const likelyFocus = reusableCount
+      ? "这轮里有一部分被标记为长期偏好，系统更可能尝试沉淀成规则。"
+      : "这轮更像针对当前稿件的局部改写，系统会优先按一次性修改吸收。";
+    const structureBias = state.pendingAnnotations.some((item) =>
+      /结构|顺序|层次|开头|结尾|先写|后写/.test(`${item.location} ${item.reason} ${item.comment}`),
+    )
+      ? "其中包含结构类信号，后续学习结果里更可能出现段落顺序或组织方式建议。"
+      : "目前更多是措辞、补事实和表达强弱的调整信号。";
+
+    container.innerHTML = `<div class="learn-result">
+      <div class="learn-result-grid">
+        <div class="learn-result-item"><strong>提交前预判：</strong>${escapeHtml(likelyFocus)}</div>
+        <div class="learn-result-item"><strong>结构倾向：</strong>${escapeHtml(structureBias)}</div>
+        <div class="learn-result-item"><strong>长期偏好：</strong>${escapeHtml(String(reusableCount))} 条</div>
+        <div class="learn-result-item"><strong>高优先级：</strong>${escapeHtml(String(highPriorityCount))} 条</div>
+      </div>
+    </div>`;
     return;
   }
 
