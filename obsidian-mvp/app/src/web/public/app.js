@@ -1870,6 +1870,33 @@ function summarizeDraftChanges() {
   container.innerHTML = summary.map((item) => `<div>${escapeHtml(item)}</div>`).join("");
 }
 
+function renderAnnotationSubmissionSummary() {
+  const container = document.getElementById("annotation-submit-summary");
+  if (!container) {
+    return;
+  }
+  if (!state.pendingAnnotations.length) {
+    container.textContent = "还没有需要提交的批注。";
+    return;
+  }
+
+  const topItems = state.pendingAnnotations.slice(0, 3).map((item, index) => {
+    const mode = item.isReusable ? "长期偏好" : "本次修改";
+    const reason = item.reason || item.comment || "未填写原因";
+    return `${index + 1}. ${item.location || `批注 ${index + 1}`} / ${mode} / ${reason}`;
+  });
+  const remaining = state.pendingAnnotations.length - topItems.length;
+  const highPriorityCount = state.pendingAnnotations.filter((item) => item.priority === "high").length;
+
+  container.innerHTML = `
+    <div class="mini">将按当前顺序提交 ${escapeHtml(String(state.pendingAnnotations.length))} 条批注，其中高优先级 ${escapeHtml(String(highPriorityCount))} 条。</div>
+    <div class="annotation-submit-lines">
+      ${topItems.map((item) => `<div>${escapeHtml(item)}</div>`).join("")}
+      ${remaining > 0 ? `<div class="mini">还有 ${escapeHtml(String(remaining))} 条会一并提交。</div>` : ""}
+    </div>
+  `;
+}
+
 function renderPendingAnnotations() {
   const container = document.getElementById("annotation-list");
   const counter = document.getElementById("annotation-count");
@@ -1887,6 +1914,7 @@ function renderPendingAnnotations() {
     }
     state.activeAnnotationIndex = -1;
     summarizeDraftChanges();
+    renderAnnotationSubmissionSummary();
     return;
   }
 
@@ -1937,6 +1965,7 @@ function renderPendingAnnotations() {
       <div class="mini">当前正在编辑：${escapeHtml(active?.location || "未命名位置")}</div>`;
   }
   summarizeDraftChanges();
+  renderAnnotationSubmissionSummary();
 }
 
 function refillAnnotationForm(annotation) {
