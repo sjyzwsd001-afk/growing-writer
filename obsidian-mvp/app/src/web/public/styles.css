@@ -553,6 +553,15 @@ legend {
   background: linear-gradient(180deg, #fffefb 0%, #fff7ec 100%);
 }
 
+.selection-card-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.selection-card-label {
+  font-weight: 600;
+}
+
 .compact-panel {
   padding: 0;
   margin-top: 4px;

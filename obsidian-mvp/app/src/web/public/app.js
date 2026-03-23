@@ -1786,11 +1786,21 @@ function setEditorVisible(visible) {
 
 function updateSelectionPreview(selection) {
   const preview = document.getElementById("selection-preview");
+  const editor = document.getElementById("draft-editor");
   if (!preview) {
     return;
   }
   if (!selection || !selection.text) {
-    preview.textContent = "当前未选择正文片段。";
+    const cursor = Number(editor?.selectionStart ?? 0);
+    const value = String(editor?.value || "");
+    const lineIndex = value.slice(0, cursor).split(/\r?\n/).length;
+    const currentLine = value.split(/\r?\n/)[Math.max(0, lineIndex - 1)] || "";
+    const compact = currentLine.replace(/\s+/g, " ").trim();
+    if (!value.trim()) {
+      preview.textContent = "当前还没有正文内容。生成初稿后，这里会显示你正在修改的位置。";
+    } else {
+      preview.textContent = `当前光标大约在第 ${lineIndex} 行：${compact || "这一行暂时为空。"}`;
+    }
     preview.classList.remove("has-selection");
     return;
   }
@@ -2974,7 +2984,12 @@ function bindEditorActions() {
     captureDraftSelection({ strict: false });
   });
 
+  document.getElementById("draft-editor").addEventListener("keyup", () => {
+    captureDraftSelection({ strict: false });
+  });
+
   document.getElementById("draft-editor").addEventListener("input", () => {
+    captureDraftSelection({ strict: false });
     summarizeDraftChanges();
   });
 

@@ -242,7 +242,10 @@
                     <button id="capture-selection" type="button" class="btn ghost">从正文选区自动定位</button>
                     <button id="add-annotation" type="button" class="btn ghost">加入本轮批注清单</button>
                   </div>
-                  <div id="selection-preview" class="summary-box selection-card">当前未选择正文片段。</div>
+                  <div class="selection-card-wrap">
+                    <div class="mini selection-card-label">当前选区 / 编辑焦点</div>
+                    <div id="selection-preview" class="summary-box selection-card">当前未选择正文片段。</div>
+                  </div>
                   <div class="grid two">
                     <label>修改位置
                       <input id="feedback-location" placeholder="例如：第二段-风险分析" />
