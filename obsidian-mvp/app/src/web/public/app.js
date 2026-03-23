@@ -1821,6 +1821,24 @@ function clearFeedbackInputs() {
   document.getElementById("feedback-comment").value = "";
 }
 
+function syncActiveAnnotationFromSelection(selection) {
+  if (!selection) {
+    return;
+  }
+  const matchIndex = state.pendingAnnotations.findIndex(
+    (item) =>
+      item?.selection &&
+      Number(item.selection.start) === Number(selection.start) &&
+      Number(item.selection.end) === Number(selection.end),
+  );
+  if (matchIndex < 0 || matchIndex === state.activeAnnotationIndex) {
+    return;
+  }
+  state.activeAnnotationIndex = matchIndex;
+  refillAnnotationForm(state.pendingAnnotations[matchIndex]);
+  renderPendingAnnotations();
+}
+
 function summarizeDraftChanges() {
   const baseline = String(state.generatedDraftBaseline || "");
   const current = String(document.getElementById("draft-editor")?.value || "");
@@ -2172,6 +2190,7 @@ function captureDraftSelection(options = { strict: false }) {
   if (locationInput && !String(locationInput.value || "").trim()) {
     locationInput.value = `正文[${start}-${end}]`;
   }
+  syncActiveAnnotationFromSelection(selection);
   updateSelectionPreview(selection);
   return selection;
 }
