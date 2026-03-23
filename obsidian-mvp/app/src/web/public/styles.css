@@ -679,6 +679,13 @@ legend {
   gap: 8px;
 }
 
+.annotation-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .annotation-text {
   border-radius: 10px;
   background: #fff;

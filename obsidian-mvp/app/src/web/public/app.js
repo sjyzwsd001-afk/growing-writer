@@ -70,6 +70,8 @@ const BUTTON_TOOLTIP_BY_ACTION = {
   "view-workflow-definition": "查看当前 7 步流程的 DSL 定义。",
   "view-observability": "查看这次模型调用的耗时、结果和回退情况。",
   "remove-annotation": "从本轮批注清单里删除这条批注。",
+  "edit-annotation": "把这条批注回填到输入区，继续修改。",
+  "focus-annotation": "把正文光标跳到这条批注对应的位置。",
   "confirm-generated-rule": "确认系统刚生成的候选规则并正式入库。",
   "reject-generated-rule": "暂不采用这条候选规则，但保留这次学习记录。",
   "llm-edit": "编辑这张模型卡片的接入配置。",
@@ -1872,7 +1874,11 @@ function renderPendingAnnotations() {
       (item, index) => `<div class="annotation-item ${index === state.pendingAnnotations.length - 1 ? "newest" : ""}">
         <div class="annotation-head">
           <strong>${escapeHtml(item.location || `批注 ${index + 1}`)}</strong>
-          <button type="button" class="mini-btn danger" data-action="remove-annotation" data-index="${index}">删除</button>
+          <div class="annotation-head-actions">
+            <button type="button" class="mini-btn" data-action="edit-annotation" data-index="${index}">回填</button>
+            <button type="button" class="mini-btn" data-action="focus-annotation" data-index="${index}">定位</button>
+            <button type="button" class="mini-btn danger" data-action="remove-annotation" data-index="${index}">删除</button>
+          </div>
         </div>
         <div class="annotation-controls">
           <label class="inline-check mini">
@@ -1902,6 +1908,29 @@ function renderPendingAnnotations() {
     lastAdded.innerHTML = `<strong>刚加入本轮批注：</strong><div class="mini">${escapeHtml(latest.location || "未命名位置")} / ${escapeHtml(latest.reason || latest.comment || "未填写原因")}</div>`;
   }
   summarizeDraftChanges();
+}
+
+function refillAnnotationForm(annotation) {
+  if (!annotation) {
+    return;
+  }
+  document.getElementById("feedback-location").value = annotation.location || "";
+  document.getElementById("feedback-reason").value = annotation.reason || "";
+  document.getElementById("feedback-comment").value = annotation.comment || "";
+  state.feedbackSelection = annotation.selection || null;
+  updateSelectionPreview(annotation.selection || null);
+}
+
+function focusAnnotationInDraft(annotation) {
+  const editor = document.getElementById("draft-editor");
+  const selection = annotation?.selection;
+  if (!editor || !selection || !Number.isFinite(selection.start) || !Number.isFinite(selection.end)) {
+    throw new Error("这条批注没有记录可定位的正文选区。");
+  }
+  editor.focus();
+  editor.setSelectionRange(selection.start, selection.end);
+  state.feedbackSelection = selection;
+  updateSelectionPreview(selection);
 }
 
 function renderFeedbackLearnResult() {
@@ -3018,15 +3047,38 @@ function bindEditorActions() {
 
   document.getElementById("annotation-list").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-action='remove-annotation']");
-    if (!button) {
+    const actionButton = event.target.closest("button[data-action]");
+    if (!actionButton) {
       return;
     }
-    const index = Number(button.dataset.index);
-    if (!Number.isInteger(index) || index < 0) {
+    const action = actionButton.dataset.action || "";
+    const index = Number(actionButton.dataset.index);
+    if (!Number.isInteger(index) || index < 0 || !state.pendingAnnotations[index]) {
       return;
     }
-    state.pendingAnnotations.splice(index, 1);
-    renderPendingAnnotations();
+    const annotation = state.pendingAnnotations[index];
+
+    if (action === "remove-annotation") {
+      state.pendingAnnotations.splice(index, 1);
+      renderPendingAnnotations();
+      setInfo("已从本轮批注清单移除。");
+      return;
+    }
+
+    if (action === "edit-annotation") {
+      refillAnnotationForm(annotation);
+      setInfo("已把这条批注回填到输入区。");
+      return;
+    }
+
+    if (action === "focus-annotation") {
+      try {
+        focusAnnotationInDraft(annotation);
+        setInfo("已定位到这条批注对应的正文位置。");
+      } catch (error) {
+        setInfo(error.message, true);
+      }
+    }
   });
 
   document.getElementById("annotation-list").addEventListener("change", (event) => {
