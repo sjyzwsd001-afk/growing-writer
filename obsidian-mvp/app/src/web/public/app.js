@@ -72,6 +72,8 @@ const BUTTON_TOOLTIP_BY_ACTION = {
   "remove-annotation": "从本轮批注清单里删除这条批注。",
   "edit-annotation": "把这条批注回填到输入区，继续修改。",
   "focus-annotation": "把正文光标跳到这条批注对应的位置。",
+  "annotation-up": "把这条批注往前移动一位。",
+  "annotation-down": "把这条批注往后移动一位。",
   "confirm-generated-rule": "确认系统刚生成的候选规则并正式入库。",
   "reject-generated-rule": "暂不采用这条候选规则，但保留这次学习记录。",
   "llm-edit": "编辑这张模型卡片的接入配置。",
@@ -1875,6 +1877,8 @@ function renderPendingAnnotations() {
         <div class="annotation-head">
           <strong>${escapeHtml(item.location || `批注 ${index + 1}`)}</strong>
           <div class="annotation-head-actions">
+            <button type="button" class="mini-btn" data-action="annotation-up" data-index="${index}" ${index === 0 ? "disabled" : ""}>上移</button>
+            <button type="button" class="mini-btn" data-action="annotation-down" data-index="${index}" ${index === state.pendingAnnotations.length - 1 ? "disabled" : ""}>下移</button>
             <button type="button" class="mini-btn" data-action="edit-annotation" data-index="${index}">回填</button>
             <button type="button" class="mini-btn" data-action="focus-annotation" data-index="${index}">定位</button>
             <button type="button" class="mini-btn danger" data-action="remove-annotation" data-index="${index}">删除</button>
@@ -3068,6 +3072,18 @@ function bindEditorActions() {
     if (action === "edit-annotation") {
       refillAnnotationForm(annotation);
       setInfo("已把这条批注回填到输入区。");
+      return;
+    }
+
+    if (action === "annotation-up" || action === "annotation-down") {
+      const targetIndex = action === "annotation-up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= state.pendingAnnotations.length) {
+        return;
+      }
+      const [moved] = state.pendingAnnotations.splice(index, 1);
+      state.pendingAnnotations.splice(targetIndex, 0, moved);
+      renderPendingAnnotations();
+      setInfo(action === "annotation-up" ? "已把这条批注前移。" : "已把这条批注后移。");
       return;
     }
 
