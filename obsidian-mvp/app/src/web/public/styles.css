@@ -657,6 +657,12 @@ legend {
   background: #fff7ea;
 }
 
+.annotation-item.active {
+  border-color: rgba(31, 83, 62, 0.38);
+  box-shadow: 0 0 0 1px rgba(31, 83, 62, 0.12);
+  background: #f3fbf6;
+}
+
 .annotation-status-card {
   background: linear-gradient(180deg, #fffefb 0%, #fff6e8 100%);
 }

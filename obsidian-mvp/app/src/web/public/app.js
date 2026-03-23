@@ -11,6 +11,7 @@ const state = {
   feedbackHistory: [],
   latestFeedbackByLocation: {},
   pendingAnnotations: [],
+  activeAnnotationIndex: -1,
   generatedDraftBaseline: "",
   latestFeedbackLearnResult: null,
   currentGenerationContext: null,
@@ -1866,14 +1867,18 @@ function renderPendingAnnotations() {
     if (lastAdded) {
       lastAdded.textContent = "还没有加入本轮批注。";
     }
+    state.activeAnnotationIndex = -1;
     summarizeDraftChanges();
     return;
   }
 
+  if (state.activeAnnotationIndex < 0 || state.activeAnnotationIndex >= state.pendingAnnotations.length) {
+    state.activeAnnotationIndex = state.pendingAnnotations.length - 1;
+  }
   const latest = state.pendingAnnotations[state.pendingAnnotations.length - 1];
   container.innerHTML = state.pendingAnnotations
     .map(
-      (item, index) => `<div class="annotation-item ${index === state.pendingAnnotations.length - 1 ? "newest" : ""}">
+      (item, index) => `<div class="annotation-item ${index === state.pendingAnnotations.length - 1 ? "newest" : ""} ${index === state.activeAnnotationIndex ? "active" : ""}" data-action="select-annotation" data-index="${index}">
         <div class="annotation-head">
           <strong>${escapeHtml(item.location || `批注 ${index + 1}`)}</strong>
           <div class="annotation-head-actions">
@@ -1909,7 +1914,9 @@ function renderPendingAnnotations() {
     )
     .join("");
   if (lastAdded) {
-    lastAdded.innerHTML = `<strong>刚加入本轮批注：</strong><div class="mini">${escapeHtml(latest.location || "未命名位置")} / ${escapeHtml(latest.reason || latest.comment || "未填写原因")}</div>`;
+    const active = state.pendingAnnotations[state.activeAnnotationIndex];
+    lastAdded.innerHTML = `<strong>刚加入本轮批注：</strong><div class="mini">${escapeHtml(latest.location || "未命名位置")} / ${escapeHtml(latest.reason || latest.comment || "未填写原因")}</div>
+      <div class="mini">当前正在编辑：${escapeHtml(active?.location || "未命名位置")}</div>`;
   }
   summarizeDraftChanges();
 }
@@ -2136,6 +2143,7 @@ function collectCurrentAnnotation({ strictSelection = true, persist = false } = 
 
   if (persist) {
     state.pendingAnnotations.push(annotation);
+    state.activeAnnotationIndex = state.pendingAnnotations.length - 1;
     renderPendingAnnotations();
     clearFeedbackInputs();
     state.feedbackSelection = null;
@@ -3045,32 +3053,51 @@ function bindEditorActions() {
 
   document.getElementById("clear-annotations").addEventListener("click", () => {
     state.pendingAnnotations = [];
+    state.activeAnnotationIndex = -1;
     renderPendingAnnotations();
     setInfo("已清空本轮批注清单。");
   });
 
   document.getElementById("annotation-list").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action='remove-annotation']");
     const actionButton = event.target.closest("button[data-action]");
-    if (!actionButton) {
+    const annotationCard = !actionButton ? event.target.closest("[data-action='select-annotation']") : null;
+    if (!actionButton && !annotationCard) {
       return;
     }
-    const action = actionButton.dataset.action || "";
-    const index = Number(actionButton.dataset.index);
+    const action = actionButton?.dataset.action || annotationCard?.dataset.action || "";
+    const index = Number(actionButton?.dataset.index ?? annotationCard?.dataset.index);
     if (!Number.isInteger(index) || index < 0 || !state.pendingAnnotations[index]) {
       return;
     }
     const annotation = state.pendingAnnotations[index];
 
+    if (action === "select-annotation") {
+      state.activeAnnotationIndex = index;
+      refillAnnotationForm(annotation);
+      try {
+        focusAnnotationInDraft(annotation);
+      } catch {
+        // Ignore missing selection data; refill still helps.
+      }
+      renderPendingAnnotations();
+      setInfo("已切换到这条批注。");
+      return;
+    }
+
     if (action === "remove-annotation") {
       state.pendingAnnotations.splice(index, 1);
+      if (state.activeAnnotationIndex >= state.pendingAnnotations.length) {
+        state.activeAnnotationIndex = state.pendingAnnotations.length - 1;
+      }
       renderPendingAnnotations();
       setInfo("已从本轮批注清单移除。");
       return;
     }
 
     if (action === "edit-annotation") {
+      state.activeAnnotationIndex = index;
       refillAnnotationForm(annotation);
+      renderPendingAnnotations();
       setInfo("已把这条批注回填到输入区。");
       return;
     }
@@ -3082,6 +3109,7 @@ function bindEditorActions() {
       }
       const [moved] = state.pendingAnnotations.splice(index, 1);
       state.pendingAnnotations.splice(targetIndex, 0, moved);
+      state.activeAnnotationIndex = targetIndex;
       renderPendingAnnotations();
       setInfo(action === "annotation-up" ? "已把这条批注前移。" : "已把这条批注后移。");
       return;
@@ -3089,7 +3117,9 @@ function bindEditorActions() {
 
     if (action === "focus-annotation") {
       try {
+        state.activeAnnotationIndex = index;
         focusAnnotationInDraft(annotation);
+        renderPendingAnnotations();
         setInfo("已定位到这条批注对应的正文位置。");
       } catch (error) {
         setInfo(error.message, true);
