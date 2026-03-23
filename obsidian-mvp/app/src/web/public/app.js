@@ -1850,6 +1850,7 @@ function summarizeDraftChanges() {
 function renderPendingAnnotations() {
   const container = document.getElementById("annotation-list");
   const counter = document.getElementById("annotation-count");
+  const lastAdded = document.getElementById("annotation-last-added");
   if (!container) {
     return;
   }
@@ -1858,13 +1859,17 @@ function renderPendingAnnotations() {
   }
   if (!state.pendingAnnotations.length) {
     container.innerHTML = `<div class="annotation-empty">还没有加入本轮批注。先在正文里选中一段，再写修改原因或批注说明。</div>`;
+    if (lastAdded) {
+      lastAdded.textContent = "还没有加入本轮批注。";
+    }
     summarizeDraftChanges();
     return;
   }
 
+  const latest = state.pendingAnnotations[state.pendingAnnotations.length - 1];
   container.innerHTML = state.pendingAnnotations
     .map(
-      (item, index) => `<div class="annotation-item">
+      (item, index) => `<div class="annotation-item ${index === state.pendingAnnotations.length - 1 ? "newest" : ""}">
         <div class="annotation-head">
           <strong>${escapeHtml(item.location || `批注 ${index + 1}`)}</strong>
           <button type="button" class="mini-btn danger" data-action="remove-annotation" data-index="${index}">删除</button>
@@ -1893,6 +1898,9 @@ function renderPendingAnnotations() {
       </div>`,
     )
     .join("");
+  if (lastAdded) {
+    lastAdded.innerHTML = `<strong>刚加入本轮批注：</strong><div class="mini">${escapeHtml(latest.location || "未命名位置")} / ${escapeHtml(latest.reason || latest.comment || "未填写原因")}</div>`;
+  }
   summarizeDraftChanges();
 }
 

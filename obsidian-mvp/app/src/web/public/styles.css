@@ -652,6 +652,15 @@ legend {
   gap: 6px;
 }
 
+.annotation-item.newest {
+  border-color: rgba(143, 79, 26, 0.35);
+  background: #fff7ea;
+}
+
+.annotation-status-card {
+  background: linear-gradient(180deg, #fffefb 0%, #fff6e8 100%);
+}
+
 .annotation-controls {
   display: flex;
   flex-wrap: wrap;
