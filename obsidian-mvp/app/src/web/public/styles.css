@@ -725,6 +725,12 @@ legend {
   border: 0;
 }
 
+.file-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .learn-result {
   display: grid;
   gap: 10px;

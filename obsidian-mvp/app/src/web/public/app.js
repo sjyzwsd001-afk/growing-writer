@@ -3330,6 +3330,21 @@ function bindMaterialImport() {
   const materialUploadSummary = document.getElementById("material-upload-summary");
   const materialUploadTrigger = document.getElementById("material-upload-trigger");
 
+  function openFilePicker(input) {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // Fall through to click() for browsers that expose showPicker but reject it.
+      }
+    }
+    input.click();
+  }
+
   function updateMaterialUploadSummary() {
     if (!(materialUploadInput instanceof HTMLInputElement) || !materialUploadSummary) {
       return;
@@ -3409,10 +3424,13 @@ function bindMaterialImport() {
   materialUploadInput?.addEventListener("change", () => {
     updateMaterialUploadSummary();
   });
-  materialUploadTrigger?.addEventListener("click", () => {
-    if (materialUploadInput instanceof HTMLInputElement) {
-      materialUploadInput.click();
+  materialUploadTrigger?.addEventListener("click", () => openFilePicker(materialUploadInput));
+  materialUploadTrigger?.addEventListener("keydown", (event) => {
+    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) {
+      return;
     }
+    event.preventDefault();
+    openFilePicker(materialUploadInput);
   });
 
   analyzeMaterialImportMode();
@@ -3494,6 +3512,18 @@ function bindBackgroundUploadSummary() {
     return;
   }
 
+  const openFilePicker = () => {
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // Fall through to click() for broader compatibility.
+      }
+    }
+    input.click();
+  };
+
   const update = () => {
     const files = Array.from(input.files || []);
     summary.textContent = files.length
@@ -3502,8 +3532,13 @@ function bindBackgroundUploadSummary() {
   };
 
   input.addEventListener("change", update);
-  trigger?.addEventListener("click", () => {
-    input.click();
+  trigger?.addEventListener("click", openFilePicker);
+  trigger?.addEventListener("keydown", (event) => {
+    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+    event.preventDefault();
+    openFilePicker();
   });
   update();
 }
