@@ -504,6 +504,7 @@ const AUTO_CALIBRATION_SCHEMA_HINT = `{
   "writing_risks": ["string"],
   "next_action": "string"
 }`;
+const LLM_CALIBRATION_TIMEOUT_MS = 120_000;
 
 async function runLlmConnectivityTest(settings: StoredLlmSettings) {
   const validation = validateStoredLlmProfile(settings);
@@ -549,6 +550,7 @@ async function runLlmConnectivityTest(settings: StoredLlmSettings) {
       schema: z.object({
         reply: z.string(),
       }),
+      timeoutMs: LLM_CALIBRATION_TIMEOUT_MS,
     });
 
     return {
@@ -626,7 +628,7 @@ async function runLlmAutoCalibration(settings: StoredLlmSettings) {
       schema: autoCalibrationSchema,
       schemaHint: AUTO_CALIBRATION_SCHEMA_HINT,
       maxTokens: 900,
-      timeoutMs: 45_000,
+      timeoutMs: LLM_CALIBRATION_TIMEOUT_MS,
     });
 
     return {
