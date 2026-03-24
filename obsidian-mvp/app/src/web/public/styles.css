@@ -708,6 +708,11 @@ legend {
   padding: 10px 12px;
 }
 
+.summary-inline {
+  margin-top: -4px;
+  color: var(--muted);
+}
+
 .learn-result {
   display: grid;
   gap: 10px;

@@ -3326,6 +3326,27 @@ function bindMaterialImport() {
   const form = document.getElementById("material-form");
   const modeSelect = form?.querySelector("[name='mode']");
   const hintContainer = document.getElementById("material-mode-hint");
+  const materialUploadInput = form?.querySelector("input[name='uploadFile']");
+  const materialUploadSummary = document.getElementById("material-upload-summary");
+
+  function updateMaterialUploadSummary() {
+    if (!(materialUploadInput instanceof HTMLInputElement) || !materialUploadSummary) {
+      return;
+    }
+    const files = Array.from(materialUploadInput.files || []);
+    if (!files.length) {
+      materialUploadSummary.textContent = "还没有选择导入文件。";
+      return;
+    }
+    if (files.length === 1) {
+      materialUploadSummary.textContent = `已选择 1 个文件：${files[0].name}`;
+      return;
+    }
+    materialUploadSummary.textContent = `已选择 ${files.length} 个文件：${files
+      .slice(0, 3)
+      .map((file) => file.name)
+      .join("、")}${files.length > 3 ? " 等" : ""}`;
+  }
 
   function analyzeMaterialImportMode() {
     if (!form || !modeSelect || !hintContainer) {
@@ -3384,7 +3405,12 @@ function bindMaterialImport() {
     }
   });
 
+  materialUploadInput?.addEventListener("change", () => {
+    updateMaterialUploadSummary();
+  });
+
   analyzeMaterialImportMode();
+  updateMaterialUploadSummary();
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -3439,6 +3465,7 @@ function bindMaterialImport() {
         body: JSON.stringify(payload),
       });
       form.reset();
+      updateMaterialUploadSummary();
       await loadDashboard();
       const count = Number(result?.count || 0);
       if (count > 1) {
@@ -3451,6 +3478,24 @@ function bindMaterialImport() {
       setInfo(`材料导入失败：${error.message}`, true);
     }
   });
+}
+
+function bindBackgroundUploadSummary() {
+  const input = document.querySelector("input[name='backgroundUpload']");
+  const summary = document.getElementById("background-upload-summary");
+  if (!(input instanceof HTMLInputElement) || !summary) {
+    return;
+  }
+
+  const update = () => {
+    const files = Array.from(input.files || []);
+    summary.textContent = files.length
+      ? `已选择背景文件：${files.map((file) => file.name).join("、")}`
+      : "还没有选择背景文件。";
+  };
+
+  input.addEventListener("change", update);
+  update();
 }
 
 function bindLlmSettings() {
@@ -4060,6 +4105,7 @@ bindTabs();
 bindWizard();
 bindEditorActions();
 bindMaterialImport();
+bindBackgroundUploadSummary();
 bindLlmSettings();
 bindWorkflowDefinitionEditor();
 bindSettingsActions();

@@ -128,6 +128,7 @@
                 <label>本次背景材料上传（可选）
                   <input type="file" name="backgroundUpload" accept=".txt,.md,.docx,.pdf,.xlsx,.pptx" />
                 </label>
+                <div id="background-upload-summary" class="mini summary-inline">还没有选择背景文件。</div>
                 <label>背景说明
                   <textarea name="background" rows="5" placeholder="例如：项目已进入联调阶段，目前整体推进正常，但接口稳定性和测试节奏仍有风险。"></textarea>
                 </label>
@@ -459,6 +460,7 @@
                 <label>来源<input name="source" placeholder="例如：历史最佳稿" /></label>
                 <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
                 <label>上传文件<input name="uploadFile" type="file" multiple accept=".txt,.md,.docx,.pdf,.xlsx,.pptx" /></label>
+                <div id="material-upload-summary" class="mini summary-inline">还没有选择导入文件。</div>
                 <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx（本地路径模式仍一次仅支持一个文件）" /></label>
                 <label>正文<textarea name="body" rows="6" placeholder="可直接粘贴"></textarea></label>
                 <button class="btn primary" type="submit">导入材料</button>
