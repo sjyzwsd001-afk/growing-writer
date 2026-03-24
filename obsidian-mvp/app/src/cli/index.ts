@@ -690,7 +690,7 @@ program
 
 program
   .command("import-materials-dir")
-  .requiredOption("--source-dir <sourceDir>", "directory containing .txt/.md/.docx/.pdf materials")
+  .requiredOption("--source-dir <sourceDir>", "directory containing .txt/.md/.docx/.pdf/.xlsx/.pptx materials")
   .requiredOption("--doc-type <docType>", "material document type")
   .option("--audience <audience>", "target audience")
   .option("--scenario <scenario>", "usage scenario")

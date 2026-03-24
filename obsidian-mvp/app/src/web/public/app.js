@@ -3391,35 +3391,61 @@ function bindMaterialImport() {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const mode = String(formData.get("mode") || "normal");
-    const uploadFile = formData.get("uploadFile");
+    const uploadFiles = formData.getAll("uploadFile").filter((item) => item instanceof File && item.size > 0);
+    const sourceFile = String(formData.get("sourceFile") || "").trim();
+    const title = String(formData.get("title") || "").trim();
 
     const payload = {
       mode,
       isTemplate: mode === "template" ? "true" : "false",
-      title: String(formData.get("title") || "").trim(),
+      title,
       docType: String(formData.get("docType") || "").trim(),
       audience: String(formData.get("audience") || "").trim(),
       scenario: String(formData.get("scenario") || "").trim(),
       source: String(formData.get("source") || "").trim(),
       tags: String(formData.get("tags") || "").trim(),
-      sourceFile: String(formData.get("sourceFile") || "").trim(),
+      sourceFile,
       body: String(formData.get("body") || "").trim(),
       quality: mode === "template" ? "high" : "medium",
     };
 
-    if (uploadFile instanceof File && uploadFile.size > 0) {
-      payload.uploadName = uploadFile.name;
-      payload.uploadBase64 = await fileToBase64(uploadFile);
+    if (!payload.docType) {
+      setInfo("请先填写文档类型。", true);
+      return;
+    }
+
+    if (!title && !uploadFiles.length) {
+      setInfo("单文件手工导入时，请填写标题；批量上传时可以留空。", true);
+      return;
+    }
+
+    if (sourceFile && uploadFiles.length > 0) {
+      setInfo("批量上传时，请不要同时填写本地文件路径。", true);
+      return;
+    }
+
+    if (uploadFiles.length > 1) {
+      payload.uploadFiles = await Promise.all(
+        uploadFiles.map(async (file) => JSON.stringify({ name: file.name, base64: await fileToBase64(file) })),
+      );
+    } else if (uploadFiles[0] instanceof File) {
+      payload.uploadName = uploadFiles[0].name;
+      payload.uploadBase64 = await fileToBase64(uploadFiles[0]);
     }
 
     try {
-      await api("/api/materials/import", {
+      const result = await api("/api/materials/import", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       form.reset();
       await loadDashboard();
-      setInfo(mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
+      const count = Number(result?.count || 0);
+      if (count > 1) {
+        setInfo(mode === "template" ? `已批量导入 ${count} 份正式模板。` : `已批量导入 ${count} 份历史材料。`);
+      } else {
+        setInfo(mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
+      }
       toggleView("settings");
     } catch (error) {
       setInfo(`材料导入失败：${error.message}`, true);

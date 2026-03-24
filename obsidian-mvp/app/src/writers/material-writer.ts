@@ -1,5 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
+import AdmZip, { type IZipEntry } from "adm-zip";
 import fg from "fast-glob";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
@@ -17,6 +18,94 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+function decodeXmlText(value: string): string {
+  return value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function readZipEntryText(zip: AdmZip, entryName: string): string {
+  const entry = zip.getEntry(entryName);
+  if (!entry) {
+    return "";
+  }
+  return zip.readAsText(entry, "utf8");
+}
+
+function extractSpreadsheetTextFromZip(zip: AdmZip): string {
+  const sharedStringsXml = readZipEntryText(zip, "xl/sharedStrings.xml");
+  const sharedStrings = [...sharedStringsXml.matchAll(/<si[\s\S]*?<\/si>/g)].map((match) =>
+    decodeXmlText(match[0]),
+  );
+  const worksheetEntries = zip
+    .getEntries()
+    .filter((entry: IZipEntry) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(entry.entryName))
+    .sort((a: IZipEntry, b: IZipEntry) => a.entryName.localeCompare(b.entryName));
+
+  const sheetTexts = worksheetEntries
+    .map((entry: IZipEntry, index: number) => {
+      const xml = zip.readAsText(entry, "utf8");
+      const cellValues = [...xml.matchAll(/<c\b[^>]*?(?:\st="([^"]+)")?[^>]*>[\s\S]*?<v>([\s\S]*?)<\/v>[\s\S]*?<\/c>/g)]
+        .map((match) => {
+          const cellType = String(match[1] || "").trim();
+          const rawValue = decodeXmlText(match[2]);
+          if (cellType === "s") {
+            const shared = sharedStrings[Number(rawValue)] || "";
+            return shared.trim();
+          }
+          return rawValue.trim();
+        })
+        .filter(Boolean);
+      if (!cellValues.length) {
+        return "";
+      }
+      return `工作表 ${index + 1}\n${cellValues.join("\n")}`;
+    })
+    .filter(Boolean);
+
+  return sheetTexts.join("\n\n");
+}
+
+function extractPresentationTextFromZip(zip: AdmZip): string {
+  const slideEntries = zip
+    .getEntries()
+    .filter((entry: IZipEntry) => /^ppt\/slides\/slide\d+\.xml$/i.test(entry.entryName))
+    .sort((a: IZipEntry, b: IZipEntry) => a.entryName.localeCompare(b.entryName));
+
+  const slideTexts = slideEntries
+    .map((entry: IZipEntry, index: number) => {
+      const xml = zip.readAsText(entry, "utf8");
+      const textRuns = [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)]
+        .map((match) => decodeXmlText(match[1]))
+        .filter(Boolean);
+      if (!textRuns.length) {
+        return "";
+      }
+      return `第 ${index + 1} 页\n${textRuns.join("\n")}`;
+    })
+    .filter(Boolean);
+
+  return slideTexts.join("\n\n");
+}
+
+function extractTextFromOfficeZipBuffer(input: { fileName: string; buffer: Buffer }): string {
+  const extension = extname(input.fileName).toLowerCase();
+  const zip = new AdmZip(input.buffer);
+  if (extension === ".xlsx") {
+    return extractSpreadsheetTextFromZip(zip);
+  }
+  if (extension === ".pptx") {
+    return extractPresentationTextFromZip(zip);
+  }
+  return "";
 }
 
 export function analyzeMaterialHeuristically(text: string, docType: string): MaterialAnalysis {
@@ -176,7 +265,7 @@ export async function importMaterialsFromDirectory(input: {
   quality?: string;
   analyze?: (payload: { title: string; rawBody: string; docType: string; audience?: string; scenario?: string }) => Promise<MaterialAnalysis>;
 }): Promise<Array<{ path: string; materialId: string; sourceFile: string }>> {
-  const files = await fg(["**/*.md", "**/*.txt", "**/*.docx", "**/*.pdf"], {
+  const files = await fg(["**/*.md", "**/*.txt", "**/*.docx", "**/*.pdf", "**/*.xlsx", "**/*.pptx"], {
     cwd: input.sourceDir,
     absolute: true,
     onlyFiles: true,
@@ -241,6 +330,11 @@ async function extractTextFromFile(path: string): Promise<string> {
     return result.text;
   }
 
+  if (extension === ".xlsx" || extension === ".pptx") {
+    const buffer = await readFile(path);
+    return extractTextFromOfficeZipBuffer({ fileName: path, buffer });
+  }
+
   throw new Error(`Unsupported material file type: ${extension}`);
 }
 
@@ -264,6 +358,10 @@ export async function extractTextFromBuffer(input: {
     const result = await parser.getText();
     await parser.destroy();
     return result.text;
+  }
+
+  if (extension === ".xlsx" || extension === ".pptx") {
+    return extractTextFromOfficeZipBuffer(input);
   }
 
   throw new Error(`Unsupported uploaded material file type: ${extension}`);

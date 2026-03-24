@@ -2933,13 +2933,75 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/materials/import") {
         const body = (await readBody(req)) as Record<string, string | string[] | undefined>;
-        if (!body.title || !body.docType || (!body.body && !body.sourceFile && !body.uploadName)) {
-          sendJson(res, 400, { error: "title、docType，以及正文/文件路径/浏览器上传文件至少要提供一项。" });
+        const uploadFiles = Array.isArray(body.uploadFiles)
+          ? body.uploadFiles
+              .filter((item) => typeof item === "string" && item.trim())
+              .map((item) => {
+                try {
+                  return JSON.parse(String(item)) as { name?: string; base64?: string };
+                } catch {
+                  return null;
+                }
+              })
+              .filter((item): item is { name?: string; base64?: string } => Boolean(item?.name && item?.base64))
+          : [];
+        const hasUpload = Boolean(body.uploadName && body.uploadBase64) || uploadFiles.length > 0;
+        if (
+          !body.docType ||
+          (!body.title && !hasUpload) ||
+          (!body.body && !body.sourceFile && !body.uploadName && uploadFiles.length === 0)
+        ) {
+          sendJson(res, 400, { error: "docType 必填；标题在手工输入时必填；正文/文件路径/浏览器上传文件至少要提供一项。" });
           return;
         }
 
         const client = createLlmClient(vaultRoot);
         const analyzer = createMaterialAnalyzer(client);
+        const tags = normalizeTagList(body.tags);
+        const isTemplate = body.isTemplate === "true" || body.mode === "template";
+        if (isTemplate) {
+          tags.push("template");
+        }
+        const commonInput = {
+          vaultRoot,
+          docType: String(body.docType),
+          audience: typeof body.audience === "string" ? body.audience : "",
+          scenario: typeof body.scenario === "string" ? body.scenario : "",
+          quality: isTemplate ? "high" : typeof body.quality === "string" ? body.quality : "high",
+          tags,
+        };
+
+        if (uploadFiles.length > 0) {
+          const imported = [];
+          for (const file of uploadFiles) {
+            const rawBody = await extractTextFromBuffer({
+              fileName: String(file.name),
+              buffer: Buffer.from(String(file.base64), "base64"),
+            });
+            const derivedTitle = String(file.name).replace(/\.[^.]+$/, "");
+            const analysis = rawBody
+              ? await analyzer({
+                  title: derivedTitle,
+                  rawBody,
+                  docType: commonInput.docType,
+                  audience: commonInput.audience,
+                  scenario: commonInput.scenario,
+                })
+              : undefined;
+            imported.push(
+              await importMaterial({
+                ...commonInput,
+                title: derivedTitle,
+                source: typeof body.source === "string" && body.source ? `${body.source} / ${file.name}` : file.name,
+                body: rawBody,
+                analysis,
+              }),
+            );
+          }
+          sendJson(res, 200, { imported, count: imported.length, mode: isTemplate ? "template" : "normal" });
+          return;
+        }
+
         const uploadedBody =
           body.uploadName && body.uploadBase64
             ? await extractTextFromBuffer({
@@ -2948,30 +3010,20 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
               })
             : "";
         const rawBody = (typeof body.body === "string" ? body.body : "") || uploadedBody;
-        const tags = normalizeTagList(body.tags);
-        const isTemplate = body.isTemplate === "true" || body.mode === "template";
-        if (isTemplate) {
-          tags.push("template");
-        }
         const analysis = rawBody
           ? await analyzer({
               title: String(body.title),
               rawBody,
-              docType: String(body.docType),
-              audience: typeof body.audience === "string" ? body.audience : "",
-              scenario: typeof body.scenario === "string" ? body.scenario : "",
+              docType: commonInput.docType,
+              audience: commonInput.audience,
+              scenario: commonInput.scenario,
             })
           : undefined;
 
         const result = await importMaterial({
-          vaultRoot,
+          ...commonInput,
           title: String(body.title),
-          docType: String(body.docType),
-          audience: typeof body.audience === "string" ? body.audience : "",
-          scenario: typeof body.scenario === "string" ? body.scenario : "",
           source: typeof body.source === "string" ? body.source : "",
-          quality: isTemplate ? "high" : typeof body.quality === "string" ? body.quality : "high",
-          tags,
           body: rawBody,
           sourceFile: typeof body.sourceFile === "string" && body.sourceFile ? resolve(body.sourceFile) : undefined,
           analysis,
