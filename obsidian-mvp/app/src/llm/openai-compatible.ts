@@ -139,6 +139,14 @@ function isRetryableError(error: unknown): boolean {
   return /fetch failed|network|timed out|timeout|econnreset|socket|520|522|524/i.test(error.message);
 }
 
+function shouldFallbackToTextResponse(status: number, body: string): boolean {
+  if (status !== 400) {
+    return false;
+  }
+
+  return /response_format\.type.+json_schema.+text/i.test(body);
+}
+
 export class OpenAiCompatibleClient {
   constructor(private readonly config: LlmConfig) {}
 
@@ -160,6 +168,7 @@ export class OpenAiCompatibleClient {
     const timeoutMs = options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS;
     const maxAttempts = this.config.apiType === "anthropic-messages" ? 3 : 2;
     let lastError: Error | null = null;
+    let openAiResponseFormat: "json_object" | "text" = "json_object";
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const controller = new AbortController();
@@ -200,7 +209,7 @@ export class OpenAiCompatibleClient {
                   model: this.config.model,
                   temperature: 0.1,
                   max_tokens: options.maxTokens,
-                  response_format: { type: "json_object" },
+                  response_format: { type: openAiResponseFormat },
                   messages: [
                     {
                       role: "system",
@@ -213,6 +222,17 @@ export class OpenAiCompatibleClient {
 
         if (!response.ok) {
           const body = await response.text();
+          if (
+            this.config.apiType !== "anthropic-messages" &&
+            openAiResponseFormat === "json_object" &&
+            shouldFallbackToTextResponse(response.status, body)
+          ) {
+            openAiResponseFormat = "text";
+            lastError = new Error(
+              `LLM switched to text response mode for compatibility: ${response.status} ${body}`,
+            );
+            continue;
+          }
           const requestError = buildLlmRequestError(response.status, body);
           if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxAttempts) {
             lastError = requestError;
