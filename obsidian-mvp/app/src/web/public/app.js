@@ -3326,8 +3326,9 @@ function bindMaterialImport() {
   const form = document.getElementById("material-form");
   const modeSelect = form?.querySelector("[name='mode']");
   const hintContainer = document.getElementById("material-mode-hint");
-  const materialUploadInput = form?.querySelector("input[name='uploadFile']");
+  const materialUploadInput = document.getElementById("material-upload-input");
   const materialUploadSummary = document.getElementById("material-upload-summary");
+  const materialUploadTrigger = document.getElementById("material-upload-trigger");
 
   function updateMaterialUploadSummary() {
     if (!(materialUploadInput instanceof HTMLInputElement) || !materialUploadSummary) {
@@ -3408,6 +3409,11 @@ function bindMaterialImport() {
   materialUploadInput?.addEventListener("change", () => {
     updateMaterialUploadSummary();
   });
+  materialUploadTrigger?.addEventListener("click", () => {
+    if (materialUploadInput instanceof HTMLInputElement) {
+      materialUploadInput.click();
+    }
+  });
 
   analyzeMaterialImportMode();
   updateMaterialUploadSummary();
@@ -3481,8 +3487,9 @@ function bindMaterialImport() {
 }
 
 function bindBackgroundUploadSummary() {
-  const input = document.querySelector("input[name='backgroundUpload']");
+  const input = document.getElementById("background-upload-input");
   const summary = document.getElementById("background-upload-summary");
+  const trigger = document.getElementById("background-upload-trigger");
   if (!(input instanceof HTMLInputElement) || !summary) {
     return;
   }
@@ -3495,6 +3502,9 @@ function bindBackgroundUploadSummary() {
   };
 
   input.addEventListener("change", update);
+  trigger?.addEventListener("click", () => {
+    input.click();
+  });
   update();
 }
 
