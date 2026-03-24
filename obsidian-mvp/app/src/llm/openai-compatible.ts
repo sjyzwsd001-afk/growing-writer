@@ -11,6 +11,7 @@ const chatCompletionSchema = z.object({
       z.object({
         message: z.object({
           content: z.string().nullable().optional(),
+          reasoning_content: z.string().nullable().optional(),
         }),
       }),
     )
@@ -249,7 +250,14 @@ export class OpenAiCompatibleClient {
                 .filter((item) => item.type === "text" && typeof item.text === "string")
                 .map((item) => item.text ?? "")
                 .join("\n")
-            : chatCompletionSchema.parse(rawJson).choices[0]?.message.content;
+            : (() => {
+                const message = chatCompletionSchema.parse(rawJson).choices[0]?.message;
+                return message?.content?.trim()
+                  ? message.content
+                  : message?.reasoning_content?.trim()
+                    ? message.reasoning_content
+                    : message?.content;
+              })();
         if (!content) {
           throw new Error("LLM returned empty content.");
         }
