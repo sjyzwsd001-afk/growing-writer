@@ -506,6 +506,10 @@ const AUTO_CALIBRATION_SCHEMA_HINT = `{
 }`;
 const LLM_CALIBRATION_TIMEOUT_MS = 120_000;
 
+function isLikelyLocalLlmProfile(settings: StoredLlmSettings): boolean {
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?(?:\/|$)/i.test(settings.baseUrl.trim());
+}
+
 async function runLlmConnectivityTest(settings: StoredLlmSettings) {
   const validation = validateStoredLlmProfile(settings);
   if (validation.errors.length) {
@@ -638,6 +642,15 @@ async function runLlmAutoCalibration(settings: StoredLlmSettings) {
       structuredOutput: "strict-schema" as const,
     };
   } catch (error) {
+    if (isLikelyLocalLlmProfile(settings)) {
+      return {
+        ok: true,
+        usable: true,
+        message:
+          "轻量校准通过：纯文本连通正常，可先用于普通写作；结构化输出仍较弱，复杂 schema 任务可能不稳定。",
+        structuredOutput: "connectivity-only" as const,
+      };
+    }
     return {
       ok: false,
       usable: false,
