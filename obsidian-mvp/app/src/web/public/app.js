@@ -252,12 +252,15 @@ function buildSettingsResultSummary(payload) {
   return "";
 }
 
-function setSettingsResult(title, payload) {
+function setSettingsResult(title, payload, options = {}) {
   const container = document.getElementById("settings-result");
   if (!container) {
     return;
   }
-  toggleSettingsPage("results");
+  const reveal = options.reveal !== false;
+  if (reveal) {
+    toggleSettingsPage("results");
+  }
 
   const content = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
   const summary = buildSettingsResultSummary(payload);
@@ -271,7 +274,9 @@ function setSettingsResult(title, payload) {
           </details>`
         : `<pre>${escapeHtml(content)}</pre>`
     }`;
-  container.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (reveal) {
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function setSettingsResultPreview(title, summaryHtml, rawText = "") {
@@ -3630,7 +3635,8 @@ function bindLlmSettings() {
       setLlmModalOpen(false);
       const calibrationMessage = result.calibration?.message || "模型卡片已保存。";
       setInfo(calibrationMessage);
-      setSettingsResult("模型卡片已保存", result);
+      setSettingsResult("模型卡片已保存", result, { reveal: false });
+      toggleSettingsPage("models");
       toggleView("settings");
     } catch (error) {
       setInfo(`保存模型配置失败：${error.message}`, true);

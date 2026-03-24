@@ -2572,8 +2572,10 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
         const profiles = listStoredLlmProfiles(vaultRoot);
         const existing =
-          profiles.profiles.find((profile) => profile.id === profileId) ??
-          getStoredLlmSettings(vaultRoot);
+          profileId
+            ? profiles.profiles.find((profile) => profile.id === profileId) ?? null
+            : null;
+        const isEditingExisting = Boolean(profileId && existing?.id === profileId);
         const profileName = typeof body.name === "string" ? body.name.trim() : "";
         const isCodex = provider === OPENAI_CODEX_PROVIDER;
         const model = isCodex
@@ -2602,12 +2604,11 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           return;
         }
         const preserveExistingToken =
-          Boolean(profileId) &&
-          !tokenInput &&
-          existing?.id === profileId;
+          isEditingExisting &&
+          !tokenInput;
 
-        const candidateSettings: StoredLlmSettings = {
-          id: profileId || existing?.id || `llm-preview-${Date.now()}`,
+        const candidateSettings: Partial<StoredLlmSettings> = {
+          id: isEditingExisting ? profileId : undefined,
           name: profileName || existing?.name || "",
           provider,
           apiType:
@@ -2678,7 +2679,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         }
 
         const shouldActivate =
-          !profiles.activeProfileId || !profileId || profiles.activeProfileId === profileId;
+          !profiles.activeProfileId || (Boolean(profileId) && profiles.activeProfileId === profileId);
         const settings = upsertStoredLlmProfile(vaultRoot, {
           ...candidateSettings,
         }, { activate: shouldActivate }).profile;
@@ -2714,10 +2715,12 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
         const profiles = listStoredLlmProfiles(vaultRoot);
         const existing =
-          profiles.profiles.find((profile) => profile.id === profileId) ??
-          getStoredLlmSettings(vaultRoot);
+          profileId
+            ? profiles.profiles.find((profile) => profile.id === profileId) ?? null
+            : null;
+        const isEditingExisting = Boolean(profileId && existing?.id === profileId);
 
-        let candidate: StoredLlmSettings | null = null;
+        let candidate: Partial<StoredLlmSettings> | StoredLlmSettings | null = null;
         if (profileId && existing?.id === profileId) {
           candidate = existing;
         } else if (typeof body.provider === "string") {
@@ -2743,9 +2746,9 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
             });
             return;
           }
-          const preserveExistingToken = Boolean(profileId) && !tokenInput && existing?.id === profileId;
+          const preserveExistingToken = isEditingExisting && !tokenInput;
           candidate = {
-            id: profileId || existing?.id || `llm-preview-${Date.now()}`,
+            id: isEditingExisting ? profileId : undefined,
             name:
               typeof body.name === "string" && body.name.trim()
                 ? body.name.trim()
@@ -2816,7 +2819,13 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           return;
         }
 
-        const result = await runLlmConnectivityTest(candidate);
+        const result = await runLlmConnectivityTest({
+          ...candidate,
+          id:
+            typeof candidate.id === "string" && candidate.id.trim()
+              ? candidate.id
+              : `llm-preview-${Date.now()}`,
+        } as StoredLlmSettings);
         sendJson(res, result.ok ? 200 : 400, result);
         return;
       }
