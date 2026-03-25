@@ -596,7 +596,22 @@ export function deleteStoredLlmProfile(
     throw new Error("No saved LLM profiles.");
   }
 
-  const profiles = store.profiles.filter((profile) => profile.id !== profileId);
+  const profiles = store.profiles
+    .filter((profile) => profile.id !== profileId)
+    .map((profile) =>
+      normalizeStoredSettings(
+        {
+          ...profile,
+          fastProfileId: profile.fastProfileId === profileId ? "" : profile.fastProfileId,
+          strongProfileId: profile.strongProfileId === profileId ? "" : profile.strongProfileId,
+          fallbackProfileIds: Array.isArray(profile.fallbackProfileIds)
+            ? profile.fallbackProfileIds.filter((id) => id !== profileId)
+            : [],
+          updatedAt: nowIso(),
+        },
+        profile,
+      ),
+    );
   if (!profiles.length) {
     const nextStore: StoredLlmSettingsStore = {
       version: 2,

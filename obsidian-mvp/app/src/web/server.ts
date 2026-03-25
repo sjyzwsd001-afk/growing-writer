@@ -2879,6 +2879,21 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
               : existing?.strongModel || model,
           fallbackModels,
         };
+        const validProfileIds = new Set(profiles.profiles.map((profile) => profile.id));
+        const referencedProfileIds = [
+          candidateSettings.fastProfileId || "",
+          candidateSettings.strongProfileId || "",
+          ...(candidateSettings.fallbackProfileIds || []),
+        ]
+          .filter(Boolean)
+          .filter((id) => id !== profileId);
+        const missingProfileId = referencedProfileIds.find((id) => !validProfileIds.has(id));
+        if (missingProfileId) {
+          sendJson(res, 400, {
+            error: `跨卡路由引用了不存在的模型卡：${missingProfileId}`,
+          });
+          return;
+        }
         const validation = validateStoredLlmProfile(candidateSettings);
         if (validation.errors.length) {
           sendJson(res, 400, {
