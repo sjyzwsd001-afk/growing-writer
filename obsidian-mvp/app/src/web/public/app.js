@@ -1201,6 +1201,37 @@ function updateDocTypeGuidance() {
   }
 }
 
+function updateWizardActionButtons() {
+  const nextButton = document.getElementById("wizard-next");
+  const submitButton = document.getElementById("wizard-submit");
+  const confirmChecked = Boolean(document.getElementById("wizard-confirm-check")?.checked);
+  if (!(nextButton instanceof HTMLButtonElement) || !(submitButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const nextLabels = {
+    1: "继续：选历史材料",
+    2: "继续：看模板建议",
+    3: "继续：补本次背景",
+    4: "继续：执行检查",
+    5: state.wizardCheckPassed ? "继续：最后确认" : "请先执行检查",
+  };
+  nextButton.textContent = nextLabels[state.wizardStep] || "下一步";
+  nextButton.disabled = state.wizardStep === 5 && !state.wizardCheckPassed;
+
+  if (state.wizardStep === 6) {
+    submitButton.disabled = !state.wizardCheckPassed || !confirmChecked;
+    submitButton.textContent = !state.wizardCheckPassed
+      ? "请先通过检查"
+      : confirmChecked
+        ? "确认并生成初稿"
+        : "勾选确认后生成";
+  } else {
+    submitButton.disabled = false;
+    submitButton.textContent = "确认并生成初稿";
+  }
+}
+
 function updateWizardStep() {
   document.getElementById("wizard-step-index").textContent = String(state.wizardStep);
   document.querySelectorAll(".wizard-step").forEach((step) => {
@@ -1216,6 +1247,7 @@ function updateWizardStep() {
     renderWizardCheckResult(state.wizardCheckReport);
   }
   updateDocTypeGuidance();
+  updateWizardActionButtons();
   renderWorkflowStageTracker();
 }
 
@@ -3846,12 +3878,14 @@ function bindWizard() {
       setInfo("检查未通过，请先修复阻塞项。", true);
     }
     updateWizardSummary();
+    updateWizardActionButtons();
   });
 
   document.getElementById("wizard-confirm-check").addEventListener("change", () => {
     if (state.wizardStep >= 6) {
       updateWizardSummary();
     }
+    updateWizardActionButtons();
   });
 
   document.getElementById("goto-editor-panel").addEventListener("click", () => {
