@@ -335,9 +335,18 @@ async function copyText(text, successMessage) {
     throw new Error("没有可复制的路径。");
   }
 
+  let copied = false;
+
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-  } else {
+    try {
+      await navigator.clipboard.writeText(value);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+  }
+
+  if (!copied) {
     const textarea = document.createElement("textarea");
     textarea.value = value;
     textarea.setAttribute("readonly", "true");
@@ -345,8 +354,11 @@ async function copyText(text, successMessage) {
     textarea.style.left = "-9999px";
     document.body.append(textarea);
     textarea.select();
-    document.execCommand("copy");
+    const ok = document.execCommand("copy");
     textarea.remove();
+    if (!ok) {
+      throw new Error("复制失败，请手动选中文本后复制。");
+    }
   }
 
   const status = document.getElementById("obsidian-quick-action-status");
@@ -3711,6 +3723,7 @@ function bindEditorActions() {
     const draft = String(document.getElementById("draft-editor")?.value || "").trim();
     container.textContent = generateRepurposeSummary(draft);
     container.dataset.manual = "true";
+    setRepurposeCopyStatus("");
     setInfo("已生成一版摘要。");
   });
 
@@ -3722,6 +3735,7 @@ function bindEditorActions() {
     const draft = String(document.getElementById("draft-editor")?.value || "").trim();
     container.textContent = generateLeaderBrief(draft);
     container.dataset.manual = "true";
+    setRepurposeCopyStatus("");
     setInfo("已生成一版领导摘要。");
   });
 
@@ -3733,6 +3747,7 @@ function bindEditorActions() {
     const draft = String(document.getElementById("draft-editor")?.value || "").trim();
     container.textContent = generateRepurposeOutline(draft);
     container.dataset.manual = "true";
+    setRepurposeCopyStatus("");
     setInfo("已生成一版提纲。");
   });
 
@@ -3742,7 +3757,7 @@ function bindEditorActions() {
       setInfo("摘要已复制。");
       setRepurposeCopyStatus("摘要已复制。");
     } catch (error) {
-      setRepurposeCopyStatus(error.message);
+      setRepurposeCopyStatus(error.message || "摘要复制失败。");
       setInfo(error.message, true);
     }
   });
@@ -3753,7 +3768,7 @@ function bindEditorActions() {
       setInfo("提纲已复制。");
       setRepurposeCopyStatus("提纲已复制。");
     } catch (error) {
-      setRepurposeCopyStatus(error.message);
+      setRepurposeCopyStatus(error.message || "提纲复制失败。");
       setInfo(error.message, true);
     }
   });
@@ -3764,7 +3779,7 @@ function bindEditorActions() {
       setInfo("领导摘要已复制。");
       setRepurposeCopyStatus("领导摘要已复制。");
     } catch (error) {
-      setRepurposeCopyStatus(error.message);
+      setRepurposeCopyStatus(error.message || "领导摘要复制失败。");
       setInfo(error.message, true);
     }
   });
