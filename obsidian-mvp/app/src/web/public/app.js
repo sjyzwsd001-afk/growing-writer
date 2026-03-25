@@ -119,6 +119,8 @@ const BUTTON_TOOLTIP_BY_TEXT = {
   "批量转正式模板": "把当前勾选的材料一起转成正式模板。",
   "批量转历史材料": "把当前勾选的模板或材料一起转回历史材料。",
   "批量重分析": "重新分析当前勾选的材料，刷新角色、结构和规则线索。",
+  "全选历史材料": "勾选当前列表里的全部历史材料。",
+  "全选模板": "勾选当前列表里的全部正式模板。",
   "清空选择": "清空当前勾选的材料。",
   "重新加载 DSL": "重新读取当前流程 DSL 定义。",
   "保存 DSL": "保存当前流程 DSL 改动并立即生效。",
@@ -1396,6 +1398,15 @@ function toggleMaterialSelection(path, checked) {
 function clearMaterialSelection() {
   state.selectedMaterialPaths = [];
   renderMaterialSelectionStatus();
+}
+
+function selectMaterialsByBucket(bucket) {
+  const items =
+    bucket === "templates" ? state.dashboard?.templates || [] : state.dashboard?.materials || [];
+  const paths = items.map((item) => String(item.path || "")).filter(Boolean);
+  state.selectedMaterialPaths = [...new Set([...state.selectedMaterialPaths, ...paths])];
+  renderMaterialSelectionStatus();
+  renderSettingsLists();
 }
 
 function renderMaterialSelectionStatus() {
@@ -4851,6 +4862,16 @@ function bindSettingsActions() {
   document.getElementById("bulk-clear-material-selection").addEventListener("click", () => {
     clearMaterialSelection();
     loadDashboard();
+  });
+
+  document.getElementById("bulk-select-materials").addEventListener("click", () => {
+    selectMaterialsByBucket("materials");
+    setInfo(`已选中当前历史材料 ${Array.isArray(state.dashboard?.materials) ? state.dashboard.materials.length : 0} 份。`);
+  });
+
+  document.getElementById("bulk-select-templates").addEventListener("click", () => {
+    selectMaterialsByBucket("templates");
+    setInfo(`已选中当前模板 ${Array.isArray(state.dashboard?.templates) ? state.dashboard.templates.length : 0} 份。`);
   });
 
   document.getElementById("bulk-analyze-materials").addEventListener("click", async () => {
