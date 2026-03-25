@@ -118,6 +118,7 @@ const BUTTON_TOOLTIP_BY_TEXT = {
   "刷新画像": "根据材料、规则和反馈重新生成写作画像。",
   "批量转正式模板": "把当前勾选的材料一起转成正式模板。",
   "批量转历史材料": "把当前勾选的模板或材料一起转回历史材料。",
+  "批量重分析": "重新分析当前勾选的材料，刷新角色、结构和规则线索。",
   "清空选择": "清空当前勾选的材料。",
   "重新加载 DSL": "重新读取当前流程 DSL 定义。",
   "保存 DSL": "保存当前流程 DSL 改动并立即生效。",
@@ -1423,6 +1424,20 @@ async function bulkUpdateMaterialRole(role) {
   setSettingsResult(`材料批量更新完成`, result);
   const updatedCount = Array.isArray(result.updated) ? result.updated.length : 0;
   setInfo(role === "template" ? `已批量转正式模板 ${updatedCount} 份。` : `已批量转历史材料 ${updatedCount} 份。`);
+  await loadDashboard();
+}
+
+async function bulkAnalyzeMaterials() {
+  const paths = state.selectedMaterialPaths.filter(Boolean);
+  if (!paths.length) {
+    throw new Error("请先勾选至少一份材料。");
+  }
+  const result = await api("/api/materials/analyze/batch", {
+    method: "POST",
+    body: JSON.stringify({ paths }),
+  });
+  setSettingsResult("材料批量重分析完成", result);
+  setInfo(`已批量重分析 ${Array.isArray(result.updated) ? result.updated.length : 0} 份材料。`);
   await loadDashboard();
 }
 
@@ -4836,6 +4851,21 @@ function bindSettingsActions() {
   document.getElementById("bulk-clear-material-selection").addEventListener("click", () => {
     clearMaterialSelection();
     loadDashboard();
+  });
+
+  document.getElementById("bulk-analyze-materials").addEventListener("click", async () => {
+    const button = document.getElementById("bulk-analyze-materials");
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "处理中...";
+    try {
+      await bulkAnalyzeMaterials();
+    } catch (error) {
+      setSettingsResult("批量重分析失败", { error: error.message });
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
   });
 
   document.getElementById("bulk-mark-template").addEventListener("click", async () => {

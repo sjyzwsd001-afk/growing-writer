@@ -3294,6 +3294,48 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         return;
       }
 
+      if (req.method === "POST" && url.pathname === "/api/materials/analyze/batch") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const paths = Array.isArray(body.paths) ? body.paths.map((item) => String(item || "")).filter(Boolean) : [];
+        if (!paths.length) {
+          sendJson(res, 400, { error: "Missing material paths." });
+          return;
+        }
+        const analyzer = createMaterialAnalyzer(createLlmClient(vaultRoot));
+        const repo = new VaultRepository(vaultRoot);
+        const updated = [];
+        for (const item of paths) {
+          const materialPath = resolve(item);
+          await analyzeImportedMaterial(materialPath, { analyze: analyzer });
+          const materials = await repo.loadMaterials();
+          const material = materials.find((entry) => entry.path === materialPath);
+          if (!material) {
+            continue;
+          }
+          const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
+          const isTemplate = isTemplateMaterial({
+            tags: material.tags,
+            source,
+            docType: material.docType,
+          });
+          const role = classifyMaterialRole({
+            isTemplate,
+            source,
+            quality: material.quality,
+            docType: material.docType,
+            scenario: material.scenario,
+          });
+          updated.push({
+            path: materialPath,
+            title: material.title,
+            roleLabel: role.roleLabel,
+            roleReason: role.roleReason,
+          });
+        }
+        sendJson(res, 200, { updated, updatedCount: updated.length });
+        return;
+      }
+
       if (req.method === "POST" && url.pathname === "/api/materials/role") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
         if (!body.path || !body.role) {
