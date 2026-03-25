@@ -1267,29 +1267,10 @@ function renderTemplatePreview() {
       <div class="mini">如果你希望它更像你过去常用的写法、段落顺序或固定套路，建议在这里选一个模板。</div>
       ${
         recommended.length
-          ? `<div class="template-recommend-list">${recommended
-              .map(
-                ({ item, recommendation }, index) => {
-                  const level =
-                    index === 0 || recommendation.score >= 5
-                      ? "strong"
-                      : recommendation.score >= 3
-                        ? "medium"
-                        : "light";
-                  const levelLabel =
-                    level === "strong" ? "优先推荐" : level === "medium" ? "可作为备选" : "仅作参考";
-                  return `
-                <div class="template-recommend-item ${level}">
-                  <strong>推荐 ${index + 1}：${escapeHtml(item.title || "未命名模板")}</strong>
-                  <div class="mini"><span class="status-chip ${level === "strong" ? "status-confirmed" : level === "medium" ? "status-candidate" : "status-neutral"}">${levelLabel}</span> / ${escapeHtml(getTemplateKindLabel(item))}</div>
-                  ${renderTemplateQualityChips(item)}
-                  ${renderRecommendationReasonChips(recommendation)}
-                  <div class="mini">${escapeHtml(getTemplateKindHint(item))}</div>
-                  <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
-                </div>`;
-                },
-              )
-              .join("")}</div>`
+          ? `<div class="template-preview-summary">
+              <strong>系统已经在上方给出首推模板。</strong>
+              <div class="mini">当前最合适的是「${escapeHtml(recommended[0]?.item?.title || "未命名模板")}」，如果你认可，直接点“一键采用”即可；如果想自己判断，再看上方备选卡。</div>
+            </div>`
           : `<div class="mini">当前信息还不足以推荐更合适的模板，系统会按常规规则和材料生成。</div>`
       }
     `;
