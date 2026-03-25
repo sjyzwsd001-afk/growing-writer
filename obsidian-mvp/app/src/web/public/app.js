@@ -59,6 +59,7 @@ const BUTTON_TOOLTIP_BY_ACTION = {
   "view-profile": "查看这份写作画像的详细内容。",
   "view-feedback": "查看这条反馈记录的详情与学习结果。",
   "copy-path": "复制这条记录对应的文件或目录路径。",
+  "open-in-obsidian": "在 Obsidian 里直接打开这条记录对应的文件或目录。",
   "analyze-material": "重新分析这份材料，更新角色判断、结构和规则线索。",
   "material-mark-template": "把这份材料转成正式模板，后续生成会优先参考它。",
   "material-mark-history": "把这份模板转回历史材料，不再作为正式模板优先使用。",
@@ -376,6 +377,20 @@ async function copyText(text, successMessage) {
 function normalizeLocation(value) {
   const cleaned = String(value || "").trim();
   return cleaned || "全文";
+}
+
+function buildObsidianOpenUrl(targetPath) {
+  const absolutePath = String(targetPath || "").trim();
+  const vaultRoot = String(state.dashboard?.vaultRoot || "").trim();
+  if (!absolutePath || !vaultRoot || !absolutePath.startsWith(vaultRoot)) {
+    return "";
+  }
+  const vaultName = vaultRoot.split("/").filter(Boolean).pop() || "";
+  const relativePath = absolutePath.slice(vaultRoot.length).replace(/^\/+/, "");
+  if (!vaultName || !relativePath) {
+    return "";
+  }
+  return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath)}`;
 }
 
 function inferFeedbackType(text) {
@@ -1483,6 +1498,7 @@ function renderGroupedRuleList(containerId, items) {
               </div>
               <div class="row-actions">
                 <button type="button" class="mini-btn" data-action="view-rule" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+                <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
                 <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
                 <button type="button" class="mini-btn" data-action="rule-set-scope" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">设范围</button>
                 <button type="button" class="mini-btn" data-action="rule-view-versions" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">版本</button>
@@ -1586,6 +1602,7 @@ function renderGroupedFeedbackList(containerId, items) {
               </div>
               <div class="row-actions">
                 <button type="button" class="mini-btn" data-action="view-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">查看</button>
+                <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">在 Obsidian 中打开</button>
                 <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)} 文件路径">复制路径</button>
                 <button type="button" class="mini-btn" data-action="learn-feedback" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.id)}">学习反馈</button>
                 ${candidateRules
@@ -1645,6 +1662,7 @@ function renderProfileList(containerId, items) {
         </div>
         <div class="row-actions">
           <button type="button" class="mini-btn" data-action="view-profile" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)}">查看</button>
+          <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)}">在 Obsidian 中打开</button>
           <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.name)} 文件路径">复制路径</button>
         </div>
       </div>`;
@@ -1729,6 +1747,7 @@ function renderSettingsLists() {
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+      <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
       <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
       <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
       <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">${item.recommendTemplatePromotion ? "按建议转模板" : "转模板"}</button>
@@ -1756,6 +1775,7 @@ function renderSettingsLists() {
     </div>
     <div class="row-actions">
       <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
+      <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
       <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
       <button type="button" class="mini-btn" data-action="material-mark-history" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转历史材料</button>
     </div>`;
@@ -4508,6 +4528,16 @@ async function runSettingsAction(action, button) {
 
   if (action === "copy-path") {
     await copyText(path, `${title || "路径"}已复制。`);
+    return;
+  }
+
+  if (action === "open-in-obsidian") {
+    const openUrl = buildObsidianOpenUrl(path);
+    if (!openUrl) {
+      throw new Error("当前文件无法映射到 Obsidian Vault。");
+    }
+    window.open(openUrl, "_blank", "noopener,noreferrer");
+    setInfo(`已尝试在 Obsidian 中打开：${title || "当前文件"}。`);
     return;
   }
 
