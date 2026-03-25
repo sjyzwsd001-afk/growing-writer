@@ -2258,6 +2258,50 @@ function renderFinalizeReview() {
   `;
 }
 
+function splitDraftParagraphs(text) {
+  return String(text || "")
+    .split(/\n{2,}/)
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+function generateRepurposeSummary(text) {
+  const paragraphs = splitDraftParagraphs(text);
+  if (!paragraphs.length) {
+    return "当前还没有正文内容，先生成或补一版稿子。";
+  }
+  return paragraphs
+    .slice(0, 3)
+    .map((item, index) => `${index + 1}. ${item.slice(0, 90)}${item.length > 90 ? "..." : ""}`)
+    .join("\n");
+}
+
+function generateRepurposeOutline(text) {
+  const paragraphs = splitDraftParagraphs(text);
+  if (!paragraphs.length) {
+    return "当前还没有正文内容，先生成或补一版稿子。";
+  }
+  return paragraphs
+    .slice(0, 5)
+    .map((item, index) => {
+      const title = item.split(/[，。；：:]/)[0] || item;
+      return `${index + 1}. ${title.slice(0, 26)}${title.length > 26 ? "..." : ""}`;
+    })
+    .join("\n");
+}
+
+function renderRepurposeOutputs() {
+  const draft = String(document.getElementById("draft-editor")?.value || "").trim();
+  const summary = document.getElementById("repurpose-summary");
+  const outline = document.getElementById("repurpose-outline");
+  if (summary && !summary.dataset.manual) {
+    summary.textContent = draft ? "点击“生成摘要”后，这里会整理出一版适合快速转发的摘要。" : "生成后，这里会给出适合转发或快速汇报的摘要。";
+  }
+  if (outline && !outline.dataset.manual) {
+    outline.textContent = draft ? "点击“生成提纲”后，这里会整理出一版适合继续汇报或转 PPT 的提纲。" : "生成后，这里会给出适合继续汇报或转 PPT 的提纲。";
+  }
+}
+
 function buildGenerationContextFromPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -3069,6 +3113,7 @@ async function createAndRunTask() {
     renderFeedbackLearnResult();
     renderFinalizeReview();
     renderTaskContextSummary();
+    renderRepurposeOutputs();
 
     state.currentTask = {
       id: created.taskId,
@@ -3272,6 +3317,7 @@ async function submitFeedbackAndRegenerate() {
   renderFeedbackLearnResult();
   renderFinalizeReview();
   renderTaskContextSummary();
+  renderRepurposeOutputs();
   renderWorkflowStageTracker();
   return evaluation;
 }
@@ -3438,6 +3484,7 @@ function bindEditorActions() {
   document.getElementById("draft-editor").addEventListener("input", () => {
     captureDraftSelection({ strict: false });
     summarizeDraftChanges();
+    renderRepurposeOutputs();
   });
 
   document.getElementById("add-annotation").addEventListener("click", () => {
@@ -3606,6 +3653,28 @@ function bindEditorActions() {
       setTaskBadge("保存失败", true);
       setInfo(error.message, true);
     }
+  });
+
+  document.getElementById("generate-brief-summary").addEventListener("click", () => {
+    const container = document.getElementById("repurpose-summary");
+    if (!container) {
+      return;
+    }
+    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
+    container.textContent = generateRepurposeSummary(draft);
+    container.dataset.manual = "true";
+    setInfo("已生成一版摘要。");
+  });
+
+  document.getElementById("generate-brief-outline").addEventListener("click", () => {
+    const container = document.getElementById("repurpose-outline");
+    if (!container) {
+      return;
+    }
+    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
+    container.textContent = generateRepurposeOutline(draft);
+    container.dataset.manual = "true";
+    setInfo("已生成一版提纲。");
   });
 
   document.getElementById("submit-feedback").addEventListener("click", async () => {
