@@ -2304,12 +2304,38 @@ function generateRepurposeOutline(text) {
   return `一、总体情况\n${outlineItems[0] || "1. 补充总体情况"}\n\n二、重点问题或风险\n${outlineItems[1] || "1. 补充重点问题"}\n\n三、下一步安排\n${outlineItems[2] || "1. 补充下一步安排"}`;
 }
 
+function generateLeaderBrief(text) {
+  const paragraphs = splitDraftParagraphs(text);
+  if (!paragraphs.length) {
+    return "当前还没有正文内容，先生成或补一版稿子。";
+  }
+  const conclusion =
+    pickParagraphByKeyword(paragraphs, /总体|整体|结论|建议|判断|当前|目前/) || paragraphs[0] || "";
+  const risk =
+    pickParagraphByKeyword(paragraphs, /风险|问题|不足|隐患|挑战|延迟|影响/) ||
+    paragraphs[1] ||
+    "";
+  const ask =
+    pickParagraphByKeyword(paragraphs, /下一步|建议|请示|需协调|需支持|安排|将继续/) ||
+    paragraphs[2] ||
+    "";
+  return [
+    `1. 当前判断：${conclusion.slice(0, 52)}${conclusion.length > 52 ? "..." : ""}`,
+    `2. 主要风险：${risk ? `${risk.slice(0, 52)}${risk.length > 52 ? "..." : ""}` : "正文里暂未明确写出风险。"} `,
+    `3. 下一步/请示：${ask ? `${ask.slice(0, 52)}${ask.length > 52 ? "..." : ""}` : "正文里暂未明确写出下一步安排。"} `,
+  ].join("\n");
+}
+
 function renderRepurposeOutputs() {
   const draft = String(document.getElementById("draft-editor")?.value || "").trim();
   const summary = document.getElementById("repurpose-summary");
+  const leaderBrief = document.getElementById("repurpose-leader-brief");
   const outline = document.getElementById("repurpose-outline");
   if (summary && !summary.dataset.manual) {
     summary.textContent = draft ? "点击“生成摘要”后，这里会整理出一版适合快速转发的摘要。" : "生成后，这里会给出适合转发或快速汇报的摘要。";
+  }
+  if (leaderBrief && !leaderBrief.dataset.manual) {
+    leaderBrief.textContent = draft ? "点击“生成领导摘要”后，这里会整理出一版更短、更适合给领导先看的摘要。" : "生成后，这里会给出一版更短、更适合给领导先看的摘要。";
   }
   if (outline && !outline.dataset.manual) {
     outline.textContent = draft ? "点击“生成提纲”后，这里会整理出一版适合继续汇报或转 PPT 的提纲。" : "生成后，这里会给出适合继续汇报或转 PPT 的提纲。";
@@ -3680,6 +3706,17 @@ function bindEditorActions() {
     setInfo("已生成一版摘要。");
   });
 
+  document.getElementById("generate-leader-brief").addEventListener("click", () => {
+    const container = document.getElementById("repurpose-leader-brief");
+    if (!container) {
+      return;
+    }
+    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
+    container.textContent = generateLeaderBrief(draft);
+    container.dataset.manual = "true";
+    setInfo("已生成一版领导摘要。");
+  });
+
   document.getElementById("generate-brief-outline").addEventListener("click", () => {
     const container = document.getElementById("repurpose-outline");
     if (!container) {
@@ -3704,6 +3741,15 @@ function bindEditorActions() {
     try {
       await copyText(document.getElementById("repurpose-outline")?.textContent || "", "提纲已复制。");
       setInfo("提纲已复制。");
+    } catch (error) {
+      setInfo(error.message, true);
+    }
+  });
+
+  document.getElementById("copy-leader-brief").addEventListener("click", async () => {
+    try {
+      await copyText(document.getElementById("repurpose-leader-brief")?.textContent || "", "领导摘要已复制。");
+      setInfo("领导摘要已复制。");
     } catch (error) {
       setInfo(error.message, true);
     }
