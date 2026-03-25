@@ -226,6 +226,10 @@ function setInfo(message, isError = false) {
   summary.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
 }
 
+function confirmDestructiveAction(message) {
+  return window.confirm(message);
+}
+
 function buildSettingsResultSummary(payload) {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -3142,6 +3146,12 @@ function bindEditorActions() {
   });
 
   document.getElementById("clear-annotations").addEventListener("click", () => {
+    if (!state.pendingAnnotations.length) {
+      return;
+    }
+    if (!confirmDestructiveAction("确认清空本轮批注清单吗？这会移除当前未提交的所有批注。")) {
+      return;
+    }
     state.pendingAnnotations = [];
     state.activeAnnotationIndex = -1;
     renderPendingAnnotations();
@@ -3175,6 +3185,9 @@ function bindEditorActions() {
     }
 
     if (action === "remove-annotation") {
+      if (!confirmDestructiveAction("确认删除这条批注吗？")) {
+        return;
+      }
       state.pendingAnnotations.splice(index, 1);
       if (state.activeAnnotationIndex >= state.pendingAnnotations.length) {
         state.activeAnnotationIndex = state.pendingAnnotations.length - 1;
@@ -3312,6 +3325,9 @@ function bindEditorActions() {
   });
 
   document.getElementById("finalize-draft").addEventListener("click", async () => {
+    if (!confirmDestructiveAction("确认直接定稿吗？当前正文会写回任务文件，并作为本轮最终版本。")) {
+      return;
+    }
     try {
       await saveCurrentDraft(true);
       if (state.currentTask?.runId) {
@@ -3614,6 +3630,10 @@ function bindLlmSettings() {
       }
 
       if (action === "llm-delete") {
+        const targetCard = getLlmCardById(profileId);
+        if (!confirmDestructiveAction(`确认删除模型卡“${targetCard?.name || profileId}”吗？删除后将无法恢复。`)) {
+          return;
+        }
         await api("/api/settings/llm/delete", {
           method: "POST",
           body: JSON.stringify({ profileId }),
@@ -3860,6 +3880,9 @@ function bindWorkflowDefinitionEditor() {
         return;
       }
       if (action === "stage-delete") {
+        if (!confirmDestructiveAction(`确认删除流程阶段“${stage.label || stage.id || `阶段 ${index + 1}`}”吗？`)) {
+          return;
+        }
         const deletedId = stage.id;
         definition.stages.splice(index, 1);
         definition.stages.forEach((item) => {

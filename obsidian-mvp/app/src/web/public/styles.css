@@ -897,18 +897,19 @@ legend {
 
 .llm-card-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 
 .llm-card {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: linear-gradient(180deg, #fffdf8 0%, #fff8ee 100%);
-  padding: 10px;
+  padding: 12px;
   display: grid;
-  gap: 10px;
-  min-height: 122px;
+  gap: 12px;
+  min-height: 138px;
 }
 
 .llm-card.active {
@@ -917,10 +918,9 @@ legend {
 }
 
 .llm-card-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -960,9 +960,10 @@ legend {
 }
 
 .llm-card-badges {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  justify-items: end;
+  justify-content: flex-start;
 }
 
 .chip {
