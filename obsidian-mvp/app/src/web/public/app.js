@@ -2265,15 +2265,31 @@ function splitDraftParagraphs(text) {
     .filter(Boolean);
 }
 
+function pickParagraphByKeyword(paragraphs, pattern) {
+  return paragraphs.find((item) => pattern.test(item)) || "";
+}
+
 function generateRepurposeSummary(text) {
   const paragraphs = splitDraftParagraphs(text);
   if (!paragraphs.length) {
     return "当前还没有正文内容，先生成或补一版稿子。";
   }
-  return paragraphs
-    .slice(0, 3)
-    .map((item, index) => `${index + 1}. ${item.slice(0, 90)}${item.length > 90 ? "..." : ""}`)
-    .join("\n");
+  const conclusion =
+    pickParagraphByKeyword(paragraphs, /总体|整体|结论|建议|判断|当前|目前/) || paragraphs[0] || "";
+  const risk =
+    pickParagraphByKeyword(paragraphs, /风险|问题|不足|隐患|挑战|延迟|影响/) ||
+    paragraphs[1] ||
+    "";
+  const nextStep =
+    pickParagraphByKeyword(paragraphs, /下一步|后续|计划|安排|将继续|建议/) ||
+    paragraphs[2] ||
+    "";
+
+  return [
+    `一、结论摘要：${conclusion.slice(0, 88)}${conclusion.length > 88 ? "..." : ""}`,
+    `二、当前风险：${risk ? `${risk.slice(0, 88)}${risk.length > 88 ? "..." : ""}` : "当前正文里未明确写出风险段，可补一条更清楚。"}`,
+    `三、下一步：${nextStep ? `${nextStep.slice(0, 88)}${nextStep.length > 88 ? "..." : ""}` : "当前正文里未明确写出下一步安排，可补一条更清楚。"}`,
+  ].join("\n");
 }
 
 function generateRepurposeOutline(text) {
@@ -2281,13 +2297,11 @@ function generateRepurposeOutline(text) {
   if (!paragraphs.length) {
     return "当前还没有正文内容，先生成或补一版稿子。";
   }
-  return paragraphs
-    .slice(0, 5)
-    .map((item, index) => {
-      const title = item.split(/[，。；：:]/)[0] || item;
-      return `${index + 1}. ${title.slice(0, 26)}${title.length > 26 ? "..." : ""}`;
-    })
-    .join("\n");
+  const outlineItems = paragraphs.slice(0, 5).map((item, index) => {
+    const title = item.split(/[，。；：:]/)[0] || item;
+    return `${index + 1}. ${title.slice(0, 26)}${title.length > 26 ? "..." : ""}`;
+  });
+  return `一、总体情况\n${outlineItems[0] || "1. 补充总体情况"}\n\n二、重点问题或风险\n${outlineItems[1] || "1. 补充重点问题"}\n\n三、下一步安排\n${outlineItems[2] || "1. 补充下一步安排"}`;
 }
 
 function renderRepurposeOutputs() {
