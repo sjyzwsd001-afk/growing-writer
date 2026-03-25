@@ -1009,12 +1009,41 @@ function renderWizardCheckResult(report) {
   }
 }
 
+function focusWizardField(selector) {
+  const field = document.querySelector(selector);
+  if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+    field.focus();
+    if (typeof field.scrollIntoView === "function") {
+      field.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+}
+
+function validateWizardSoftGuidance(step) {
+  const form = document.getElementById("wizard-form");
+  const formData = new FormData(form);
+  if (step === 2 && !formData.getAll("sourceMaterialIds").length) {
+    return "还没选历史材料也可以继续，但建议至少选 1 篇更像你的旧稿。";
+  }
+  return "";
+}
+
 function validateStepBeforeNext(step) {
+  const hardBlocker = validateStepBeforeNextHard(step);
+  return hardBlocker;
+}
+
+function validateStepBeforeNextHard(step) {
   const form = document.getElementById("wizard-form");
   const formData = new FormData(form);
   if (step === 1) {
-    if (!String(formData.get("title") || "").trim() || !String(formData.get("docType") || "").trim()) {
-      return "请先填写任务标题和文档类型。";
+    if (!String(formData.get("title") || "").trim()) {
+      focusWizardField('#wizard-form input[name="title"]');
+      return "请先填写任务标题。";
+    }
+    if (!String(formData.get("docType") || "").trim()) {
+      focusWizardField('#wizard-form input[name="docType"]');
+      return "请先填写文档类型。";
     }
   }
   if (step === 4) {
@@ -1023,13 +1052,16 @@ function validateStepBeforeNext(step) {
     const hasUpload =
       formData.get("backgroundUpload") instanceof File && formData.get("backgroundUpload").size > 0;
     if (!background && !facts && !hasUpload) {
-      return "请至少填写背景/事实或上传背景文件，再进入检查步骤。";
+      focusWizardField('#wizard-form textarea[name="background"]');
+      return "请至少填写背景说明、关键事实，或上传背景文件，再进入检查步骤。";
     }
   }
   if (step === 5 && !state.wizardCheckPassed) {
+    document.getElementById("wizard-run-check")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return "请先在 Step 5 执行检查并通过。";
   }
   if (step === 6 && !state.currentTask?.id) {
+    document.getElementById("wizard-submit")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return "请先点击“确认并生成初稿”，生成后才能进入定稿步骤。";
   }
   return "";
@@ -3882,8 +3914,12 @@ function bindWizard() {
         setInfo(blocker, true);
         return;
       }
+      const guidance = validateWizardSoftGuidance(state.wizardStep);
       state.wizardStep += 1;
       updateWizardStep();
+      if (guidance) {
+        setInfo(guidance);
+      }
     }
   });
 
