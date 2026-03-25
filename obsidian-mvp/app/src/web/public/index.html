@@ -409,6 +409,7 @@
                 <p class="hint">保存后后台会自动校准模型卡，卡片上只展示“可用 / 校准中 / 不可用”。</p>
                 <div class="panel-sub modal-inner-panel">
                   <h3>模型路由与降级</h3>
+                  <p class="hint">这里是在同一张模型卡里切换不同模型名：诊断/提纲走快模型，初稿走强模型；不是跨卡切换不同服务商。</p>
                   <label class="inline-check">
                     <input id="routing-enabled" type="checkbox" />
                     <span>启用智能路由（诊断/提纲走快模型，初稿走强模型）</span>
@@ -424,6 +425,10 @@
                   <label>降级模型列表（逗号分隔，按顺序重试）
                     <input id="routing-fallback-models" placeholder="例如：gpt-5.3-codex,gpt-4.1" />
                   </label>
+                  <div class="editor-actions">
+                    <button id="suggest-routing" class="mini-btn" type="button">按当前模型推荐</button>
+                  </div>
+                  <div id="routing-suggestion-note" class="mini"></div>
                 </div>
                 <div class="editor-actions">
                   <button id="save-llm-settings" class="btn primary" type="button">保存为模型卡片</button>

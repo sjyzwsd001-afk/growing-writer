@@ -419,6 +419,89 @@ function buildObsidianOpenUrl(targetPath) {
   return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath)}`;
 }
 
+function inferRoutingSuggestion({ provider, model, baseUrl }) {
+  const currentModel = String(model || "").trim();
+  const currentProvider = String(provider || "").trim();
+  const currentBaseUrl = String(baseUrl || "").toLowerCase();
+  let fastModel = currentModel;
+  let strongModel = currentModel;
+  let fallbackModels = [];
+  let note = "当前模型暂时没有明显的快慢分工，先按同一模型运行。";
+
+  if (currentProvider === "openai-codex-oauth") {
+    strongModel = currentModel === "gpt-5.3-codex" ? "gpt-5.4" : currentModel || "gpt-5.4";
+    fastModel = currentModel === "gpt-5.4" ? "gpt-5.3-codex" : "gpt-5.3-codex";
+    fallbackModels = [fastModel].filter((item) => item && item !== strongModel);
+    note = "推荐把诊断/提纲交给 gpt-5.3-codex，正文交给 gpt-5.4。";
+  } else if (/kimi|moonshot/.test(currentBaseUrl) || /kimi/i.test(currentModel)) {
+    if (/thinking/i.test(currentModel)) {
+      strongModel = currentModel;
+      fastModel = currentModel.replace(/thinking/gi, "k2p5");
+      fallbackModels = [fastModel].filter((item) => item && item !== strongModel);
+      note = "当前像 Kimi 的思考模型，推荐用更快的 K2P5 负责前置阶段。";
+    } else {
+      fastModel = currentModel;
+      strongModel = currentModel;
+      note = "当前 Kimi 卡先用同一模型跑全流程，后续如果这家提供更强主模型，再拆快慢。";
+    }
+  } else if (/minimax/i.test(currentBaseUrl) || /highspeed/i.test(currentModel)) {
+    fastModel = currentModel;
+    strongModel = currentModel;
+    note = "当前模型已经偏速度型，先让它承担全流程，避免无意义切换。";
+  } else if (/gpt-5\.4/i.test(currentModel)) {
+    fastModel = "gpt-5.3-codex";
+    strongModel = currentModel;
+    fallbackModels = ["gpt-5.3-codex"];
+    note = "当前像 OpenAI 强模型，推荐补一条更快的前置模型和回退链路。";
+  } else if (/gpt-5\.3-codex/i.test(currentModel)) {
+    fastModel = currentModel;
+    strongModel = "gpt-5.4";
+    fallbackModels = [currentModel];
+    note = "当前像 OpenAI 快模型，推荐正文升级到 gpt-5.4。";
+  } else if (/3b|mini|highspeed/i.test(currentModel)) {
+    fastModel = currentModel;
+    strongModel = currentModel;
+    note = "当前模型更偏轻量或速度型，先保持同一模型更稳。";
+  } else if (/thinking|deepseek-r1/i.test(currentModel)) {
+    fastModel = currentModel;
+    strongModel = currentModel;
+    note = "当前像推理型或本地模型，先不强拆快慢，避免结构化稳定性下降。";
+  }
+
+  const dedupedFallbacks = [...new Set(fallbackModels.filter(Boolean).filter((item) => item !== fastModel && item !== strongModel ? true : item === fastModel && fastModel !== strongModel))];
+
+  return {
+    routingEnabled: true,
+    fastModel: fastModel || currentModel,
+    strongModel: strongModel || currentModel,
+    fallbackModels: dedupedFallbacks,
+    note,
+  };
+}
+
+function applyRoutingSuggestion() {
+  const mode = document.getElementById("llm-mode").value;
+  const model =
+    mode === "openai-codex-oauth"
+      ? document.getElementById("llm-model-oauth-select").value
+      : document.getElementById("llm-model-key-input").value.trim();
+  const baseUrl = document.getElementById("llm-base-url-input").value.trim();
+  const suggestion = inferRoutingSuggestion({
+    provider: mode,
+    model,
+    baseUrl,
+  });
+  document.getElementById("routing-enabled").checked = Boolean(suggestion.routingEnabled);
+  document.getElementById("routing-fast-model").value = suggestion.fastModel || "";
+  document.getElementById("routing-strong-model").value = suggestion.strongModel || "";
+  document.getElementById("routing-fallback-models").value = suggestion.fallbackModels.join(",");
+  const note = document.getElementById("routing-suggestion-note");
+  if (note) {
+    note.textContent = suggestion.note;
+  }
+  setInfo("已按当前模型填入一版推荐路由。");
+}
+
 function inferFeedbackType(text) {
   const normalized = String(text || "").toLowerCase();
   if (/结构|顺序|层次/.test(normalized)) {
@@ -3053,6 +3136,9 @@ function renderLlmCardDetail(card) {
   const fallbackText = Array.isArray(card.fallbackModels) && card.fallbackModels.length
     ? card.fallbackModels.join(" -> ")
     : "未设置";
+  const routingText = card.routingEnabled
+    ? `诊断/提纲 -> ${card.fastModel || card.model || "未设置"}；正文 -> ${card.strongModel || card.model || "未设置"}`
+    : "未启用智能路由";
 
   title.textContent = card.name || card.id;
   body.innerHTML = `
@@ -3094,6 +3180,10 @@ function renderLlmCardDetail(card) {
       <div class="llm-detail-item">
         <div class="result-summary-label">降级链路</div>
         <div class="mini">${escapeHtml(fallbackText)}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">当前路由</div>
+        <div class="mini">${escapeHtml(routingText)}</div>
       </div>
     </div>
     ${
@@ -3168,6 +3258,12 @@ function fillLlmForm(card) {
   document.getElementById("routing-fallback-models").value = Array.isArray(card?.fallbackModels)
     ? card.fallbackModels.join(",")
     : "";
+  const routingNote = document.getElementById("routing-suggestion-note");
+  if (routingNote) {
+    routingNote.textContent = card?.routingEnabled
+      ? `当前路由：诊断/提纲走 ${card?.fastModel || model || "当前模型"}，正文走 ${card?.strongModel || model || "当前模型"}。`
+      : "还没有启用智能路由。可点“按当前模型推荐”先生成一版。";
+  }
   document.getElementById("llm-form-title").textContent = card ? "编辑模型卡片" : "新建模型卡片";
   document.getElementById("llm-editing-meta").textContent = card
     ? `当前编辑：${card.name || card.id}`
@@ -4201,9 +4297,22 @@ function bindBackgroundUploadSummary() {
 }
 
 function bindLlmSettings() {
+  const refreshRoutingNote = () => {
+    const note = document.getElementById("routing-suggestion-note");
+    if (!note) {
+      return;
+    }
+    note.textContent = "可点“按当前模型推荐”，自动填一版更适合这张卡的模型路由。";
+  };
+
   document.getElementById("llm-mode").addEventListener("change", (event) => {
     toggleLlmMode(event.currentTarget.value);
+    refreshRoutingNote();
   });
+
+  document.getElementById("llm-model-oauth-select").addEventListener("change", refreshRoutingNote);
+  document.getElementById("llm-model-key-input").addEventListener("input", refreshRoutingNote);
+  document.getElementById("llm-base-url-input").addEventListener("input", refreshRoutingNote);
 
   document.getElementById("new-llm-card").addEventListener("click", () => {
     state.editingLlmProfileId = "";
@@ -4222,6 +4331,10 @@ function bindLlmSettings() {
 
   document.getElementById("close-confirm-modal").addEventListener("click", () => {
     settleConfirmModal(false);
+  });
+
+  document.getElementById("suggest-routing").addEventListener("click", () => {
+    applyRoutingSuggestion();
   });
 
   document.getElementById("confirm-cancel").addEventListener("click", () => {
