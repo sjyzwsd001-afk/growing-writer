@@ -21,6 +21,7 @@ const state = {
   editingLlmProfileId: "",
   detailLlmProfileId: "",
   finalizeMeta: null,
+  selectedMaterialPaths: [],
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -113,6 +114,9 @@ const BUTTON_TOOLTIP_BY_TEXT = {
   "提交反馈并再次生成": "按本轮修改意见学习后，再生成一版新稿。",
   "直接定稿": "把当前正文定为最终稿，并写回任务文件。",
   "刷新画像": "根据材料、规则和反馈重新生成写作画像。",
+  "批量转正式模板": "把当前勾选的材料一起转成正式模板。",
+  "批量转历史材料": "把当前勾选的模板或材料一起转回历史材料。",
+  "清空选择": "清空当前勾选的材料。",
   "重新加载 DSL": "重新读取当前流程 DSL 定义。",
   "保存 DSL": "保存当前流程 DSL 改动并立即生效。",
   "新增阶段": "在流程里新增一个阶段节点。",
@@ -1324,10 +1328,64 @@ function renderSimpleList(containerId, items, renderItem) {
   }
   for (const item of items) {
     const row = document.createElement("div");
-    row.className = "row-item";
+    row.className =
+      containerId === "settings-materials" || containerId === "settings-templates" ? "row-item selectable" : "row-item";
     row.innerHTML = renderItem(item);
     container.append(row);
   }
+}
+
+function isMaterialSelected(path) {
+  return state.selectedMaterialPaths.includes(String(path || ""));
+}
+
+function toggleMaterialSelection(path, checked) {
+  const value = String(path || "");
+  if (!value) {
+    return;
+  }
+  if (checked) {
+    if (!state.selectedMaterialPaths.includes(value)) {
+      state.selectedMaterialPaths = [...state.selectedMaterialPaths, value];
+    }
+  } else {
+    state.selectedMaterialPaths = state.selectedMaterialPaths.filter((item) => item !== value);
+  }
+  renderMaterialSelectionStatus();
+}
+
+function clearMaterialSelection() {
+  state.selectedMaterialPaths = [];
+  renderMaterialSelectionStatus();
+}
+
+function renderMaterialSelectionStatus() {
+  const container = document.getElementById("material-selection-status");
+  if (!container) {
+    return;
+  }
+  const count = state.selectedMaterialPaths.length;
+  container.textContent = count ? `已勾选 ${count} 份材料，可批量调整角色。` : "还没有勾选材料。";
+}
+
+async function bulkUpdateMaterialRole(role) {
+  const paths = state.selectedMaterialPaths.filter(Boolean);
+  if (!paths.length) {
+    throw new Error("请先勾选至少一份材料。");
+  }
+  const result = await api("/api/materials/role/batch", {
+    method: "POST",
+    body: JSON.stringify({
+      paths,
+      role,
+      reason: role === "template" ? "通过设置页批量转为模板材料" : "通过设置页批量转为历史材料",
+    }),
+  });
+  clearMaterialSelection();
+  setSettingsResult(`材料批量更新完成`, result);
+  const updatedCount = Array.isArray(result.updated) ? result.updated.length : 0;
+  setInfo(role === "template" ? `已批量转正式模板 ${updatedCount} 份。` : `已批量转历史材料 ${updatedCount} 份。`);
+  await loadDashboard();
 }
 
 function renderGroupedRuleList(containerId, items) {
@@ -1659,7 +1717,11 @@ function renderSettingsLists() {
     );
     });
   renderSimpleList("settings-materials", sortedMaterials, (item) => {
-    return `<div class="row-main">
+    const selected = isMaterialSelected(item.path);
+    return `<div class="row-select">
+      <input type="checkbox" data-action="toggle-material-selection" data-path="${escapeHtml(item.path)}" ${selected ? "checked" : ""} />
+    </div>
+    <div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.roleLabel || "参考材料")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
       <div class="mini">${escapeHtml(item.roleReason || "")}</div>
@@ -1682,7 +1744,11 @@ function renderSettingsLists() {
     );
   });
   renderSimpleList("settings-templates", sortedTemplates, (item) => {
-    return `<div class="row-main">
+    const selected = isMaterialSelected(item.path);
+    return `<div class="row-select">
+      <input type="checkbox" data-action="toggle-material-selection" data-path="${escapeHtml(item.path)}" ${selected ? "checked" : ""} />
+    </div>
+    <div class="row-main">
       <strong>${escapeHtml(item.title)}</strong>
       <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
       <div class="mini">${escapeHtml(normalizeTemplateUiCopy(item.roleReason || "正式模板会优先参与生成。"))}</div>
@@ -1696,6 +1762,7 @@ function renderSettingsLists() {
   });
 
   renderGroupedRuleList("settings-rules", data.rules || []);
+  renderMaterialSelectionStatus();
 
   renderProfileList("settings-profiles", data.profiles || []);
 
@@ -3063,6 +3130,11 @@ async function loadWorkflowDefinitionEditor() {
 async function loadDashboard() {
   const data = await api("/api/dashboard");
   state.dashboard = data;
+  const validPaths = new Set([
+    ...((data.materials || []).map((item) => String(item.path || ""))),
+    ...((data.templates || []).map((item) => String(item.path || ""))),
+  ]);
+  state.selectedMaterialPaths = state.selectedMaterialPaths.filter((path) => validPaths.has(path));
   updateTopStatus(data);
   hydrateLlmSettings(data);
   renderTemplateSelector(data.templateCandidates || data.templates || []);
@@ -4638,6 +4710,16 @@ function bindSettingsActions() {
 
   for (const id of containers) {
     const container = document.getElementById(id);
+    container.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      if ((target.dataset.action || "") !== "toggle-material-selection") {
+        return;
+      }
+      toggleMaterialSelection(target.dataset.path || "", target.checked);
+    });
     container.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) {
@@ -4670,6 +4752,41 @@ function bindSettingsActions() {
       await loadDashboard();
     } catch (error) {
       setSettingsResult("刷新画像失败", { error: error.message });
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+
+  document.getElementById("bulk-clear-material-selection").addEventListener("click", () => {
+    clearMaterialSelection();
+    loadDashboard();
+  });
+
+  document.getElementById("bulk-mark-template").addEventListener("click", async () => {
+    const button = document.getElementById("bulk-mark-template");
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "处理中...";
+    try {
+      await bulkUpdateMaterialRole("template");
+    } catch (error) {
+      setSettingsResult("批量转模板失败", { error: error.message });
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+
+  document.getElementById("bulk-mark-history").addEventListener("click", async () => {
+    const button = document.getElementById("bulk-mark-history");
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "处理中...";
+    try {
+      await bulkUpdateMaterialRole("history");
+    } catch (error) {
+      setSettingsResult("批量转历史材料失败", { error: error.message });
     } finally {
       button.disabled = false;
       button.textContent = original;

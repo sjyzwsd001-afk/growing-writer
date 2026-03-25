@@ -800,6 +800,12 @@ legend {
   overflow: auto;
 }
 
+.bulk-toolbar {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px 10px;
+}
+
 .row-item {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -807,6 +813,24 @@ legend {
   padding: 10px 11px;
   display: grid;
   gap: 8px;
+}
+
+.row-item.selectable {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.row-select {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.row-select input {
+  width: 16px;
+  height: 16px;
 }
 
 .grouped-list {

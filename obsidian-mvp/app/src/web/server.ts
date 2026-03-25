@@ -300,6 +300,30 @@ async function updateMaterialRole(input: {
   };
 }
 
+async function updateMaterialRoleBatch(input: {
+  vaultRoot: string;
+  materialPaths: string[];
+  role: "template" | "history";
+  reason?: string;
+}) {
+  const updated = [];
+  for (const materialPath of input.materialPaths) {
+    updated.push(
+      await updateMaterialRole({
+        vaultRoot: input.vaultRoot,
+        materialPath,
+        role: input.role,
+        reason: input.reason,
+      }),
+    );
+  }
+  return {
+    role: input.role,
+    updated,
+    updatedCount: updated.length,
+  };
+}
+
 type TaskCreateRequest = {
   title: string;
   docType: string;
@@ -3279,6 +3303,23 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const result = await updateMaterialRole({
           vaultRoot,
           materialPath: resolve(body.path),
+          role: body.role === "template" ? "template" : "history",
+          reason: typeof body.reason === "string" ? body.reason : "",
+        });
+        sendJson(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/materials/role/batch") {
+        const body = (await readBody(req)) as Record<string, unknown>;
+        const paths = Array.isArray(body.paths) ? body.paths.map((item) => String(item || "")).filter(Boolean) : [];
+        if (!paths.length || !body.role) {
+          sendJson(res, 400, { error: "Missing material paths or role." });
+          return;
+        }
+        const result = await updateMaterialRoleBatch({
+          vaultRoot,
+          materialPaths: paths.map((item) => resolve(item)),
           role: body.role === "template" ? "template" : "history",
           reason: typeof body.reason === "string" ? body.reason : "",
         });
