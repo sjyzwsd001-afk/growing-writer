@@ -502,13 +502,19 @@
             <section class="panel">
               <div class="panel-header"><h2>模型配置</h2></div>
               <div class="panel-sub">
-                <div class="section-meta">
-                  <strong>模型卡片</strong>
-                  <button id="new-llm-card" class="mini-btn" type="button">新建卡片</button>
+                <div id="llm-overview" class="llm-overview-grid">
+                  <div class="empty">正在读取模型状态。</div>
+                </div>
+                <div class="section-meta llm-section-meta">
+                  <div>
+                    <strong>模型卡片</strong>
+                    <div class="mini">当前页只保留可切换、可比对、可管理的模型卡；详细配置放进编辑层和详情层。</div>
+                  </div>
+                  <button id="new-llm-card" class="btn primary" type="button">新建卡片</button>
                 </div>
                 <div id="llm-card-list" class="llm-card-list"></div>
               </div>
-              <div class="meta">最近更新：<span id="llm-updated-at">-</span></div>
+              <div class="meta llm-updated-meta">最近更新：<span id="llm-updated-at">-</span></div>
             </section>
           </div>
 

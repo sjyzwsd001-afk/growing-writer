@@ -3445,6 +3445,62 @@ function renderLlmCardDetail(card) {
   `;
 }
 
+function isLocalLlmCard(card) {
+  const baseUrl = String(card?.baseUrl || "").toLowerCase();
+  return baseUrl.includes("127.0.0.1") || baseUrl.includes("localhost");
+}
+
+function renderLlmOverview(data) {
+  const container = document.getElementById("llm-overview");
+  if (!container) {
+    return;
+  }
+  const llm = data.llm || {};
+  const cards = Array.isArray(llm.cards) ? llm.cards : [];
+  const activeCard = cards.find((card) => card.isActive) || null;
+  const readyCount = cards.filter((card) => String(card.calibration?.status || "") === "ready").length;
+  const pendingCount = cards.filter((card) => {
+    const statusText = getCalibrationStatusText(card.calibration || null, card.validation || { errors: [], warnings: [] }, card.enabled);
+    return statusText === "校准中" || statusText === "待校准" || statusText === "不可用" || statusText === "配置错误";
+  }).length;
+  const localCount = cards.filter((card) => isLocalLlmCard(card)).length;
+  const routingCount = cards.filter((card) => card.routingEnabled).length;
+  const currentStatus = activeCard
+    ? `${getCalibrationStatusText(activeCard.calibration || null, activeCard.validation || { errors: [], warnings: [] }, activeCard.enabled)} / ${activeCard.name || activeCard.id}`
+    : "还没有启用卡片";
+  const capability = activeCard
+    ? getCalibrationCapabilityText(activeCard.calibration || null) || "等待校准后再判断适用场景。"
+    : "先启用一张可用卡片，再决定用哪张来跑正式写作。";
+
+  container.innerHTML = `
+    <div class="llm-overview-card llm-overview-primary">
+      <div class="result-summary-label">当前模型</div>
+      <strong>${escapeHtml(currentStatus)}</strong>
+      <div class="mini">${escapeHtml(capability)}</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">可用卡片</div>
+      <strong>${escapeHtml(String(readyCount))}</strong>
+      <div class="mini">已通过校准，可直接参与写作</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">待处理卡片</div>
+      <strong>${escapeHtml(String(pendingCount))}</strong>
+      <div class="mini">校准中、失败或配置仍需修正</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">本地模型</div>
+      <strong>${escapeHtml(String(localCount))}</strong>
+      <div class="mini">适合轻量草拟或本机实验</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">跨卡路由</div>
+      <strong>${escapeHtml(String(routingCount))}</strong>
+      <div class="mini">已启用快卡 / 强卡 / 回退卡</div>
+    </div>
+  `;
+}
+
 function renderLlmCards(data) {
   const llm = data.llm || {};
   const cards = Array.isArray(llm.cards)
@@ -3467,40 +3523,79 @@ function renderLlmCards(data) {
     container.innerHTML = `<div class="empty">还没有模型卡片。先在下方新建一个。</div>`;
     return;
   }
+  const sections = [
+    {
+      title: "当前启用",
+      hint: "真正参与当前写作流程的模型卡。",
+      cards: cards.filter((card) => card.isActive),
+    },
+    {
+      title: "正式写作",
+      hint: "更适合稳定生成正文、提纲和规则学习。",
+      cards: cards.filter((card) => !card.isActive && String(card.calibration?.status || "") === "ready" && !String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作")),
+    },
+    {
+      title: "轻量与实验",
+      hint: "更适合本地草拟、兼容性测试或轻量写作。",
+      cards: cards.filter((card) => !card.isActive && (String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作") || isLocalLlmCard(card))),
+    },
+    {
+      title: "待处理",
+      hint: "还没有完全就绪，建议先看详情或编辑修正。",
+      cards: cards.filter((card) => !card.isActive && String(card.calibration?.status || "") !== "ready" && !(String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作") || isLocalLlmCard(card))),
+    },
+  ].filter((section) => section.cards.length);
 
-  container.innerHTML = cards
-    .map((card) => {
-      const validation = card.validation || { errors: [], warnings: [] };
-      const calibration = card.calibration || null;
-      const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
-      const capabilityText = getCalibrationCapabilityText(calibration);
-      const roleText = card.isActive ? "当前" : "备用";
-      const routingText = card.routingEnabled ? "跨卡路由" : "单卡运行";
-      return `<div class="llm-card ${card.isActive ? "active" : ""}">
-        <div class="llm-card-top">
-          <div class="llm-card-main">
-            <strong class="llm-card-title">${escapeHtml(card.name || card.id)}</strong>
-            <div class="mini llm-card-meta">${escapeHtml(card.model || "-")}</div>
+  container.innerHTML = sections
+    .map((section) => `
+      <div class="llm-card-section">
+        <div class="llm-card-section-head">
+          <div>
+            <strong>${escapeHtml(section.title)}</strong>
+            <div class="mini">${escapeHtml(section.hint)}</div>
           </div>
         </div>
-        <div class="llm-card-status">
-          <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
-          <span class="chip ${card.isActive ? "active" : ""}">${escapeHtml(roleText)}</span>
-          <span class="chip">${escapeHtml(routingText)}</span>
+        <div class="llm-card-list-section">
+          ${section.cards
+            .map((card) => {
+              const validation = card.validation || { errors: [], warnings: [] };
+              const calibration = card.calibration || null;
+              const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
+              const capabilityText = getCalibrationCapabilityText(calibration);
+              const roleText = card.isActive ? "当前" : "备用";
+              const routingText = card.routingEnabled ? "跨卡路由" : "单卡运行";
+              const secondaryAction = card.isActive
+                ? `<button type="button" class="mini-btn" disabled>已启用</button>`
+                : `<button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}">启用</button>`;
+              return `<div class="llm-card ${card.isActive ? "active" : ""}">
+                <div class="llm-card-top">
+                  <div class="llm-card-main">
+                    <strong class="llm-card-title">${escapeHtml(card.name || card.id)}</strong>
+                    <div class="mini llm-card-meta">${escapeHtml(card.model || "-")}</div>
+                  </div>
+                </div>
+                <div class="llm-card-status">
+                  <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
+                  <span class="chip ${card.isActive ? "active" : ""}">${escapeHtml(roleText)}</span>
+                  <span class="chip">${escapeHtml(routingText)}</span>
+                </div>
+                <div class="llm-card-note">
+                  <div class="mini">${escapeHtml(capabilityText || "等待校准后再判断适用场景。")}</div>
+                </div>
+                <div class="llm-card-footer">
+                  <div class="llm-card-actions">
+                    <button type="button" class="mini-btn" data-action="llm-detail" data-profile-id="${escapeHtml(card.id)}">详情</button>
+                    <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
+                    ${secondaryAction}
+                    <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
+                  </div>
+                </div>
+              </div>`;
+            })
+            .join("")}
         </div>
-        <div class="llm-card-note">
-          <div class="mini">${escapeHtml(capabilityText || "等待校准后再判断适用场景。")}</div>
-        </div>
-        <div class="llm-card-footer">
-          <div class="llm-card-actions">
-            <button type="button" class="mini-btn" data-action="llm-detail" data-profile-id="${escapeHtml(card.id)}">详情</button>
-            <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
-            <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
-            <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
-          </div>
-        </div>
-      </div>`;
-    })
+      </div>
+    `)
     .join("");
 }
 
@@ -3545,6 +3640,7 @@ function fillLlmForm(card) {
 }
 
 function hydrateLlmSettings(data) {
+  renderLlmOverview(data);
   renderLlmCards(data);
   const activeProfileId = data.llm?.activeProfileId || "";
   const editingProfileId = state.editingLlmProfileId || activeProfileId;
