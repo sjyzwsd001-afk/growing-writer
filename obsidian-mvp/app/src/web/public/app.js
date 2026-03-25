@@ -1377,6 +1377,7 @@ function renderGroupedRuleList(containerId, items) {
             const scopeLabel = item.scope ? `适用范围：${item.scope}` : "适用范围：通用";
             const docTypeLabel = docTypes || "不限";
             const audienceLabel = audiences || "不限";
+            const conflictHints = Array.isArray(item.conflictHints) ? item.conflictHints.slice(0, 2) : [];
             return `<div class="row-item">
               <div class="row-main">
                 <strong>${escapeHtml(item.title)}</strong>
@@ -1384,6 +1385,11 @@ function renderGroupedRuleList(containerId, items) {
                 <div class="mini">已沉淀版本 ${escapeHtml(String(item.versionCount ?? 0))} / 置信度 ${escapeHtml(String(item.confidence ?? 0))} / 已影响任务 ${escapeHtml(String(item.linkedTaskCount ?? 0))} 次 / 来自反馈 ${escapeHtml(String(item.linkedFeedbackCount ?? 0))} 次</div>
                 <div class="inline-chips">
                   ${priorityHint}
+                  ${
+                    conflictHints.length
+                      ? `<span class="mini-chip conflict">可能冲突 ${escapeHtml(String(conflictHints.length))} 处</span>`
+                      : ""
+                  }
                   ${
                     taskTitles.length
                       ? taskTitles.map((title) => `<span class="mini-chip priority">${escapeHtml(title)}</span>`).join("")
@@ -1396,6 +1402,11 @@ function renderGroupedRuleList(containerId, items) {
                   }
                 </div>
                 <div class="rule-provenance">
+                  ${
+                    conflictHints.length
+                      ? conflictHints.map((hint) => `<div class="mini">冲突提示：${escapeHtml(hint)}</div>`).join("")
+                      : ""
+                  }
                   <div class="mini">来源材料：${escapeHtml(sourceTitles.join(" / ") || "暂无来源记录")}</div>
                   <div class="mini">最近版本：${escapeHtml(item.latestVersionAt || "-")}</div>
                 </div>

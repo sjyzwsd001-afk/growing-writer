@@ -851,6 +851,12 @@ legend {
   border-color: rgba(170, 119, 31, 0.18);
 }
 
+.mini-chip.conflict {
+  background: #fff1f1;
+  color: #9b2e2e;
+  border-color: rgba(155, 46, 46, 0.18);
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;

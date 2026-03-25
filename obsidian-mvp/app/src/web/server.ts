@@ -1139,6 +1139,77 @@ function normalizeTextForCompare(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function hasOverlap(a: string[], b: string[]): boolean {
+  if (!a.length || !b.length) {
+    return true;
+  }
+  const set = new Set(a.map((item) => item.trim()).filter(Boolean));
+  return b.some((item) => set.has(item.trim()));
+}
+
+function detectRuleConflictHints(
+  rules: Array<{
+    id: string;
+    title: string;
+    status: string;
+    scope: string;
+    docTypes: string[];
+    audiences: string[];
+    content: string;
+  }>,
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  const orderKeywords = ["意义", "现状", "问题", "成绩", "措施", "建议", "结论", "背景"];
+
+  for (let i = 0; i < rules.length; i += 1) {
+    const current = rules[i];
+    const currentText = `${current.title} ${current.content}`;
+    const currentOrder = orderKeywords.find((item) => currentText.includes(`先写${item}`));
+    const currentConclusionFirst = /结论前置/.test(currentText);
+
+    for (let j = i + 1; j < rules.length; j += 1) {
+      const other = rules[j];
+      if (current.status !== other.status || current.status === "disabled") {
+        continue;
+      }
+      if (!hasOverlap(current.docTypes, other.docTypes) || !hasOverlap(current.audiences, other.audiences)) {
+        continue;
+      }
+      const currentScope = normalizeTextForCompare(current.scope || "");
+      const otherScope = normalizeTextForCompare(other.scope || "");
+      if (currentScope && otherScope && currentScope !== otherScope) {
+        continue;
+      }
+
+      const otherText = `${other.title} ${other.content}`;
+      const otherOrder = orderKeywords.find((item) => otherText.includes(`先写${item}`));
+      const otherConclusionFirst = /结论前置/.test(otherText);
+
+      let reason = "";
+      if (currentOrder && otherOrder && currentOrder !== otherOrder) {
+        reason = `与「${other.title}」都在规定开头顺序，但一个主张先写${currentOrder}，另一个主张先写${otherOrder}。`;
+      } else if (currentConclusionFirst !== otherConclusionFirst && (currentConclusionFirst || otherConclusionFirst)) {
+        reason = `与「${other.title}」在“是否结论前置”上可能冲突。`;
+      } else if (/不要/.test(currentText) && !/不要/.test(otherText) && hasOverlap(current.docTypes, other.docTypes)) {
+        reason = `与「${other.title}」适用范围高度重叠，建议人工确认两条规则是否会互相掣肘。`;
+      }
+
+      if (reason) {
+        result.set(current.id, [...(result.get(current.id) || []), reason]);
+        result.set(
+          other.id,
+          [
+            ...(result.get(other.id) || []),
+            reason.replace(`与「${other.title}」`, `与「${current.title}」`),
+          ],
+        );
+      }
+    }
+  }
+
+  return result;
+}
+
 function extractKeywords(text: string): string[] {
   const raw = text
     .toLowerCase()
@@ -2186,6 +2257,17 @@ async function buildDashboard(vaultRoot: string) {
     .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
   const materialTitleById = new Map(materialItems.map((item) => [item.id, item.title]));
   const taskTitleById = new Map(tasks.map((item) => [item.id, item.title]));
+  const ruleConflictHints = detectRuleConflictHints(
+    rules.map((item) => ({
+      id: item.id,
+      title: item.title,
+      status: item.status,
+      scope: item.scope,
+      docTypes: item.docTypes,
+      audiences: item.audiences,
+      content: item.content,
+    })),
+  );
 
   const ruleItems = await Promise.all(
     rules.map(async (item) => {
@@ -2214,6 +2296,7 @@ async function buildDashboard(vaultRoot: string) {
         linkedTaskTitles: linkedTasks.slice(0, 3).map((task) => task.title),
         linkedFeedbackCount,
         linkedFeedbackIds: linkedFeedbacks.slice(0, 3).map((feedback) => feedback.id),
+        conflictHints: ruleConflictHints.get(item.id) || [],
         path: item.path,
       };
     }),
