@@ -2246,6 +2246,14 @@ function renderFinalizeReview() {
           <strong>下一步建议：</strong>${escapeHtml(recommendation)}
         </div>
       </div>
+      ${
+        state.latestFeedbackLearnResult?.candidateRulePath
+          ? `<div class="editor-actions">
+              <button type="button" class="btn primary" data-action="confirm-generated-rule" data-path="${escapeHtml(state.latestFeedbackLearnResult.candidateRulePath)}">把这次学习直接确认入规则</button>
+              <button type="button" class="btn ghost" data-action="reject-generated-rule" data-path="${escapeHtml(state.latestFeedbackLearnResult.candidateRulePath)}">这次先不入库</button>
+            </div>`
+          : ""
+      }
     </div>
   `;
 }
