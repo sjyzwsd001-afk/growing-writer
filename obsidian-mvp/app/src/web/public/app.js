@@ -1033,19 +1033,49 @@ function renderTemplateChoiceCards(items, selectedId = "") {
     return;
   }
 
-  container.innerHTML = items
-    .slice(0, 3)
-    .map((item) => {
-      const recommendation = scoreTemplateForCurrentTask(item, getCurrentWizardTemplateSignals());
-      const selected = item.id === selectedId;
-      return `<button type="button" class="choice-card ${selected ? "active" : ""}" data-action="pick-template-card" data-template-id="${escapeHtml(item.id)}">
-        <strong>${escapeHtml(item.title || "未命名模板")}</strong>
-        <div class="mini">${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "通用场景")}</div>
-        <div class="mini">${escapeHtml(getTemplateKindHint(item))}</div>
-        <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
-      </button>`;
-    })
-    .join("");
+  const ranked = items
+    .map((item) => ({
+      item,
+      recommendation: scoreTemplateForCurrentTask(item, getCurrentWizardTemplateSignals()),
+    }))
+    .sort((a, b) => b.recommendation.score - a.recommendation.score)
+    .slice(0, 3);
+  const primary = ranked[0] || null;
+  const alternatives = ranked.slice(1);
+
+  container.innerHTML = `
+    ${
+      primary
+        ? `<div class="template-primary-card ${primary.item.id === selectedId ? "active" : ""}">
+            <div class="template-primary-head">
+              <div>
+                <div class="mini">系统首推</div>
+                <strong>${escapeHtml(primary.item.title || "未命名模板")}</strong>
+              </div>
+              <button type="button" class="mini-btn" data-action="pick-template-card" data-template-id="${escapeHtml(primary.item.id)}">
+                ${primary.item.id === selectedId ? "当前已选" : "一键采用"}
+              </button>
+            </div>
+            <div class="mini">${escapeHtml(primary.item.docType || "-")} / ${escapeHtml(primary.item.scenario || "通用场景")}</div>
+            ${renderTemplateQualityChips(primary.item)}
+            ${renderRecommendationReasonChips(primary.recommendation)}
+            <div class="mini">${escapeHtml(getTemplateKindHint(primary.item))}</div>
+          </div>`
+        : ""
+    }
+    <div class="template-alternative-grid">
+      ${alternatives
+        .map(({ item, recommendation }) => {
+          const selected = item.id === selectedId;
+          return `<button type="button" class="choice-card ${selected ? "active" : ""}" data-action="pick-template-card" data-template-id="${escapeHtml(item.id)}">
+            <strong>${escapeHtml(item.title || "未命名模板")}</strong>
+            <div class="mini">${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "通用场景")}</div>
+            <div class="mini">匹配度 ${escapeHtml(recommendation.score.toFixed(1))}</div>
+          </button>`;
+        })
+        .join("")}
+    </div>
+  `;
 }
 
 function renderTemplateSelector(items) {
