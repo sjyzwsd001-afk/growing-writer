@@ -3691,6 +3691,24 @@ function bindEditorActions() {
     setInfo("已生成一版提纲。");
   });
 
+  document.getElementById("copy-brief-summary").addEventListener("click", async () => {
+    try {
+      await copyText(document.getElementById("repurpose-summary")?.textContent || "", "摘要已复制。");
+      setInfo("摘要已复制。");
+    } catch (error) {
+      setInfo(error.message, true);
+    }
+  });
+
+  document.getElementById("copy-brief-outline").addEventListener("click", async () => {
+    try {
+      await copyText(document.getElementById("repurpose-outline")?.textContent || "", "提纲已复制。");
+      setInfo("提纲已复制。");
+    } catch (error) {
+      setInfo(error.message, true);
+    }
+  });
+
   document.getElementById("submit-feedback").addEventListener("click", async () => {
     const button = document.getElementById("submit-feedback");
     button.disabled = true;
