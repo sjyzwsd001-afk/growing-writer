@@ -718,6 +718,23 @@ legend {
   gap: 6px;
 }
 
+.wizard-quick-adds {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.wizard-quick-chip {
+  cursor: pointer;
+  background: linear-gradient(180deg, #fffefb 0%, #fff8ef 100%);
+  color: var(--ink);
+}
+
+.wizard-quick-chip:hover {
+  border-color: rgba(143, 79, 26, 0.28);
+  color: var(--accent);
+}
+
 .msg.error {
   border-color: rgba(155, 46, 46, 0.4);
   color: var(--danger);

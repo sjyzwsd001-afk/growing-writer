@@ -1232,6 +1232,24 @@ function updateWizardActionButtons() {
   }
 }
 
+function appendLineToWizardTextarea(fieldName, line) {
+  const textarea = document.querySelector(`#wizard-form textarea[name="${fieldName}"]`);
+  if (!(textarea instanceof HTMLTextAreaElement)) {
+    return false;
+  }
+  const value = textarea.value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!value.includes(line)) {
+    value.push(line);
+    textarea.value = value.join("\n");
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  textarea.focus();
+  return true;
+}
+
 function updateWizardStep() {
   document.getElementById("wizard-step-index").textContent = String(state.wizardStep);
   document.querySelectorAll(".wizard-step").forEach((step) => {
@@ -3963,6 +3981,16 @@ function bindWizard() {
   });
 
   document.getElementById("wizard-form").addEventListener("click", (event) => {
+    const quickChip = event.target.closest(".wizard-quick-chip");
+    if (quickChip instanceof HTMLElement) {
+      const fieldName = String(quickChip.dataset.targetField || "").trim();
+      const line = String(quickChip.dataset.addLine || "").trim();
+      if (fieldName && line && appendLineToWizardTextarea(fieldName, line)) {
+        setInfo(`已加入“${line}”。`);
+      }
+      return;
+    }
+
     const skipButton = event.target.closest("#skip-template-selection");
     if (skipButton) {
       const select = document.getElementById("template-selector");
