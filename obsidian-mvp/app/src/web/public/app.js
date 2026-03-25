@@ -3244,7 +3244,21 @@ function renderLlmCardDetail(card) {
 
 function renderLlmCards(data) {
   const llm = data.llm || {};
-  const cards = Array.isArray(llm.cards) ? llm.cards : [];
+  const cards = Array.isArray(llm.cards)
+    ? [...llm.cards].sort((a, b) => {
+        const activeDelta = Number(Boolean(b.isActive)) - Number(Boolean(a.isActive));
+        if (activeDelta !== 0) {
+          return activeDelta;
+        }
+        const readyDelta =
+          Number(String(b.calibration?.status || "") === "ready") -
+          Number(String(a.calibration?.status || "") === "ready");
+        if (readyDelta !== 0) {
+          return readyDelta;
+        }
+        return String(a.name || "").localeCompare(String(b.name || ""), "zh-CN");
+      })
+    : [];
   const container = document.getElementById("llm-card-list");
   if (!cards.length) {
     container.innerHTML = `<div class="empty">还没有模型卡片。先在下方新建一个。</div>`;
@@ -3257,7 +3271,8 @@ function renderLlmCards(data) {
       const calibration = card.calibration || null;
       const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
       const capabilityText = getCalibrationCapabilityText(calibration);
-      const roleText = card.isActive ? "当前启用" : "备用模型";
+      const roleText = card.isActive ? "当前" : "备用";
+      const routingText = card.routingEnabled ? "跨卡路由" : "单卡运行";
       return `<div class="llm-card ${card.isActive ? "active" : ""}">
         <div class="llm-card-top">
           <div class="llm-card-main">
@@ -3268,9 +3283,10 @@ function renderLlmCards(data) {
         <div class="llm-card-status">
           <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
           <span class="chip ${card.isActive ? "active" : ""}">${escapeHtml(roleText)}</span>
+          <span class="chip">${escapeHtml(routingText)}</span>
         </div>
         <div class="llm-card-note">
-          <div class="mini">${escapeHtml(capabilityText || "等待进一步校准后再判断适用场景。")}</div>
+          <div class="mini">${escapeHtml(capabilityText || "等待校准后再判断适用场景。")}</div>
         </div>
         <div class="llm-card-footer">
           <div class="llm-card-actions">
