@@ -22,6 +22,7 @@ const state = {
   detailLlmProfileId: "",
   finalizeMeta: null,
   selectedMaterialPaths: [],
+  confirmResolver: null,
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -252,8 +253,30 @@ function setInfo(message, isError = false) {
   summary.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
 }
 
+function setConfirmModalOpen(open, message = "") {
+  const modal = document.getElementById("confirm-modal");
+  const messageEl = document.getElementById("confirm-modal-message");
+  if (!modal || !messageEl) {
+    return;
+  }
+  messageEl.textContent = message || "确认执行这个操作吗？";
+  modal.classList.toggle("hidden", !open);
+}
+
+function settleConfirmModal(value) {
+  const resolver = state.confirmResolver;
+  state.confirmResolver = null;
+  setConfirmModalOpen(false);
+  if (resolver) {
+    resolver(Boolean(value));
+  }
+}
+
 function confirmDestructiveAction(message) {
-  return window.confirm(message);
+  return new Promise((resolve) => {
+    state.confirmResolver = resolve;
+    setConfirmModalOpen(true, message);
+  });
 }
 
 function buildSettingsResultSummary(payload) {
@@ -3648,11 +3671,11 @@ function bindEditorActions() {
     }
   });
 
-  document.getElementById("clear-annotations").addEventListener("click", () => {
+  document.getElementById("clear-annotations").addEventListener("click", async () => {
     if (!state.pendingAnnotations.length) {
       return;
     }
-    if (!confirmDestructiveAction("确认清空本轮批注清单吗？这会移除当前未提交的所有批注。")) {
+    if (!(await confirmDestructiveAction("确认清空本轮批注清单吗？这会移除当前未提交的所有批注。"))) {
       return;
     }
     state.pendingAnnotations = [];
@@ -3661,7 +3684,7 @@ function bindEditorActions() {
     setInfo("已清空本轮批注清单。");
   });
 
-  document.getElementById("annotation-list").addEventListener("click", (event) => {
+  document.getElementById("annotation-list").addEventListener("click", async (event) => {
     const actionButton = event.target.closest("button[data-action]");
     const annotationCard = !actionButton ? event.target.closest("[data-action='select-annotation']") : null;
     if (!actionButton && !annotationCard) {
@@ -3688,7 +3711,7 @@ function bindEditorActions() {
     }
 
     if (action === "remove-annotation") {
-      if (!confirmDestructiveAction("确认删除这条批注吗？")) {
+      if (!(await confirmDestructiveAction("确认删除这条批注吗？"))) {
         return;
       }
       state.pendingAnnotations.splice(index, 1);
@@ -3899,7 +3922,7 @@ function bindEditorActions() {
   });
 
   document.getElementById("finalize-draft").addEventListener("click", async () => {
-    if (!confirmDestructiveAction("确认直接定稿吗？当前正文会写回任务文件，并作为本轮最终版本。")) {
+    if (!(await confirmDestructiveAction("确认直接定稿吗？当前正文会写回任务文件，并作为本轮最终版本。"))) {
       return;
     }
     try {
@@ -4171,6 +4194,18 @@ function bindLlmSettings() {
     setLlmDetailModalOpen(false);
   });
 
+  document.getElementById("close-confirm-modal").addEventListener("click", () => {
+    settleConfirmModal(false);
+  });
+
+  document.getElementById("confirm-cancel").addEventListener("click", () => {
+    settleConfirmModal(false);
+  });
+
+  document.getElementById("confirm-accept").addEventListener("click", () => {
+    settleConfirmModal(true);
+  });
+
   document.getElementById("llm-editor-modal").addEventListener("click", (event) => {
     const target = event.target;
     if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
@@ -4182,6 +4217,13 @@ function bindLlmSettings() {
     const target = event.target;
     if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
       setLlmDetailModalOpen(false);
+    }
+  });
+
+  document.getElementById("confirm-modal").addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.dataset.closeConfirm === "true") {
+      settleConfirmModal(false);
     }
   });
 
@@ -4225,7 +4267,7 @@ function bindLlmSettings() {
 
       if (action === "llm-delete") {
         const targetCard = getLlmCardById(profileId);
-        if (!confirmDestructiveAction(`确认删除模型卡“${targetCard?.name || profileId}”吗？删除后将无法恢复。`)) {
+        if (!(await confirmDestructiveAction(`确认删除模型卡“${targetCard?.name || profileId}”吗？删除后将无法恢复。`))) {
           return;
         }
         await api("/api/settings/llm/delete", {
@@ -4440,7 +4482,7 @@ function bindWorkflowDefinitionEditor() {
     });
   });
 
-  stageList.addEventListener("click", (event) => {
+  stageList.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-action]");
     if (!button) {
       return;
@@ -4449,6 +4491,12 @@ function bindWorkflowDefinitionEditor() {
     const index = Number(button.dataset.index);
     if (!action || !Number.isInteger(index) || index < 0) {
       return;
+    }
+    if (action === "stage-delete") {
+      const allowed = await confirmDestructiveAction("确认删除这个流程阶段吗？");
+      if (!allowed) {
+        return;
+      }
     }
 
     updateWorkflowDefinitionFromUi((definition) => {
@@ -4474,9 +4522,6 @@ function bindWorkflowDefinitionEditor() {
         return;
       }
       if (action === "stage-delete") {
-        if (!confirmDestructiveAction(`确认删除流程阶段“${stage.label || stage.id || `阶段 ${index + 1}`}”吗？`)) {
-          return;
-        }
         const deletedId = stage.id;
         definition.stages.splice(index, 1);
         definition.stages.forEach((item) => {
