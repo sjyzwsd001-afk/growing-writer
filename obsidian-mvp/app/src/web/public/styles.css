@@ -1028,6 +1028,26 @@ legend {
   box-shadow: var(--shadow);
 }
 
+.llm-detail-card {
+  width: min(780px, calc(100vw - 24px));
+}
+
+.llm-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.llm-detail-item {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.66);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
 .modal-inner-panel {
   padding: 0;
   margin-top: 14px;

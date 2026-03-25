@@ -19,6 +19,7 @@ const state = {
   workflowEditorDefinition: null,
   oauthStartAttempt: 0,
   editingLlmProfileId: "",
+  detailLlmProfileId: "",
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -77,6 +78,7 @@ const BUTTON_TOOLTIP_BY_ACTION = {
   "annotation-down": "把这条批注往后移动一位。",
   "confirm-generated-rule": "确认系统刚生成的候选规则并正式入库。",
   "reject-generated-rule": "暂不采用这条候选规则，但保留这次学习记录。",
+  "llm-detail": "查看这张模型卡片的详细配置与校准结果。",
   "llm-edit": "编辑这张模型卡片的接入配置。",
   "llm-activate": "切换为当前默认使用的模型卡片。",
   "llm-delete": "删除这张模型卡片。",
@@ -142,6 +144,24 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString("zh-CN", {
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function inferButtonTooltip(button) {
@@ -1722,6 +1742,10 @@ function setLlmModalOpen(open) {
   document.getElementById("llm-editor-modal").classList.toggle("hidden", !open);
 }
 
+function setLlmDetailModalOpen(open) {
+  document.getElementById("llm-detail-modal").classList.toggle("hidden", !open);
+}
+
 function getLlmFormPayload() {
   const mode = document.getElementById("llm-mode").value;
   const model =
@@ -2570,6 +2594,105 @@ function getCalibrationCapabilityText(calibration) {
   return "";
 }
 
+function getCalibrationDetailText(calibration) {
+  if (!calibration) {
+    return "尚未生成校准结果";
+  }
+  if (calibration.status !== "ready") {
+    return calibration.message || "校准尚未完成";
+  }
+  if (calibration.structuredOutput === "strict-schema") {
+    return "严格结构化输出可用";
+  }
+  if (calibration.structuredOutput === "connectivity-only") {
+    return "已通过轻量校准，结构化能力较弱";
+  }
+  return "结构化能力未知";
+}
+
+function renderLlmCardDetail(card) {
+  const title = document.getElementById("llm-detail-title");
+  const body = document.getElementById("llm-detail-body");
+  if (!title || !body) {
+    return;
+  }
+
+  if (!card) {
+    title.textContent = "模型卡详情";
+    body.innerHTML = `<div class="empty">请选择一张模型卡。</div>`;
+    return;
+  }
+
+  const validation = card.validation || { errors: [], warnings: [] };
+  const calibration = card.calibration || null;
+  const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
+  const capabilityText = getCalibrationCapabilityText(calibration) || "尚未判定";
+  const detailCapabilityText = getCalibrationDetailText(calibration);
+  const roleText = card.isActive ? "当前启用" : "备用模型";
+  const providerText =
+    card.provider === "openai-codex-oauth"
+      ? "OpenAI Codex OAuth"
+      : card.apiType === "anthropic-messages"
+        ? "API Key / Anthropic Messages"
+        : "API Key / OpenAI Completions";
+  const checkedAtText = calibration?.checkedAt
+    ? formatDateTime(calibration.checkedAt)
+    : "尚未校准";
+  const fallbackText = Array.isArray(card.fallbackModels) && card.fallbackModels.length
+    ? card.fallbackModels.join(" -> ")
+    : "未设置";
+
+  title.textContent = card.name || card.id;
+  body.innerHTML = `
+    <div class="llm-detail-grid">
+      <div class="llm-detail-item">
+        <div class="result-summary-label">模型状态</div>
+        <strong>${escapeHtml(statusText)}</strong>
+        <div class="mini">${escapeHtml(roleText)}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">适用能力</div>
+        <strong>${escapeHtml(capabilityText)}</strong>
+        <div class="mini">${escapeHtml(detailCapabilityText)}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">模型名称</div>
+        <strong>${escapeHtml(card.model || "-")}</strong>
+        <div class="mini">接入方式：${escapeHtml(providerText)}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">最近校准</div>
+        <strong>${escapeHtml(checkedAtText)}</strong>
+        <div class="mini">${escapeHtml(calibration?.message || "还没有校准说明。")}</div>
+      </div>
+    </div>
+    <div class="llm-detail-grid">
+      <div class="llm-detail-item">
+        <div class="result-summary-label">Base URL</div>
+        <div class="mini">${escapeHtml(card.baseUrl || "-")}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">快模型</div>
+        <div class="mini">${escapeHtml(card.fastModel || "未设置")}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">强模型</div>
+        <div class="mini">${escapeHtml(card.strongModel || "未设置")}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">降级链路</div>
+        <div class="mini">${escapeHtml(fallbackText)}</div>
+      </div>
+    </div>
+    ${
+      calibration?.message
+        ? `<div class="summary-box"><strong>校准说明</strong><div class="mini">${escapeHtml(calibration.message)}</div></div>`
+        : ""
+    }
+    ${renderValidationMessages(validation, { emptyText: "当前没有发现配置层面的错误或警告。" })}
+  `;
+}
+
 function renderLlmCards(data) {
   const llm = data.llm || {};
   const cards = Array.isArray(llm.cards) ? llm.cards : [];
@@ -2598,6 +2721,7 @@ function renderLlmCards(data) {
           </div>
         </div>
         <div class="row-actions llm-card-actions">
+          <button type="button" class="mini-btn" data-action="llm-detail" data-profile-id="${escapeHtml(card.id)}">详情</button>
           <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
           <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
           <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
@@ -2641,8 +2765,11 @@ function hydrateLlmSettings(data) {
   const activeProfileId = data.llm?.activeProfileId || "";
   const editingProfileId = state.editingLlmProfileId || activeProfileId;
   const card = getLlmCardById(editingProfileId) || getLlmCardById(activeProfileId);
+  const detailCard = getLlmCardById(state.detailLlmProfileId) || getLlmCardById(activeProfileId);
   state.editingLlmProfileId = card?.id || "";
+  state.detailLlmProfileId = detailCard?.id || "";
   fillLlmForm(card);
+  renderLlmCardDetail(detailCard);
 }
 
 async function loadWorkflowDefinitionEditor() {
@@ -3584,10 +3711,21 @@ function bindLlmSettings() {
     setLlmModalOpen(false);
   });
 
+  document.getElementById("close-llm-detail-modal").addEventListener("click", () => {
+    setLlmDetailModalOpen(false);
+  });
+
   document.getElementById("llm-editor-modal").addEventListener("click", (event) => {
     const target = event.target;
     if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
       setLlmModalOpen(false);
+    }
+  });
+
+  document.getElementById("llm-detail-modal").addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.dataset.closeModal === "true") {
+      setLlmDetailModalOpen(false);
     }
   });
 
@@ -3604,6 +3742,13 @@ function bindLlmSettings() {
     }
 
     try {
+      if (action === "llm-detail") {
+        state.detailLlmProfileId = profileId;
+        renderLlmCardDetail(getLlmCardById(profileId));
+        setLlmDetailModalOpen(true);
+        return;
+      }
+
       if (action === "llm-edit") {
         state.editingLlmProfileId = profileId;
         fillLlmForm(getLlmCardById(profileId));
