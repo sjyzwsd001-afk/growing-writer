@@ -2342,6 +2342,14 @@ function renderRepurposeOutputs() {
   }
 }
 
+function setRepurposeCopyStatus(message) {
+  const container = document.getElementById("repurpose-copy-status");
+  if (!container) {
+    return;
+  }
+  container.textContent = message || "";
+}
+
 function buildGenerationContextFromPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -3732,7 +3740,9 @@ function bindEditorActions() {
     try {
       await copyText(document.getElementById("repurpose-summary")?.textContent || "", "摘要已复制。");
       setInfo("摘要已复制。");
+      setRepurposeCopyStatus("摘要已复制。");
     } catch (error) {
+      setRepurposeCopyStatus(error.message);
       setInfo(error.message, true);
     }
   });
@@ -3741,7 +3751,9 @@ function bindEditorActions() {
     try {
       await copyText(document.getElementById("repurpose-outline")?.textContent || "", "提纲已复制。");
       setInfo("提纲已复制。");
+      setRepurposeCopyStatus("提纲已复制。");
     } catch (error) {
+      setRepurposeCopyStatus(error.message);
       setInfo(error.message, true);
     }
   });
@@ -3750,7 +3762,9 @@ function bindEditorActions() {
     try {
       await copyText(document.getElementById("repurpose-leader-brief")?.textContent || "", "领导摘要已复制。");
       setInfo("领导摘要已复制。");
+      setRepurposeCopyStatus("领导摘要已复制。");
     } catch (error) {
+      setRepurposeCopyStatus(error.message);
       setInfo(error.message, true);
     }
   });
