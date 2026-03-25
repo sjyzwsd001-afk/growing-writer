@@ -909,6 +909,64 @@ function getNextActionHint(activeIndex, stages, hasRun) {
   return hintsByStep[state.wizardStep] || "继续完成当前步骤。";
 }
 
+function getDocTypeGuidance(docTypeRaw) {
+  const docType = String(docTypeRaw || "").trim();
+  if (/汇报|报告|简报/.test(docType)) {
+    return {
+      step1: "先说清现状 / 风险 / 下一步，用户通常最关心有没有结论和判断。",
+      step4: "建议补：背景说明 1 段 + 关键事实几条 + 风险或进展数据。",
+      step5: "会重点检查：结论是否够明确、事实是否支撑判断、措施是否落地。",
+    };
+  }
+  if (/讲话|发言|致辞/.test(docType)) {
+    return {
+      step1: "先说清给谁讲、在什么场合讲，语气和篇幅会受这个影响很大。",
+      step4: "建议补：场景背景 1 段 + 想强调的观点 + 需要点到的人或事。",
+      step5: "会重点检查：对象感是否明确、层次是否顺、语气是否像口头表达。",
+    };
+  }
+  if (/方案|计划|建议书/.test(docType)) {
+    return {
+      step1: "先说清要解决什么问题、给谁决策，方案类最怕目标和边界不清。",
+      step4: "建议补：问题背景 + 方案要点 + 资源/风险/时间安排。",
+      step5: "会重点检查：目标是否明确、方案是否成体系、措施是否可执行。",
+    };
+  }
+  if (/总结|复盘/.test(docType)) {
+    return {
+      step1: "先说清总结对象和时间范围，系统会更容易组织“成绩 / 问题 / 经验”。",
+      step4: "建议补：阶段背景 + 关键结果 + 问题教训 + 后续打算。",
+      step5: "会重点检查：结果是否具体、问题是否真实、总结是否能落到经验。",
+    };
+  }
+  return {
+    step1: "写什么 / 给谁看 / 用在什么场景",
+    step4: "背景说明 1 段 + 关键事实几条",
+    step5: "标题和文种是否完整 / 本次背景是否够用 / 重点要求有没有漏掉",
+  };
+}
+
+function updateDocTypeGuidance() {
+  const form = document.getElementById("wizard-form");
+  if (!(form instanceof HTMLFormElement)) {
+    return;
+  }
+  const formData = new FormData(form);
+  const guide = getDocTypeGuidance(String(formData.get("docType") || ""));
+  const step1 = document.getElementById("wizard-doctype-guide");
+  const step4 = document.getElementById("wizard-background-guide");
+  const step5 = document.getElementById("wizard-check-guide");
+  if (step1) {
+    step1.textContent = guide.step1;
+  }
+  if (step4) {
+    step4.textContent = guide.step4;
+  }
+  if (step5) {
+    step5.textContent = guide.step5;
+  }
+}
+
 function updateWizardStep() {
   document.getElementById("wizard-step-index").textContent = String(state.wizardStep);
   document.querySelectorAll(".wizard-step").forEach((step) => {
@@ -923,6 +981,7 @@ function updateWizardStep() {
   if (state.wizardStep === 5) {
     renderWizardCheckResult(state.wizardCheckReport);
   }
+  updateDocTypeGuidance();
   renderWorkflowStageTracker();
 }
 
@@ -3240,6 +3299,9 @@ function bindWizard() {
   document.getElementById("wizard-form").addEventListener("input", (event) => {
     const target = event.target;
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
+      if ((target.name || target.id) === "docType") {
+        updateDocTypeGuidance();
+      }
       if (state.wizardCheckPassed && ["title", "docType", "background", "facts", "mustInclude", "specialRequirements", "sourceMaterialIds", "templateId", "templateMode", "templateOverrides", "backgroundUpload"].includes(target.name || target.id)) {
         state.wizardCheckPassed = false;
         state.wizardCheckReport = null;
