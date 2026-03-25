@@ -419,62 +419,70 @@ function buildObsidianOpenUrl(targetPath) {
   return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(relativePath)}`;
 }
 
-function inferRoutingSuggestion({ provider, model, baseUrl }) {
+function inferRoutingSuggestion({ provider, model, baseUrl, currentProfileId }) {
+  const cards = getLlmCards();
+  const currentCard =
+    getLlmCardById(currentProfileId) ||
+    cards.find(
+      (card) =>
+        String(card.provider || "") === String(provider || "") &&
+        String(card.model || "") === String(model || ""),
+    ) ||
+    null;
   const currentModel = String(model || "").trim();
   const currentProvider = String(provider || "").trim();
   const currentBaseUrl = String(baseUrl || "").toLowerCase();
-  let fastModel = currentModel;
-  let strongModel = currentModel;
-  let fallbackModels = [];
+  const readyCards = cards.filter((card) => card.calibration?.status === "ready");
+  const sameProviderCards = readyCards.filter(
+    (card) =>
+      String(card.provider || "") === currentProvider ||
+      String(card.baseUrl || "").toLowerCase() === currentBaseUrl,
+  );
+  const findByModel = (matcher) =>
+    sameProviderCards.find((card) => matcher(String(card.model || "").toLowerCase()));
+  let fastProfileId = currentCard?.id || "";
+  let strongProfileId = currentCard?.id || "";
+  let fallbackProfileIds = [];
   let note = "当前模型暂时没有明显的快慢分工，先按同一模型运行。";
 
   if (currentProvider === "openai-codex-oauth") {
-    strongModel = currentModel === "gpt-5.3-codex" ? "gpt-5.4" : currentModel || "gpt-5.4";
-    fastModel = currentModel === "gpt-5.4" ? "gpt-5.3-codex" : "gpt-5.3-codex";
-    fallbackModels = [fastModel].filter((item) => item && item !== strongModel);
-    note = "推荐把诊断/提纲交给 gpt-5.3-codex，正文交给 gpt-5.4。";
+    const fastCard = findByModel((value) => value.includes("gpt-5.3-codex"));
+    const strongCard = findByModel((value) => value.includes("gpt-5.4"));
+    fastProfileId = fastCard?.id || currentCard?.id || "";
+    strongProfileId = strongCard?.id || currentCard?.id || "";
+    fallbackProfileIds = [fastCard?.id].filter(Boolean).filter((item) => item !== strongProfileId);
+    note = "推荐把诊断/提纲交给 gpt-5.3-codex 所在卡，正文交给 gpt-5.4 所在卡。";
   } else if (/kimi|moonshot/.test(currentBaseUrl) || /kimi/i.test(currentModel)) {
     if (/thinking/i.test(currentModel)) {
-      strongModel = currentModel;
-      fastModel = currentModel.replace(/thinking/gi, "k2p5");
-      fallbackModels = [fastModel].filter((item) => item && item !== strongModel);
-      note = "当前像 Kimi 的思考模型，推荐用更快的 K2P5 负责前置阶段。";
+      const fastCard = findByModel((value) => value.includes("k2p5"));
+      fastProfileId = fastCard?.id || currentCard?.id || "";
+      strongProfileId = currentCard?.id || "";
+      fallbackProfileIds = [fastCard?.id].filter(Boolean).filter((item) => item !== strongProfileId);
+      note = "当前像 Kimi 的思考模型，推荐用 K2P5 所在卡负责前置阶段。";
     } else {
-      fastModel = currentModel;
-      strongModel = currentModel;
-      note = "当前 Kimi 卡先用同一模型跑全流程，后续如果这家提供更强主模型，再拆快慢。";
+      fastProfileId = currentCard?.id || "";
+      strongProfileId = currentCard?.id || "";
+      note = "当前 Kimi 更适合同一张卡跑全流程，后续如果再补更强主卡，再拆快慢。";
     }
   } else if (/minimax/i.test(currentBaseUrl) || /highspeed/i.test(currentModel)) {
-    fastModel = currentModel;
-    strongModel = currentModel;
-    note = "当前模型已经偏速度型，先让它承担全流程，避免无意义切换。";
-  } else if (/gpt-5\.4/i.test(currentModel)) {
-    fastModel = "gpt-5.3-codex";
-    strongModel = currentModel;
-    fallbackModels = ["gpt-5.3-codex"];
-    note = "当前像 OpenAI 强模型，推荐补一条更快的前置模型和回退链路。";
-  } else if (/gpt-5\.3-codex/i.test(currentModel)) {
-    fastModel = currentModel;
-    strongModel = "gpt-5.4";
-    fallbackModels = [currentModel];
-    note = "当前像 OpenAI 快模型，推荐正文升级到 gpt-5.4。";
+    fastProfileId = currentCard?.id || "";
+    strongProfileId = currentCard?.id || "";
+    note = "当前模型已经偏速度型，先让同一张卡承担全流程，避免无意义切换。";
   } else if (/3b|mini|highspeed/i.test(currentModel)) {
-    fastModel = currentModel;
-    strongModel = currentModel;
-    note = "当前模型更偏轻量或速度型，先保持同一模型更稳。";
+    fastProfileId = currentCard?.id || "";
+    strongProfileId = currentCard?.id || "";
+    note = "当前模型更偏轻量或速度型，先保持同一张卡更稳。";
   } else if (/thinking|deepseek-r1/i.test(currentModel)) {
-    fastModel = currentModel;
-    strongModel = currentModel;
+    fastProfileId = currentCard?.id || "";
+    strongProfileId = currentCard?.id || "";
     note = "当前像推理型或本地模型，先不强拆快慢，避免结构化稳定性下降。";
   }
 
-  const dedupedFallbacks = [...new Set(fallbackModels.filter(Boolean).filter((item) => item !== fastModel && item !== strongModel ? true : item === fastModel && fastModel !== strongModel))];
-
   return {
     routingEnabled: true,
-    fastModel: fastModel || currentModel,
-    strongModel: strongModel || currentModel,
-    fallbackModels: dedupedFallbacks,
+    fastProfileId,
+    strongProfileId,
+    fallbackProfileIds: [...new Set(fallbackProfileIds.filter(Boolean))],
     note,
   };
 }
@@ -490,11 +498,10 @@ function applyRoutingSuggestion() {
     provider: mode,
     model,
     baseUrl,
+    currentProfileId: state.editingLlmProfileId || "",
   });
   document.getElementById("routing-enabled").checked = Boolean(suggestion.routingEnabled);
-  document.getElementById("routing-fast-model").value = suggestion.fastModel || "";
-  document.getElementById("routing-strong-model").value = suggestion.strongModel || "";
-  document.getElementById("routing-fallback-models").value = suggestion.fallbackModels.join(",");
+  renderRoutingProfileSelectors(suggestion);
   const note = document.getElementById("routing-suggestion-note");
   if (note) {
     note.textContent = suggestion.note;
@@ -2081,13 +2088,12 @@ function getLlmFormPayload() {
     baseUrl: document.getElementById("llm-base-url-input").value.trim(),
     authUrl: document.getElementById("llm-auth-url-input").value.trim(),
     routingEnabled: document.getElementById("routing-enabled").checked,
-    fastModel: document.getElementById("routing-fast-model").value.trim(),
-    strongModel: document.getElementById("routing-strong-model").value.trim(),
-    fallbackModels: document
-      .getElementById("routing-fallback-models")
-      .value.split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
+    fastProfileId: document.getElementById("routing-fast-profile").value.trim(),
+    strongProfileId: document.getElementById("routing-strong-profile").value.trim(),
+    fallbackProfileIds: Array.from(document.getElementById("routing-fallback-profiles").selectedOptions).map((item) => item.value).filter(Boolean),
+    fastModel: "",
+    strongModel: "",
+    fallbackModels: [],
   };
 }
 
@@ -3060,6 +3066,31 @@ function getLlmCardById(profileId) {
   return getLlmCards().find((card) => card.id === profileId) || null;
 }
 
+function renderRoutingProfileSelectors(selected = {}) {
+  const cards = getLlmCards();
+  const fastSelect = document.getElementById("routing-fast-profile");
+  const strongSelect = document.getElementById("routing-strong-profile");
+  const fallbackSelect = document.getElementById("routing-fallback-profiles");
+  if (!fastSelect || !strongSelect || !fallbackSelect) {
+    return;
+  }
+
+  const options = cards
+    .map((card) => `<option value="${escapeHtml(card.id)}">${escapeHtml(card.name || card.id)} / ${escapeHtml(card.model || "-")}</option>`)
+    .join("");
+  const emptyOption = `<option value="">跟当前启用卡一致</option>`;
+  fastSelect.innerHTML = `${emptyOption}${options}`;
+  strongSelect.innerHTML = `${emptyOption}${options}`;
+  fallbackSelect.innerHTML = options;
+
+  fastSelect.value = selected.fastProfileId || "";
+  strongSelect.value = selected.strongProfileId || "";
+  const selectedFallbacks = new Set(Array.isArray(selected.fallbackProfileIds) ? selected.fallbackProfileIds : []);
+  Array.from(fallbackSelect.options).forEach((option) => {
+    option.selected = selectedFallbacks.has(option.value);
+  });
+}
+
 function getCalibrationStatusText(calibration, validation, enabled) {
   if (calibration?.status === "ready") {
     return calibration?.structuredOutput === "connectivity-only" ? "轻量可用" : "可用";
@@ -3136,8 +3167,20 @@ function renderLlmCardDetail(card) {
   const fallbackText = Array.isArray(card.fallbackModels) && card.fallbackModels.length
     ? card.fallbackModels.join(" -> ")
     : "未设置";
+  const cardById = new Map(getLlmCards().map((item) => [item.id, item]));
+  const fastCardLabel = card.fastProfileId
+    ? `${cardById.get(card.fastProfileId)?.name || card.fastProfileId}`
+    : "跟当前启用卡一致";
+  const strongCardLabel = card.strongProfileId
+    ? `${cardById.get(card.strongProfileId)?.name || card.strongProfileId}`
+    : "跟当前启用卡一致";
+  const fallbackCardText = Array.isArray(card.fallbackProfileIds) && card.fallbackProfileIds.length
+    ? card.fallbackProfileIds
+        .map((id) => cardById.get(id)?.name || id)
+        .join(" -> ")
+    : "未设置";
   const routingText = card.routingEnabled
-    ? `诊断/提纲 -> ${card.fastModel || card.model || "未设置"}；正文 -> ${card.strongModel || card.model || "未设置"}`
+    ? `诊断/提纲 -> ${fastCardLabel}；正文 -> ${strongCardLabel}`
     : "未启用智能路由";
 
   title.textContent = card.name || card.id;
@@ -3170,20 +3213,24 @@ function renderLlmCardDetail(card) {
         <div class="mini">${escapeHtml(card.baseUrl || "-")}</div>
       </div>
       <div class="llm-detail-item">
-        <div class="result-summary-label">快模型</div>
-        <div class="mini">${escapeHtml(card.fastModel || "未设置")}</div>
+        <div class="result-summary-label">快阶段卡</div>
+        <div class="mini">${escapeHtml(fastCardLabel)}</div>
       </div>
       <div class="llm-detail-item">
-        <div class="result-summary-label">强模型</div>
-        <div class="mini">${escapeHtml(card.strongModel || "未设置")}</div>
+        <div class="result-summary-label">强阶段卡</div>
+        <div class="mini">${escapeHtml(strongCardLabel)}</div>
       </div>
       <div class="llm-detail-item">
-        <div class="result-summary-label">降级链路</div>
+        <div class="result-summary-label">同卡模型回退</div>
         <div class="mini">${escapeHtml(fallbackText)}</div>
       </div>
       <div class="llm-detail-item">
         <div class="result-summary-label">当前路由</div>
         <div class="mini">${escapeHtml(routingText)}</div>
+      </div>
+      <div class="llm-detail-item">
+        <div class="result-summary-label">跨卡回退</div>
+        <div class="mini">${escapeHtml(fallbackCardText)}</div>
       </div>
     </div>
     ${
@@ -3239,6 +3286,11 @@ function renderLlmCards(data) {
 }
 
 function fillLlmForm(card) {
+  renderRoutingProfileSelectors({
+    fastProfileId: card?.fastProfileId || "",
+    strongProfileId: card?.strongProfileId || "",
+    fallbackProfileIds: Array.isArray(card?.fallbackProfileIds) ? card.fallbackProfileIds : [],
+  });
   const mode = card?.provider || "openai-api-key";
   const model = card?.model || "gpt-5.4";
   const apiType = card?.apiType || "openai-completions";
@@ -3253,15 +3305,15 @@ function fillLlmForm(card) {
   document.getElementById("llm-base-url-input").value = card?.baseUrl || "https://api.openai.com/v1";
   document.getElementById("llm-auth-url-input").value = card?.authUrl || "";
   document.getElementById("routing-enabled").checked = Boolean(card?.routingEnabled);
-  document.getElementById("routing-fast-model").value = card?.fastModel || model || "gpt-5.3-codex";
-  document.getElementById("routing-strong-model").value = card?.strongModel || model || "gpt-5.4";
-  document.getElementById("routing-fallback-models").value = Array.isArray(card?.fallbackModels)
-    ? card.fallbackModels.join(",")
-    : "";
+  renderRoutingProfileSelectors({
+    fastProfileId: card?.fastProfileId || "",
+    strongProfileId: card?.strongProfileId || "",
+    fallbackProfileIds: Array.isArray(card?.fallbackProfileIds) ? card.fallbackProfileIds : [],
+  });
   const routingNote = document.getElementById("routing-suggestion-note");
   if (routingNote) {
     routingNote.textContent = card?.routingEnabled
-      ? `当前路由：诊断/提纲走 ${card?.fastModel || model || "当前模型"}，正文走 ${card?.strongModel || model || "当前模型"}。`
+      ? "当前已启用跨卡路由。可继续手动换卡，或点“按当前模型推荐”重生成一版。"
       : "还没有启用智能路由。可点“按当前模型推荐”先生成一版。";
   }
   document.getElementById("llm-form-title").textContent = card ? "编辑模型卡片" : "新建模型卡片";

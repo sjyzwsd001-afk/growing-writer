@@ -415,15 +415,15 @@
                     <span>启用智能路由（诊断/提纲走快模型，初稿走强模型）</span>
                   </label>
                   <div class="grid two">
-                    <label>快模型
-                      <input id="routing-fast-model" placeholder="例如：gpt-5.3-codex" />
+                    <label>快阶段卡
+                      <select id="routing-fast-profile"></select>
                     </label>
-                    <label>强模型
-                      <input id="routing-strong-model" placeholder="例如：gpt-5.4" />
+                    <label>强阶段卡
+                      <select id="routing-strong-profile"></select>
                     </label>
                   </div>
-                  <label>降级模型列表（逗号分隔，按顺序重试）
-                    <input id="routing-fallback-models" placeholder="例如：gpt-5.3-codex,gpt-4.1" />
+                  <label>回退卡（可多选）
+                    <select id="routing-fallback-profiles" multiple size="4"></select>
                   </label>
                   <div class="editor-actions">
                     <button id="suggest-routing" class="mini-btn" type="button">按当前模型推荐</button>

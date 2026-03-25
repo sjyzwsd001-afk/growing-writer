@@ -486,6 +486,17 @@ function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
 }
 
+function createLlmClientWithProfile(profile: StoredLlmSettings): OpenAiCompatibleClient {
+  return new OpenAiCompatibleClient({
+    bearerToken: profile.bearerToken?.trim() || null,
+    baseUrl: profile.baseUrl?.trim() || OPENAI_CODEX_BASE_URL,
+    model: profile.model?.trim() || OPENAI_CODEX_MODEL,
+    apiType: profile.apiType || "openai-completions",
+    enabled: Boolean(profile.bearerToken?.trim()),
+    source: "saved",
+  });
+}
+
 function createLlmClientWithModel(vaultRoot: string, modelOverride?: string): OpenAiCompatibleClient {
   const config = getLlmConfig(vaultRoot);
   const model = typeof modelOverride === "string" && modelOverride.trim() ? modelOverride.trim() : config.model;
@@ -711,6 +722,9 @@ async function calibrateAndPersistLlmProfile(vaultRoot: string, profile: StoredL
 
 function getRoutingSettings(vaultRoot: string): {
   enabled: boolean;
+  fastProfileId: string;
+  strongProfileId: string;
+  fallbackProfileIds: string[];
   fastModel: string;
   strongModel: string;
   fallbackModels: string[];
@@ -719,6 +733,9 @@ function getRoutingSettings(vaultRoot: string): {
   const stored = getStoredLlmSettings(vaultRoot);
   return {
     enabled: Boolean(stored?.routingEnabled),
+    fastProfileId: stored?.fastProfileId || "",
+    strongProfileId: stored?.strongProfileId || "",
+    fallbackProfileIds: Array.isArray(stored?.fallbackProfileIds) ? stored.fallbackProfileIds.filter(Boolean) : [],
     fastModel: stored?.fastModel || llm.model,
     strongModel: stored?.strongModel || llm.model,
     fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels.filter(Boolean) : [],
@@ -1666,34 +1683,78 @@ async function executeWithModelRouting<T>(input: {
 
   const llm = getLlmConfig(input.vaultRoot);
   const routing = getRoutingSettings(input.vaultRoot);
-  const preferredModel = routing.enabled
+  const profileStore = listStoredLlmProfiles(input.vaultRoot);
+  const profileById = new Map(profileStore.profiles.map((profile) => [profile.id, profile]));
+  const activeProfile = getStoredLlmSettings(input.vaultRoot);
+  const preferredProfileId = routing.enabled
     ? input.route === "fast"
-      ? routing.fastModel
-      : routing.strongModel
-    : llm.model;
-  const triedModels = [preferredModel, ...(routing.enabled ? routing.fallbackModels : [])]
+      ? routing.fastProfileId || activeProfile?.id || ""
+      : routing.strongProfileId || activeProfile?.id || ""
+    : activeProfile?.id || "";
+  const triedProfileIds = [
+    preferredProfileId,
+    ...(routing.enabled ? routing.fallbackProfileIds : []),
+  ]
     .map((item) => item.trim())
     .filter(Boolean);
-  const uniqueModels = [...new Set(triedModels)];
+  const uniqueProfileIds = [...new Set(triedProfileIds)];
+  const uniqueModels = routing.enabled
+    ? []
+    : [...new Set([llm.model, ...(routing.fallbackModels || [])].map((item) => item.trim()).filter(Boolean))];
   const errors: string[] = [];
 
-  for (const model of uniqueModels) {
-    try {
-      const routedClient = createLlmClientWithModel(input.vaultRoot, model);
-      const value = await input.runWithClient(routedClient);
-      return {
-        value,
-        routeMeta: {
-          stage: input.stageLabel,
-          usedModel: model,
-          triedModels: uniqueModels,
-          errors,
-          durationMs: Date.now() - startedAt,
-          success: true,
-        },
-      };
-    } catch (error) {
-      errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+  if (routing.enabled && uniqueProfileIds.length) {
+    for (const profileId of uniqueProfileIds) {
+      const profile = profileById.get(profileId);
+      if (!profile) {
+        errors.push(`${profileId}: 未找到模型卡`);
+        continue;
+      }
+      try {
+        const routedClient = createLlmClientWithProfile(profile);
+        const value = await input.runWithClient(routedClient);
+        return {
+          value,
+          routeMeta: {
+            stage: input.stageLabel,
+            usedModel: `${profile.name || profile.id} / ${profile.model}`,
+            triedModels: uniqueProfileIds.map((id) => {
+              const item = profileById.get(id);
+              return item ? `${item.name || item.id} / ${item.model}` : id;
+            }),
+            errors,
+            durationMs: Date.now() - startedAt,
+            success: true,
+          },
+        };
+      } catch (error) {
+        errors.push(`${profile.name || profile.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  } else {
+    const preferredModel = input.route === "fast" ? routing.fastModel : routing.strongModel;
+    const triedModels = [preferredModel, ...(routing.enabled ? routing.fallbackModels : [])]
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const perModel = [...new Set(triedModels.length ? triedModels : uniqueModels)];
+    for (const model of perModel) {
+      try {
+        const routedClient = createLlmClientWithModel(input.vaultRoot, model);
+        const value = await input.runWithClient(routedClient);
+        return {
+          value,
+          routeMeta: {
+            stage: input.stageLabel,
+            usedModel: model,
+            triedModels: perModel,
+            errors,
+            durationMs: Date.now() - startedAt,
+            success: true,
+          },
+        };
+      } catch (error) {
+        errors.push(`${model}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 
@@ -2344,6 +2405,9 @@ async function buildDashboard(vaultRoot: string) {
       oauthReady: Boolean(stored?.oauthAccessToken && stored?.oauthIdToken),
       validation: activeValidation,
       routingEnabled: Boolean(stored?.routingEnabled),
+      fastProfileId: stored?.fastProfileId || "",
+      strongProfileId: stored?.strongProfileId || "",
+      fallbackProfileIds: Array.isArray(stored?.fallbackProfileIds) ? stored.fallbackProfileIds : [],
       fastModel: stored?.fastModel || llmConfig.model,
       strongModel: stored?.strongModel || llmConfig.model,
       fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels : [],
@@ -2361,6 +2425,9 @@ async function buildDashboard(vaultRoot: string) {
         baseUrl: profile.baseUrl,
         authUrl: profile.authUrl,
         routingEnabled: Boolean(profile.routingEnabled),
+        fastProfileId: profile.fastProfileId || "",
+        strongProfileId: profile.strongProfileId || "",
+        fallbackProfileIds: Array.isArray(profile.fallbackProfileIds) ? profile.fallbackProfileIds : [],
         fastModel: profile.fastModel || profile.model,
         strongModel: profile.strongModel || profile.model,
         fallbackModels: Array.isArray(profile.fallbackModels) ? profile.fallbackModels : [],
@@ -2717,6 +2784,18 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
                   .map((item) => item.trim())
                   .filter(Boolean)
               : existing?.fallbackModels || [];
+        const fallbackProfileIds =
+          Array.isArray(body.fallbackProfileIds)
+            ? body.fallbackProfileIds
+                .filter((item): item is string => typeof item === "string")
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : typeof body.fallbackProfileIds === "string"
+              ? body.fallbackProfileIds
+                  .split(",")
+                  .map((item) => item.trim())
+                  .filter(Boolean)
+              : existing?.fallbackProfileIds || [];
 
         const tokenInput = typeof body.bearerToken === "string" ? body.bearerToken : "";
         if (isCodex && tokenInput.trim()) {
@@ -2781,6 +2860,15 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
             typeof body.routingEnabled === "boolean"
               ? body.routingEnabled
               : existing?.routingEnabled ?? false,
+          fastProfileId:
+            typeof body.fastProfileId === "string"
+              ? body.fastProfileId.trim()
+              : existing?.fastProfileId || "",
+          strongProfileId:
+            typeof body.strongProfileId === "string"
+              ? body.strongProfileId.trim()
+              : existing?.strongProfileId || "",
+          fallbackProfileIds,
           fastModel:
             typeof body.fastModel === "string" && body.fastModel.trim()
               ? body.fastModel.trim()

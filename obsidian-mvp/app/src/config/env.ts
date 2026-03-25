@@ -40,6 +40,9 @@ export type StoredLlmSettings = {
   oauthIdToken?: string;
   refreshToken?: string;
   routingEnabled?: boolean;
+  fastProfileId?: string;
+  strongProfileId?: string;
+  fallbackProfileIds?: string[];
   fastModel?: string;
   strongModel?: string;
   fallbackModels?: string[];
@@ -312,6 +315,31 @@ function normalizeStoredSettings(
         : typeof fallback?.routingEnabled === "boolean"
           ? fallback.routingEnabled
           : false,
+    fastProfileId:
+      typeof input?.fastProfileId === "string" && input.fastProfileId.trim()
+        ? input.fastProfileId.trim()
+        : typeof fallback?.fastProfileId === "string" && fallback.fastProfileId.trim()
+          ? fallback.fastProfileId.trim()
+          : "",
+    strongProfileId:
+      typeof input?.strongProfileId === "string" && input.strongProfileId.trim()
+        ? input.strongProfileId.trim()
+        : typeof fallback?.strongProfileId === "string" && fallback.strongProfileId.trim()
+          ? fallback.strongProfileId.trim()
+          : "",
+    fallbackProfileIds: Array.isArray(input?.fallbackProfileIds)
+      ? input.fallbackProfileIds
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : Array.isArray(fallback?.fallbackProfileIds)
+        ? fallback.fallbackProfileIds
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, 6)
+        : [],
     fastModel:
       typeof input?.fastModel === "string" && input.fastModel.trim()
         ? input.fastModel.trim()
