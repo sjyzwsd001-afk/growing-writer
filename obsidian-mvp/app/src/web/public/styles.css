@@ -574,6 +574,11 @@ legend {
   background: rgba(255, 253, 248, 0.96);
 }
 
+.repurpose-card {
+  display: grid;
+  gap: 6px;
+}
+
 .editor-feedback-guide {
   background: linear-gradient(180deg, #fffefb 0%, #fff7ec 100%);
 }
