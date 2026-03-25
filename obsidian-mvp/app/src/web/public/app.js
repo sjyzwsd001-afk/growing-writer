@@ -1168,6 +1168,39 @@ function renderCheckOptions(containerId, items, name) {
     `;
     container.append(label);
   }
+
+  if (containerId === "wizard-material-options") {
+    updateWizardMaterialSelectionSummary();
+  }
+}
+
+function updateWizardMaterialSelectionSummary() {
+  const container = document.getElementById("wizard-material-selection-summary");
+  const bridge = document.getElementById("template-step-bridge");
+  const form = document.getElementById("wizard-form");
+  if (!container || !(form instanceof HTMLFormElement)) {
+    return;
+  }
+  const checked = Array.from(form.querySelectorAll('input[name="sourceMaterialIds"]:checked'));
+  const count = checked.length;
+  if (!count) {
+    container.textContent = "还没有选择历史材料。你也可以先跳过，后面再补。";
+    if (bridge) {
+      bridge.textContent = "系统会结合你刚选的历史材料，先给出一版模板推荐；如果你觉得这次没有固定套路，也可以直接跳过。";
+    }
+    return;
+  }
+  const labels = checked
+    .slice(0, 3)
+    .map((input) => input.closest("label")?.querySelector("strong")?.textContent || "")
+    .filter(Boolean);
+  container.textContent = `已选择 ${count} 篇历史材料${labels.length ? `：${labels.join("、")}` : ""}。系统会优先根据这些材料帮你推荐模板。`;
+  if (bridge) {
+    bridge.textContent =
+      count >= 2
+        ? "你已经选了几篇比较像你写法的材料，下一步可以先看系统首推模板；如果觉得这次不需要固定套路，也可以直接跳过。"
+        : "你已经选了材料，下一步系统会结合这份材料给模板建议；不合适时也可以直接跳过模板。";
+  }
 }
 
 function renderTemplateChoiceCards(items, selectedId = "") {
@@ -1253,6 +1286,7 @@ function renderTemplateSelector(items) {
   }
   renderTemplateChoiceCards(sortedItems, String(select.value || "").trim());
   renderTemplatePreview();
+  updateWizardMaterialSelectionSummary();
 }
 
 function getCurrentWizardTemplateSignals() {
@@ -3776,6 +3810,9 @@ function bindWizard() {
           );
         }
       }
+      if ((target.name || target.id) === "sourceMaterialIds") {
+        updateWizardMaterialSelectionSummary();
+      }
     }
     if (state.wizardStep >= 6) {
       updateWizardSummary();
@@ -3805,6 +3842,24 @@ function bindWizard() {
   });
 
   document.getElementById("wizard-form").addEventListener("click", (event) => {
+    const skipButton = event.target.closest("#skip-template-selection");
+    if (skipButton) {
+      const select = document.getElementById("template-selector");
+      if (select instanceof HTMLSelectElement) {
+        select.value = "";
+      }
+      renderTemplateChoiceCards(
+        Array.isArray(state.dashboard?.templateCandidates)
+          ? state.dashboard.templateCandidates
+          : Array.isArray(state.dashboard?.templates)
+            ? state.dashboard.templates
+            : [],
+        "",
+      );
+      renderTemplatePreview();
+      setInfo("这次已改为不使用模板，系统会按历史材料和规则综合生成。");
+      return;
+    }
     const button = event.target.closest("button[data-action='pick-template-card']");
     if (!button) {
       return;
