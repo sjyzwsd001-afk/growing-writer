@@ -897,8 +897,8 @@ legend {
 
 .llm-card-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
   align-items: start;
 }
 
@@ -906,10 +906,11 @@ legend {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: linear-gradient(180deg, #fffdf8 0%, #fff8ee 100%);
-  padding: 10px;
+  padding: 12px;
   display: grid;
-  gap: 10px;
-  min-height: 112px;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 8px;
+  min-height: 164px;
 }
 
 .llm-card.active {
@@ -917,10 +918,10 @@ legend {
   box-shadow: inset 0 0 0 1px rgba(143, 79, 26, 0.18);
 }
 
-.llm-card-head {
+.llm-card-top {
   display: grid;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -930,9 +931,13 @@ legend {
   gap: 2px;
 }
 
-.llm-card-main strong {
+.llm-card-title {
   font-size: 14px;
   line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .llm-card-meta {
@@ -945,17 +950,27 @@ legend {
   overflow: hidden;
 }
 
-.llm-card-actions {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.llm-card-badges {
+.llm-card-status {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  justify-content: flex-start;
+  align-items: center;
+}
+
+.llm-card-note {
+  min-height: 34px;
+  color: var(--muted);
+}
+
+.llm-card-footer {
+  display: grid;
+  align-self: end;
+}
+
+.llm-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .chip {
@@ -991,12 +1006,6 @@ legend {
   color: #fff;
   border-color: transparent;
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-}
-
-.capability-chip {
-  background: #eef4fb;
-  border-color: rgba(58, 101, 156, 0.16);
-  color: #315d92;
 }
 
 .llm-form-shell {

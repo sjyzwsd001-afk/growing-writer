@@ -2850,23 +2850,28 @@ function renderLlmCards(data) {
       const calibration = card.calibration || null;
       const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
       const capabilityText = getCalibrationCapabilityText(calibration);
+      const roleText = card.isActive ? "当前启用" : "备用模型";
       return `<div class="llm-card ${card.isActive ? "active" : ""}">
-        <div class="llm-card-head">
+        <div class="llm-card-top">
           <div class="llm-card-main">
-            <strong>${escapeHtml(card.name || card.id)}</strong>
+            <strong class="llm-card-title">${escapeHtml(card.name || card.id)}</strong>
             <div class="mini llm-card-meta">${escapeHtml(card.model || "-")}</div>
           </div>
-          <div class="llm-card-badges">
-            <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
-            ${capabilityText ? `<span class="chip capability-chip">${escapeHtml(capabilityText)}</span>` : ""}
-            <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用"}</span>
-          </div>
         </div>
-        <div class="row-actions llm-card-actions">
-          <button type="button" class="mini-btn" data-action="llm-detail" data-profile-id="${escapeHtml(card.id)}">详情</button>
-          <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
-          <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
-          <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
+        <div class="llm-card-status">
+          <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
+          <span class="chip ${card.isActive ? "active" : ""}">${escapeHtml(roleText)}</span>
+        </div>
+        <div class="llm-card-note">
+          <div class="mini">${escapeHtml(capabilityText || "等待进一步校准后再判断适用场景。")}</div>
+        </div>
+        <div class="llm-card-footer">
+          <div class="llm-card-actions">
+            <button type="button" class="mini-btn" data-action="llm-detail" data-profile-id="${escapeHtml(card.id)}">详情</button>
+            <button type="button" class="mini-btn" data-action="llm-edit" data-profile-id="${escapeHtml(card.id)}">编辑</button>
+            <button type="button" class="mini-btn" data-action="llm-activate" data-profile-id="${escapeHtml(card.id)}"${card.isActive ? " disabled" : ""}>启用</button>
+            <button type="button" class="mini-btn danger" data-action="llm-delete" data-profile-id="${escapeHtml(card.id)}">删除</button>
+          </div>
         </div>
       </div>`;
     })
