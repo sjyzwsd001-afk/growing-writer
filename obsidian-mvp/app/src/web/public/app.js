@@ -20,6 +20,7 @@ const state = {
   oauthStartAttempt: 0,
   editingLlmProfileId: "",
   detailLlmProfileId: "",
+  finalizeMeta: null,
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -2086,6 +2087,88 @@ function renderFeedbackLearnResult() {
   </div>`;
 }
 
+function renderFinalizeReview() {
+  const container = document.getElementById("finalize-review");
+  if (!container) {
+    return;
+  }
+
+  if (!state.currentTask?.id) {
+    container.textContent = "定稿后，这里会总结这次写作学到了什么、用了哪些依据，以及后续是否值得沉淀成规则。";
+    return;
+  }
+
+  const latestFeedback = state.feedbackHistory[state.feedbackHistory.length - 1] || null;
+  const latestAnalysis = state.latestFeedbackLearnResult?.analysis || null;
+  const context = state.currentGenerationContext;
+  const finalizedAt = state.finalizeMeta?.finalizedAt || "";
+  const isFinalized = Boolean(finalizedAt);
+  const topRules = Array.isArray(context?.matchedRules)
+    ? context.matchedRules.filter((item) => String(item?.source || "") !== "template").slice(0, 3)
+    : [];
+  const topMaterials = Array.isArray(context?.matchedMaterials) ? context.matchedMaterials.slice(0, 3) : [];
+  const modelRoute = Array.isArray(context?.modelRouting) ? context.modelRouting.slice(0, 3) : [];
+  const reusableCount = state.feedbackHistory.filter((item) => item.isReusableRule).length;
+  const annotationCount = state.feedbackHistory.reduce((sum, item) => sum + Number(item.annotationCount || 0), 0);
+  const avgAbsorption = state.feedbackHistory.length
+    ? (
+        state.feedbackHistory.reduce((sum, item) => sum + Number(item.absorptionScore || 0), 0) /
+        state.feedbackHistory.length
+      ).toFixed(1)
+    : "-";
+
+  const recommendation = isFinalized
+    ? latestAnalysis?.is_reusable_rule
+      ? "这次修改里已经出现可复用信号，后面可以优先确认候选规则。"
+      : "这次更像针对当前稿件的调整，适合保留记录，但不一定需要沉淀成长期规则。"
+    : state.pendingAnnotations.length
+      ? "还有待提交的批注，建议先再生成一轮，确认关键位置都已经改顺。"
+      : "如果正文已经顺手、没有新的批注要补，可以直接定稿。";
+
+  container.innerHTML = `
+    <div class="learn-result">
+      <div class="learn-result-grid">
+        <div class="learn-result-item"><strong>当前状态：</strong>${escapeHtml(isFinalized ? "已定稿" : "待定稿")}</div>
+        <div class="learn-result-item"><strong>反馈轮次：</strong>${escapeHtml(String(state.feedbackHistory.length))} 轮</div>
+        <div class="learn-result-item"><strong>累计批注：</strong>${escapeHtml(String(annotationCount))} 条</div>
+        <div class="learn-result-item"><strong>平均吸收评分：</strong>${escapeHtml(String(avgAbsorption))}</div>
+        ${
+          finalizedAt
+            ? `<div class="learn-result-item"><strong>定稿时间：</strong>${escapeHtml(formatDateTime(finalizedAt))}</div>`
+            : ""
+        }
+        <div class="learn-result-item"><strong>可复用修改：</strong>${escapeHtml(String(reusableCount))} 条</div>
+      </div>
+      <div class="learn-result-grid">
+        <div class="learn-result-item">
+          <strong>这次主要学到了什么：</strong>${escapeHtml(
+            latestAnalysis?.suggested_update || latestAnalysis?.reasoning || "还没有形成明确学习结论。",
+          )}
+        </div>
+        <div class="learn-result-item">
+          <strong>最新一轮修改重点：</strong>${escapeHtml(
+            latestFeedback?.reason || latestFeedback?.comment || "还没有提交过反馈。",
+          )}
+        </div>
+        <div class="learn-result-item">
+          <strong>本次主要依据：</strong>${escapeHtml(
+            [
+              topRules.length ? `规则 ${topRules.length} 条` : "",
+              topMaterials.length ? `材料 ${topMaterials.length} 份` : "",
+              modelRoute.length ? `模型链路 ${modelRoute.length} 段` : "",
+            ]
+              .filter(Boolean)
+              .join(" / ") || "当前主要依赖任务输入。",
+          )}
+        </div>
+        <div class="learn-result-item">
+          <strong>下一步建议：</strong>${escapeHtml(recommendation)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function buildGenerationContextFromPayload(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -2890,6 +2973,7 @@ async function createAndRunTask() {
     renderPendingAnnotations();
     summarizeDraftChanges();
     renderFeedbackLearnResult();
+    renderFinalizeReview();
     renderTaskContextSummary();
 
     state.currentTask = {
@@ -2898,10 +2982,12 @@ async function createAndRunTask() {
       title: taskPayload.title,
       runId: run?.runId || "",
     };
+    state.finalizeMeta = null;
     state.currentWorkflowRun = run || null;
 
     loadFeedbackHistoryFromStorage(created.taskId);
     renderFeedbackHistory();
+    renderFinalizeReview();
     setEditorVisible(true);
     state.wizardStep = 7;
     updateWizardStep();
@@ -3090,6 +3176,7 @@ async function submitFeedbackAndRegenerate() {
   clearFeedbackInputs();
   state.generatedDraftBaseline = latestDraft;
   renderFeedbackLearnResult();
+  renderFinalizeReview();
   renderTaskContextSummary();
   renderWorkflowStageTracker();
   return evaluation;
@@ -3405,6 +3492,7 @@ function bindEditorActions() {
           state.latestFeedbackLearnResult.candidateRulePath = null;
         }
         renderFeedbackLearnResult();
+        renderFinalizeReview();
         await loadDashboard();
       }
     } catch (error) {
@@ -3435,6 +3523,7 @@ function bindEditorActions() {
           ? `本轮吸收评分 ${evaluation.score}（${evaluation.level}）。`
           : "已完成本轮反馈学习。";
       setInfo(`反馈已学习并生成新稿。${scoreText}你可以继续改，也可以直接定稿。`);
+      renderFinalizeReview();
     } catch (error) {
       setTaskBadge("再生成失败", true);
       setInfo(error.message, true);
@@ -3463,9 +3552,11 @@ function bindEditorActions() {
           state.currentWorkflowRun = finalized.run;
         }
       }
+      state.finalizeMeta = { finalizedAt: new Date().toISOString() };
       setTaskBadge("已定稿");
       renderWorkflowStageTracker();
       setInfo("已定稿并写入任务文件。");
+      renderFinalizeReview();
       await loadDashboard();
     } catch (error) {
       setTaskBadge("定稿失败", true);
