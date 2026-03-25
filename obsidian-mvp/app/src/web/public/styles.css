@@ -897,8 +897,8 @@ legend {
 
 .llm-card-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
   align-items: start;
 }
 
@@ -906,10 +906,10 @@ legend {
   border: 1px solid var(--border);
   border-radius: 16px;
   background: linear-gradient(180deg, #fffdf8 0%, #fff8ee 100%);
-  padding: 12px;
+  padding: 10px;
   display: grid;
-  gap: 12px;
-  min-height: 138px;
+  gap: 10px;
+  min-height: 112px;
 }
 
 .llm-card.active {
@@ -920,14 +920,14 @@ legend {
 .llm-card-head {
   display: grid;
   align-items: flex-start;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
 .llm-card-main {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .llm-card-main strong {
@@ -937,32 +937,24 @@ legend {
 
 .llm-card-meta {
   color: var(--muted);
-}
-
-.llm-card-note {
-  color: var(--muted);
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.25;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  max-width: 100%;
-}
-
-.llm-card-note.danger {
-  color: var(--danger);
 }
 
 .llm-card-actions {
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .llm-card-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   justify-content: flex-start;
 }
 

@@ -2585,18 +2585,11 @@ function renderLlmCards(data) {
       const calibration = card.calibration || null;
       const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
       const capabilityText = getCalibrationCapabilityText(calibration);
-      const summary = calibration?.message || validation.errors[0] || "";
-      const providerLabel = card.provider === "openai-codex-oauth" ? "OAuth" : "API Key";
       return `<div class="llm-card ${card.isActive ? "active" : ""}">
         <div class="llm-card-head">
           <div class="llm-card-main">
             <strong>${escapeHtml(card.name || card.id)}</strong>
-            <div class="mini llm-card-meta">${escapeHtml(providerLabel)} · ${escapeHtml(card.model || "-")}</div>
-            ${
-              summary
-                ? `<div class="mini llm-card-note ${validation.errors.length ? "danger" : ""}">${escapeHtml(summary)}</div>`
-                : ""
-            }
+            <div class="mini llm-card-meta">${escapeHtml(card.model || "-")}</div>
           </div>
           <div class="llm-card-badges">
             <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
