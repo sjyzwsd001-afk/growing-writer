@@ -1,21 +1,21 @@
 :root {
-  --bg: #eef2f6;
-  --paper: #fcfdff;
-  --panel: #f5f7fa;
-  --border: #c9d2dd;
-  --text: #18202c;
-  --muted: #697283;
-  --accent: #6e7f97;
-  --accent-2: #334155;
-  --accent-contrast: #b79a74;
-  --accent-contrast-2: #8f7556;
-  --success: #4d6c56;
-  --danger: #8d4a4d;
-  --shadow: 0 24px 54px rgba(20, 29, 42, 0.11);
-  --shadow-soft: 0 12px 28px rgba(36, 48, 66, 0.09);
-  --metal: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,246,250,0.98) 100%);
-  --metal-strong: linear-gradient(180deg, #ffffff 0%, #edf1f6 100%);
-  --line-soft: rgba(201, 210, 221, 0.82);
+  --bg: #08172a;
+  --paper: #0d1f36;
+  --panel: #10233b;
+  --border: rgba(108, 136, 173, 0.24);
+  --text: #f5f8ff;
+  --muted: #93a6be;
+  --accent: #1dc8ff;
+  --accent-2: #216dff;
+  --accent-contrast: #5ae6ff;
+  --accent-contrast-2: #9befff;
+  --success: #3fd39a;
+  --danger: #ff8f9c;
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+  --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
+  --metal: linear-gradient(180deg, rgba(18, 36, 59, 0.98) 0%, rgba(11, 24, 42, 0.98) 100%);
+  --metal-strong: linear-gradient(180deg, #153254 0%, #0c1e35 100%);
+  --line-soft: rgba(103, 133, 171, 0.22);
 }
 
 * {
@@ -27,10 +27,10 @@ body {
   color: var(--text);
   font-family: "SF Pro Display", "SF Pro Text", "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
   background:
-    radial-gradient(circle at 14% -8%, rgba(255, 255, 255, 0.98), transparent 24%),
-    radial-gradient(circle at 90% 14%, rgba(225, 209, 186, 0.18), transparent 20%),
-    radial-gradient(circle at 88% 0%, rgba(227, 234, 243, 0.45), transparent 22%),
-    linear-gradient(180deg, #fcfdfe 0%, #edf2f7 100%);
+    radial-gradient(circle at 18% 0%, rgba(25, 126, 205, 0.22), transparent 26%),
+    radial-gradient(circle at 78% 8%, rgba(16, 89, 179, 0.18), transparent 28%),
+    radial-gradient(circle at 50% 40%, rgba(0, 210, 255, 0.06), transparent 32%),
+    linear-gradient(180deg, #0c1f36 0%, #091628 44%, #07111f 100%);
 }
 
 button,
@@ -49,8 +49,8 @@ select {
 
 .topbar {
   border: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(14px);
+  background: rgba(10, 25, 43, 0.72);
+  backdrop-filter: blur(20px);
   border-radius: 24px;
   box-shadow: var(--shadow);
   padding: 16px 20px;
@@ -71,15 +71,17 @@ select {
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  color: var(--accent-contrast-2);
+  color: var(--accent-contrast);
   display: grid;
   place-items: center;
   font-weight: 700;
-  background: var(--metal-strong);
-  border: 1px solid rgba(183, 194, 207, 0.95);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(91, 233, 255, 0.32), transparent 38%),
+    linear-gradient(180deg, #123559 0%, #0c1f35 100%);
+  border: 1px solid rgba(84, 123, 171, 0.34);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 10px 22px rgba(38, 48, 62, 0.10);
+    inset 0 1px 0 rgba(152, 225, 255, 0.18),
+    0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
 .subtitle {
@@ -119,7 +121,7 @@ h3 {
 
 .status-item {
   border: 1px solid var(--line-soft);
-  background: rgba(252, 253, 255, 0.94);
+  background: rgba(13, 31, 54, 0.86);
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
@@ -135,19 +137,21 @@ h3 {
 
 .tab {
   border: 1px solid var(--line-soft);
-  background: rgba(252, 253, 255, 0.92);
+  background: rgba(13, 31, 54, 0.72);
   border-radius: 14px;
   padding: 10px 16px;
   cursor: pointer;
   color: var(--muted);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(130, 185, 255, 0.05);
 }
 
 .tab.active {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(180deg, #7f8a98 0%, #495567 74%, #a88d67 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  background: linear-gradient(135deg, #1dd0ff 0%, #216dff 100%);
+  box-shadow:
+    0 8px 24px rgba(29, 200, 255, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 .settings-subtabs {
@@ -158,18 +162,18 @@ h3 {
 
 .settings-subtab {
   border: 1px solid var(--line-soft);
-  background: rgba(252, 253, 255, 0.92);
+  background: rgba(13, 31, 54, 0.72);
   border-radius: 999px;
   padding: 8px 14px;
   cursor: pointer;
   color: var(--muted);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(130, 185, 255, 0.05);
 }
 
 .settings-subtab.active {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(180deg, #7f8a98 0%, #495567 74%, #a88d67 100%);
+  background: linear-gradient(135deg, #1dd0ff 0%, #216dff 100%);
 }
 
 .main {
@@ -197,7 +201,7 @@ h3 {
 .panel {
   border: 1px solid var(--line-soft);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.94);
+  background: linear-gradient(180deg, rgba(15, 33, 56, 0.94) 0%, rgba(10, 24, 43, 0.96) 100%);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -205,7 +209,7 @@ h3 {
 .panel-header {
   padding: 15px 18px;
   border-bottom: 1px solid rgba(199, 208, 218, 0.7);
-  background: rgba(248, 250, 252, 0.78);
+  background: rgba(16, 35, 59, 0.72);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -222,7 +226,7 @@ h3 {
   padding: 4px 12px;
   color: var(--muted);
   font-size: 13px;
-  background: rgba(246, 249, 252, 0.8);
+  background: rgba(13, 31, 54, 0.82);
 }
 
 .workflow-stage-tracker {
@@ -234,7 +238,7 @@ h3 {
 .workflow-stage-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: rgba(250, 252, 255, 0.96);
+  background: rgba(13, 28, 49, 0.82);
   padding: 8px 9px;
   display: grid;
   gap: 4px;
@@ -251,7 +255,7 @@ h3 {
   padding: 3px 8px;
   font-size: 11px;
   color: var(--muted);
-  background: rgba(208, 216, 225, 0.48);
+  background: rgba(98, 122, 153, 0.20);
 }
 
 .workflow-stage-item.pending {
@@ -259,18 +263,18 @@ h3 {
 }
 
 .workflow-stage-item.active {
-  border-color: rgba(183, 154, 116, 0.55);
-  box-shadow: inset 0 0 0 1px rgba(183, 154, 116, 0.2);
+  border-color: rgba(29, 200, 255, 0.52);
+  box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.18);
 }
 
 .workflow-stage-item.active .stage-status {
   color: #fff;
-  background: linear-gradient(180deg, #7f8a98 0%, #a88d67 100%);
+  background: linear-gradient(135deg, #1dd0ff 0%, #216dff 100%);
 }
 
 .workflow-stage-item.completed {
-  border-color: rgba(77, 108, 86, 0.3);
-  background: linear-gradient(180deg, #f7fbf8 0%, #edf4ef 100%);
+  border-color: rgba(63, 211, 154, 0.3);
+  background: rgba(10, 34, 33, 0.68);
 }
 
 .workflow-stage-item.completed .stage-status {
@@ -280,8 +284,8 @@ h3 {
 
 .workflow-next-action {
   margin-top: 10px;
-  background: rgba(249, 251, 254, 0.96);
-  border-color: rgba(183, 154, 116, 0.24);
+  background: rgba(13, 31, 54, 0.84);
+  border-color: rgba(29, 200, 255, 0.16);
 }
 
 .workflow-editor-stage {
@@ -289,7 +293,7 @@ h3 {
   border-radius: 14px;
   padding: 9px 10px;
   color: var(--muted);
-  background: linear-gradient(180deg, #fbfdff 0%, #eef3f8 100%);
+  background: rgba(13, 28, 49, 0.82);
 }
 
 .wizard-form {
@@ -312,14 +316,14 @@ h3 {
 }
 
 .wizard-focus-box {
-  background: rgba(249, 251, 254, 0.96);
-  border-color: rgba(183, 154, 116, 0.22);
+  background: rgba(13, 31, 54, 0.84);
+  border-color: rgba(29, 200, 255, 0.16);
 }
 
 .wizard-optional-panel {
-  border: 1px solid rgba(199, 208, 218, 0.78);
+  border: 1px solid var(--line-soft);
   border-radius: 16px;
-  background: rgba(248, 251, 254, 0.92);
+  background: rgba(11, 24, 42, 0.72);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -345,18 +349,18 @@ h3 {
 .wizard-readiness-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: linear-gradient(180deg, #fbfdff 0%, #eff4f9 100%);
+  background: rgba(13, 28, 49, 0.82);
   padding: 10px 11px;
 }
 
 .wizard-readiness-item.ok {
-  border-color: rgba(77, 108, 86, 0.22);
-  background: linear-gradient(180deg, #f8fcf9 0%, #edf4ef 100%);
+  border-color: rgba(63, 211, 154, 0.26);
+  background: rgba(10, 34, 33, 0.68);
 }
 
 .wizard-readiness-item.pending {
-  border-color: rgba(95, 111, 134, 0.18);
-  background: linear-gradient(180deg, #fbfdff 0%, #eef2f7 100%);
+  border-color: rgba(103, 133, 171, 0.22);
+  background: rgba(13, 28, 49, 0.82);
 }
 
 .wizard-actions {
@@ -388,13 +392,13 @@ textarea,
 select {
   width: 100%;
   border-radius: 14px;
-  border: 1px solid var(--line-soft);
-  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(103, 133, 171, 0.28);
+  background: rgba(8, 18, 33, 0.84);
   color: var(--text);
   padding: 11px 12px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    inset 0 -1px 0 rgba(214, 222, 231, 0.22);
+    inset 0 1px 0 rgba(129, 183, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
 }
 
 textarea {
@@ -406,17 +410,17 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: rgba(183, 154, 116, 0.5);
+  border-color: rgba(29, 200, 255, 0.48);
   box-shadow:
-    0 0 0 3px rgba(183, 154, 116, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+    0 0 0 3px rgba(29, 200, 255, 0.14),
+    inset 0 1px 0 rgba(129, 183, 255, 0.08);
 }
 
 fieldset {
   border: 1px solid var(--line-soft);
   border-radius: 16px;
   padding: 12px;
-  background: rgba(248, 251, 254, 0.58);
+  background: rgba(10, 24, 43, 0.50);
 }
 
 legend {
@@ -447,7 +451,7 @@ legend {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   padding: 9px 10px;
-  background: rgba(250, 252, 255, 0.96);
+  background: rgba(13, 28, 49, 0.82);
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -455,7 +459,7 @@ legend {
 
 .check-card {
   padding: 12px 12px;
-  background: rgba(249, 251, 254, 0.96);
+  background: rgba(13, 31, 54, 0.84);
 }
 
 .check-item input {
@@ -473,9 +477,9 @@ legend {
 }
 
 .template-primary-card {
-  border: 1px solid rgba(183, 154, 116, 0.28);
+  border: 1px solid rgba(29, 200, 255, 0.18);
   border-radius: 18px;
-  background: rgba(250, 252, 255, 0.98);
+  background: rgba(13, 31, 54, 0.86);
   padding: 14px;
   display: grid;
   gap: 8px;
@@ -484,7 +488,7 @@ legend {
 
 .template-primary-card.active {
   box-shadow:
-    inset 0 0 0 1px rgba(183, 154, 116, 0.18),
+    inset 0 0 0 1px rgba(29, 200, 255, 0.16),
     var(--shadow-soft);
 }
 
@@ -505,7 +509,7 @@ legend {
   text-align: left;
   border: 1px solid var(--line-soft);
   border-radius: 16px;
-  background: rgba(250, 252, 255, 0.98);
+  background: rgba(13, 28, 49, 0.82);
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -514,6 +518,9 @@ legend {
 }
 
 .choice-card.active {
+  border-color: rgba(29, 200, 255, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.14);
+  background: rgba(15, 36, 59, 0.90);
   border-color: rgba(183, 154, 116, 0.34);
   box-shadow: inset 0 0 0 1px rgba(183, 154, 116, 0.16);
   background: rgba(243, 247, 252, 0.98);
@@ -541,17 +548,18 @@ legend {
 .btn.primary {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(180deg, #7f8a98 0%, #495567 70%, #a88d67 100%);
+  background: linear-gradient(135deg, #21d4ff 0%, #216dff 100%);
+  box-shadow: 0 10px 28px rgba(29, 200, 255, 0.34);
 }
 
 .btn.success {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(180deg, #748d7b 0%, var(--success) 100%);
+  background: linear-gradient(135deg, #31dca4 0%, var(--success) 100%);
 }
 
 .btn.ghost {
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(13, 31, 54, 0.72);
 }
 
 .btn:hover,
@@ -575,7 +583,7 @@ legend {
   border-radius: 999px;
   border: 1px solid var(--line-soft);
   padding: 5px 12px;
-  background: rgba(246, 249, 252, 0.9);
+  background: rgba(13, 31, 54, 0.76);
   color: var(--muted);
   font-size: 13px;
 }
@@ -589,7 +597,7 @@ legend {
   margin: 12px 16px 14px;
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(12, 26, 45, 0.82);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -605,7 +613,7 @@ legend {
 .editor-overview-card {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(12, 26, 45, 0.82);
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -629,7 +637,7 @@ legend {
 .editor-side-card {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(12, 26, 45, 0.82);
 }
 
 .repurpose-card {
@@ -638,7 +646,7 @@ legend {
   padding: 10px 12px;
   border: 1px solid rgba(199, 208, 218, 0.72);
   border-radius: 16px;
-  background: rgba(250, 252, 255, 0.98);
+  background: rgba(13, 28, 49, 0.82);
 }
 
 .repurpose-status {
@@ -651,7 +659,7 @@ legend {
 }
 
 .editor-feedback-guide {
-  background: rgba(248, 251, 254, 0.98);
+  background: rgba(13, 31, 54, 0.84);
 }
 
 .selection-card-wrap {
@@ -682,7 +690,7 @@ legend {
 .history-block {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: #fff;
+  background: rgba(13, 28, 49, 0.82);
   padding: 10px 12px;
 }
 
@@ -697,14 +705,14 @@ legend {
 .msg {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(13, 28, 49, 0.84);
   padding: 11px 12px;
   line-height: 1.55;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  box-shadow: inset 0 1px 0 rgba(129, 183, 255, 0.05);
 }
 
 .wizard-next-box {
-  background: rgba(248, 251, 254, 0.98);
+  background: rgba(10, 30, 54, 0.88);
 }
 
 .wizard-status-row {
@@ -720,25 +728,25 @@ legend {
   gap: 6px;
   border-radius: 999px;
   padding: 6px 10px;
-  border: 1px solid rgba(201, 210, 221, 0.9);
-  background: rgba(248, 251, 254, 0.95);
+  border: 1px solid rgba(103, 133, 171, 0.22);
+  background: rgba(15, 36, 59, 0.92);
   color: var(--text);
   font-size: 13px;
   line-height: 1.4;
 }
 
 .wizard-state-pill.ready {
-  border-color: rgba(183, 154, 116, 0.26);
-  background: rgba(250, 246, 240, 0.98);
+  border-color: rgba(29, 200, 255, 0.3);
+  background: rgba(10, 41, 54, 0.94);
 }
 
 .wizard-state-pill.pending {
-  border-color: rgba(110, 127, 151, 0.18);
-  background: rgba(243, 247, 252, 0.96);
+  border-color: rgba(103, 133, 171, 0.22);
+  background: rgba(15, 36, 59, 0.92);
 }
 
 .wizard-state-pill.neutral {
-  background: rgba(249, 251, 254, 0.96);
+  background: rgba(13, 31, 54, 0.88);
 }
 
 .wizard-guidance-grid {
@@ -752,17 +760,17 @@ legend {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 10px 12px;
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(13, 28, 49, 0.82);
 }
 
 .wizard-guidance-card.ok {
-  background: rgba(250, 246, 240, 0.98);
-  border-color: rgba(183, 154, 116, 0.22);
+  background: rgba(10, 34, 33, 0.68);
+  border-color: rgba(63, 211, 154, 0.24);
 }
 
 .wizard-guidance-card.pending {
-  background: rgba(247, 250, 253, 0.98);
-  border-color: rgba(201, 210, 221, 0.9);
+  background: rgba(13, 28, 49, 0.82);
+  border-color: rgba(103, 133, 171, 0.22);
 }
 
 .wizard-guidance-title {
@@ -785,13 +793,13 @@ legend {
 
 .wizard-quick-chip {
   cursor: pointer;
-  background: linear-gradient(180deg, #fffefb 0%, #fff8ef 100%);
-  color: var(--ink);
+  background: rgba(13, 31, 54, 0.84);
+  color: var(--text);
 }
 
 .wizard-quick-chip:hover {
-  border-color: rgba(143, 79, 26, 0.28);
-  color: var(--accent);
+  border-color: rgba(29, 200, 255, 0.34);
+  color: var(--accent-contrast);
 }
 
 .msg.error {
@@ -812,13 +820,13 @@ legend {
 
 .selection-card {
   border: 1px dashed rgba(165, 176, 189, 0.9);
-  background: rgba(250, 252, 255, 0.98);
+  background: rgba(13, 28, 49, 0.82);
 }
 
 .selection-card.has-selection {
   border-style: solid;
-  border-color: rgba(183, 154, 116, 0.28);
-  background: rgba(248, 244, 238, 0.98);
+  border-color: rgba(29, 200, 255, 0.28);
+  background: rgba(10, 34, 55, 0.92);
 }
 
 @media (max-width: 980px) {
@@ -843,15 +851,15 @@ legend {
 .annotation-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: rgba(250, 252, 255, 0.98);
+  background: rgba(13, 28, 49, 0.82);
   padding: 9px 10px;
   display: grid;
   gap: 6px;
 }
 
 .annotation-item.newest {
-  border-color: rgba(183, 154, 116, 0.3);
-  background: rgba(248, 244, 238, 0.98);
+  border-color: rgba(29, 200, 255, 0.3);
+  background: rgba(10, 34, 55, 0.92);
 }
 
 .annotation-item.active {
@@ -1131,24 +1139,24 @@ legend {
 }
 
 .llm-card {
-  border: 1px solid rgba(199, 208, 218, 0.88);
+  border: 1px solid rgba(103, 133, 171, 0.24);
   border-radius: 18px;
-  background: rgba(251, 253, 255, 0.98);
+  background: rgba(12, 26, 45, 0.84);
   padding: 11px;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 7px;
   min-height: 154px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 8px 20px rgba(44, 57, 74, 0.08);
+    inset 0 1px 0 rgba(129, 183, 255, 0.05),
+    0 14px 28px rgba(0, 0, 0, 0.20);
 }
 
 .llm-card.active {
-  border-color: rgba(183, 154, 116, 0.4);
+  border-color: rgba(29, 200, 255, 0.34);
   box-shadow:
-    inset 0 0 0 1px rgba(183, 154, 116, 0.16),
-    0 10px 24px rgba(44, 57, 74, 0.1);
+    inset 0 0 0 1px rgba(29, 200, 255, 0.14),
+    0 16px 32px rgba(0, 0, 0, 0.24);
 }
 
 .llm-card-top {
@@ -1210,12 +1218,12 @@ legend {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid rgba(199, 208, 218, 0.9);
-  background: rgba(249, 251, 254, 0.96);
+  border: 1px solid rgba(103, 133, 171, 0.22);
+  background: rgba(13, 31, 54, 0.72);
   color: var(--muted);
   padding: 3px 8px;
   font-size: 11px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 1px 0 rgba(129, 183, 255, 0.05);
 }
 
 .status-chip.ok {
