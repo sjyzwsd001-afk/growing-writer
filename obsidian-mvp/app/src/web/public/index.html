@@ -162,6 +162,9 @@
                 </div>
                 <p class="hint">系统会检查关键输入完整性。通过检查后才能进入确认步骤。</p>
                 <div id="wizard-check-result" class="summary-box">点击“执行检查”开始。</div>
+                <div id="wizard-check-next-action" class="summary-box wizard-next-box">
+                  系统会在这里告诉你：现在最需要补什么，以及什么时候可以继续往下走。
+                </div>
                 <div class="editor-actions">
                   <button type="button" id="wizard-run-check" class="btn ghost">执行检查</button>
                 </div>
@@ -177,6 +180,9 @@
                   <div class="mini">看一眼准备状态，确认无误后勾选并开始生成。</div>
                 </div>
                 <div id="wizard-summary" class="summary-box">确认前 3 步后点击生成。</div>
+                <div id="wizard-readiness-verdict" class="summary-box wizard-next-box">
+                  先完成 Step 5 的检查，再回到这里确认生成。
+                </div>
                 <label class="inline-check">
                   <input type="checkbox" id="wizard-confirm-check" />
                   <span>我已确认输入内容，允许系统开始生成初稿。</span>

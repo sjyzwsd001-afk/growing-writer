@@ -811,14 +811,28 @@ function updateWizardSummary() {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean).length;
+  const confirmChecked = Boolean(document.getElementById("wizard-confirm-check")?.checked);
+  const checkPassed = Boolean(state.wizardCheckPassed);
   const readiness = [
     { label: "任务标题", ok: Boolean(title), detail: title || "未填写" },
     { label: "文档类型", ok: Boolean(docType), detail: docType || "未填写" },
     { label: "本次背景", ok: Boolean(background || facts || hasUpload), detail: background || facts || (hasUpload ? "已上传背景文件" : "未填写") },
-    { label: "检查结果", ok: state.wizardCheckPassed, detail: state.wizardCheckPassed ? "已通过" : "尚未通过" },
-    { label: "人工确认", ok: document.getElementById("wizard-confirm-check")?.checked, detail: document.getElementById("wizard-confirm-check")?.checked ? "已勾选" : "未勾选" },
+    { label: "检查结果", ok: checkPassed, detail: checkPassed ? "已通过" : "尚未通过" },
+    { label: "人工确认", ok: confirmChecked, detail: confirmChecked ? "已勾选" : "未勾选" },
   ];
+  const readyItems = readiness.filter((item) => item.ok);
+  const pendingItems = readiness.filter((item) => !item.ok);
   const modeLabel = templateMode === "strict" ? "严格套用" : templateMode === "light" ? "轻参考" : "平衡模式";
+  const verdictText = !checkPassed
+    ? "还不能生成：请先完成检查并解决阻塞项。"
+    : !confirmChecked
+      ? "离生成只差一步：请勾选人工确认。"
+      : "已具备生成条件：可以开始生成初稿。";
+  const nextActionText = !checkPassed
+    ? "下一步：回到 Step 5 执行检查，先把阻塞项清掉。"
+    : !confirmChecked
+      ? "下一步：确认前面信息无误后，勾选“允许系统开始生成初稿”。"
+      : "下一步：点击“确认并生成初稿”，进入改稿工作台。";
   document.getElementById("wizard-summary").innerHTML = `
     <div class="result-summary-grid">
       <div class="result-summary-item"><div class="result-summary-label">任务</div><strong>${escapeHtml(title || "未填写")}</strong></div>
@@ -827,6 +841,10 @@ function updateWizardSummary() {
       <div class="result-summary-item"><div class="result-summary-label">历史材料</div><strong>${escapeHtml(String(selectedCount))} 篇</strong></div>
     </div>
     <div class="mini">模板用法：${escapeHtml(modeLabel)} / 额外提醒 ${escapeHtml(String(overrideCount))} 条</div>
+    <div class="wizard-status-row">
+      <span class="wizard-state-pill ${checkPassed ? "ready" : "pending"}">${escapeHtml(verdictText)}</span>
+      <span class="wizard-state-pill neutral">${escapeHtml(nextActionText)}</span>
+    </div>
     <div class="wizard-readiness-list">
       ${readiness
         .map(
@@ -837,7 +855,24 @@ function updateWizardSummary() {
         )
         .join("")}
     </div>
+    <div class="wizard-guidance-grid">
+      <div class="wizard-guidance-card ok">
+        <div class="wizard-guidance-title">已经具备</div>
+        <ul>${readyItems.map((item) => `<li>${escapeHtml(item.label)}</li>`).join("") || "<li>暂无</li>"}</ul>
+      </div>
+      <div class="wizard-guidance-card pending">
+        <div class="wizard-guidance-title">还需确认</div>
+        <ul>${pendingItems.map((item) => `<li>${escapeHtml(item.label)}：${escapeHtml(item.detail)}</li>`).join("") || "<li>无</li>"}</ul>
+      </div>
+    </div>
   `;
+  const verdictBox = document.getElementById("wizard-readiness-verdict");
+  if (verdictBox) {
+    verdictBox.innerHTML = `
+      <strong>${escapeHtml(verdictText)}</strong>
+      <div class="mini">${escapeHtml(nextActionText)}</div>
+    `;
+  }
 }
 
 function runWizardCheck() {
@@ -886,6 +921,7 @@ function runWizardCheck() {
 
 function renderWizardCheckResult(report) {
   const container = document.getElementById("wizard-check-result");
+  const nextBox = document.getElementById("wizard-check-next-action");
   const form = document.getElementById("wizard-form");
   if (!container) {
     return;
@@ -893,16 +929,46 @@ function renderWizardCheckResult(report) {
 
   if (!report) {
     container.innerHTML = `<div>点击“执行检查”开始。</div>`;
+    if (nextBox) {
+      nextBox.innerHTML = `系统会在这里告诉你：现在最需要补什么，以及什么时候可以继续往下走。`;
+    }
     return;
   }
 
   const formData = form ? new FormData(form) : new FormData();
+  const mustIncludeCount = String(formData.get("mustInclude") || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+  const specialRequirementCount = String(formData.get("specialRequirements") || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
   const summaryItems = [
     { label: "阻塞项", value: String(report.blockers.length) },
     { label: "提醒项", value: String(report.warnings.length) },
     { label: "背景输入", value: String(formData.get("background") || "").trim() || String(formData.get("facts") || "").trim() ? "已提供" : "偏少" },
     { label: "历史材料", value: `${formData.getAll("sourceMaterialIds").length} 篇` },
+    { label: "必写点", value: `${mustIncludeCount} 条` },
+    { label: "特殊要求", value: `${specialRequirementCount} 条` },
   ];
+  const readySignals = [
+    formData.get("title") ? "任务标题已填写" : "",
+    formData.get("docType") ? "文档类型已明确" : "",
+    String(formData.get("background") || "").trim() || String(formData.get("facts") || "").trim()
+      ? "背景和事实已提供"
+      : "",
+    formData.getAll("sourceMaterialIds").length ? `已选 ${formData.getAll("sourceMaterialIds").length} 篇历史材料` : "",
+    String(formData.get("templateId") || "").trim() ? "模板已选择" : "",
+  ].filter(Boolean);
+  const nextAction = report.ok
+    ? "检查已通过。下一步：去 Step 6 看一眼准备状态，勾选人工确认后就可以生成。"
+    : `先处理 ${report.blockers.length} 个阻塞项，再重新执行检查。`;
+  const helperText = report.ok
+    ? report.warnings.length
+      ? "现在已经能继续往下走，但建议先看一眼提醒项，避免生成结果不够贴近你的写法。"
+      : "关键输入已经够用，可以进入最后确认。"
+    : "当前还不建议直接生成，否则容易得到空稿或遗漏重点的初稿。";
 
   const blockerLines = report.blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
   const warningLines = report.warnings.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
@@ -915,11 +981,32 @@ function renderWizardCheckResult(report) {
         )
         .join("")}
     </div>
+    <div class="wizard-guidance-grid">
+      <div class="wizard-guidance-card ok">
+        <div class="wizard-guidance-title">已经具备</div>
+        <ul>${readySignals.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>暂无</li>"}</ul>
+      </div>
+      <div class="wizard-guidance-card pending">
+        <div class="wizard-guidance-title">${report.ok ? "建议补强" : "优先补齐"}</div>
+        <ul>${
+          (report.ok ? report.warnings : report.blockers)
+            .map((item) => `<li>${escapeHtml(item)}</li>`)
+            .join("") || "<li>无</li>"
+        }</ul>
+      </div>
+    </div>
+    <div class="mini">${escapeHtml(helperText)}</div>
     <div><strong>阻塞项</strong></div>
     <ul>${blockerLines || "<li>无</li>"}</ul>
     <div><strong>提醒项</strong></div>
     <ul>${warningLines || "<li>无</li>"}</ul>
   `;
+  if (nextBox) {
+    nextBox.innerHTML = `
+      <strong>${escapeHtml(nextAction)}</strong>
+      <div class="mini">${escapeHtml(helperText)}</div>
+    `;
+  }
 }
 
 function validateStepBeforeNext(step) {
