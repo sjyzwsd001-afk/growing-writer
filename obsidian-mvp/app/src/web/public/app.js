@@ -2520,17 +2520,7 @@ function updateWorkflowDefinitionFromUi(mutator) {
 function updateTopStatus(data) {
   const validation = data.llm.validation || { errors: [], warnings: [] };
   const calibration = data.llm.calibration || null;
-  const calibrationText = calibration?.status === "ready"
-    ? "可用"
-    : calibration?.status === "running"
-      ? "校准中"
-      : calibration?.status === "failed"
-        ? "不可用"
-        : validation.errors.length
-          ? "配置错误"
-          : data.llm.enabled
-            ? "待校准"
-            : "未就绪";
+  const calibrationText = getCalibrationStatusText(calibration, validation, data.llm.enabled);
   document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
   document.getElementById("llm-status").textContent = `${calibrationText}${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`;
   document.getElementById("llm-source").textContent = data.llm.source || "-";
@@ -2547,6 +2537,35 @@ function getLlmCardById(profileId) {
   return getLlmCards().find((card) => card.id === profileId) || null;
 }
 
+function getCalibrationStatusText(calibration, validation, enabled) {
+  if (calibration?.status === "ready") {
+    return calibration?.structuredOutput === "connectivity-only" ? "轻量可用" : "可用";
+  }
+  if (calibration?.status === "running") {
+    return "校准中";
+  }
+  if (calibration?.status === "failed") {
+    return "不可用";
+  }
+  if (validation?.errors?.length) {
+    return "配置错误";
+  }
+  return enabled ? "待校准" : "未就绪";
+}
+
+function getCalibrationCapabilityText(calibration) {
+  if (!calibration || calibration.status !== "ready") {
+    return "";
+  }
+  if (calibration.structuredOutput === "strict-schema") {
+    return "适合正式写作";
+  }
+  if (calibration.structuredOutput === "connectivity-only") {
+    return "适合普通写作";
+  }
+  return "";
+}
+
 function renderLlmCards(data) {
   const llm = data.llm || {};
   const cards = Array.isArray(llm.cards) ? llm.cards : [];
@@ -2560,17 +2579,8 @@ function renderLlmCards(data) {
     .map((card) => {
       const validation = card.validation || { errors: [], warnings: [] };
       const calibration = card.calibration || null;
-      const statusText = calibration?.status === "ready"
-        ? "可用"
-        : calibration?.status === "running"
-          ? "校准中"
-          : calibration?.status === "failed"
-            ? "不可用"
-            : validation.errors.length
-              ? "配置错误"
-              : card.enabled
-                ? "待校准"
-                : "未就绪";
+      const statusText = getCalibrationStatusText(calibration, validation, card.enabled);
+      const capabilityText = getCalibrationCapabilityText(calibration);
       const summary = calibration?.message || validation.errors[0] || "";
       const providerLabel = card.provider === "openai-codex-oauth" ? "OAuth" : "API Key";
       return `<div class="llm-card ${card.isActive ? "active" : ""}">
@@ -2585,7 +2595,8 @@ function renderLlmCards(data) {
             }
           </div>
           <div class="llm-card-badges">
-            <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
+            <span class="chip status-chip ${statusText === "可用" ? "ok" : statusText === "轻量可用" ? "pending" : statusText === "校准中" ? "pending" : statusText === "不可用" || statusText === "配置错误" ? "error" : ""}">${escapeHtml(statusText)}</span>
+            ${capabilityText ? `<span class="chip capability-chip">${escapeHtml(capabilityText)}</span>` : ""}
             <span class="chip ${card.isActive ? "active" : ""}">${card.isActive ? "当前启用" : "备用"}</span>
           </div>
         </div>

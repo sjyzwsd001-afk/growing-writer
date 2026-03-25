@@ -1000,6 +1000,12 @@ legend {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
 }
 
+.capability-chip {
+  background: #eef4fb;
+  border-color: rgba(58, 101, 156, 0.16);
+  color: #315d92;
+}
+
 .llm-form-shell {
   border-top: 1px solid rgba(218, 200, 172, 0.75);
 }
