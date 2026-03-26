@@ -98,8 +98,10 @@
                 </div>
                 <div class="editor-actions">
                   <button id="skip-template-selection" type="button" class="mini-btn">这次不使用模板</button>
+                  <button id="skip-template-and-next" type="button" class="mini-btn">跳过模板，直接写背景</button>
                 </div>
                 <div id="template-step-bridge" class="summary-box">系统会结合你刚选的历史材料，先给出一版模板推荐；如果你觉得这次没有固定套路，也可以直接跳过。</div>
+                <div id="template-primary-action" class="summary-box">系统会先根据你的任务和已选材料，给出一张最值得先看的首推模板。</div>
                 <label class="wizard-selector">
                   <span>模板选择</span>
                   <select id="template-selector" name="templateId">
@@ -107,17 +109,20 @@
                   </select>
                 </label>
                 <div id="template-choice-cards" class="wizard-choice-cards"></div>
-                <label class="wizard-selector">怎么沿用这个模板
-                  <select name="templateMode">
-                    <option value="hybrid">平衡模式（推荐：模板骨架 + 本次事实）</option>
-                    <option value="strict">严格套用（更像按模板直接改）</option>
-                    <option value="light">轻参考（只借语气，不强套结构）</option>
-                  </select>
-                </label>
-                <label>如果你想额外提醒系统怎么套这个模板（可留空）
-                  <textarea name="templateOverrides" rows="4" placeholder="每行一条，例如：&#10;开头=先写意义，再写现状&#10;风险分析=必须量化到指标"></textarea>
-                </label>
-                <div class="mini">不会写也没关系。只有当你想特别强调“某一段必须怎么写”时，再填这里。</div>
+                <details class="wizard-optional-panel" id="template-advanced-panel">
+                  <summary>细调模板怎么套用（可选）</summary>
+                  <label class="wizard-selector">怎么沿用这个模板
+                    <select name="templateMode">
+                      <option value="hybrid">平衡模式（推荐：模板骨架 + 本次事实）</option>
+                      <option value="strict">严格套用（更像按模板直接改）</option>
+                      <option value="light">轻参考（只借语气，不强套结构）</option>
+                    </select>
+                  </label>
+                  <label>如果你想额外提醒系统怎么套这个模板（可留空）
+                    <textarea name="templateOverrides" rows="4" placeholder="每行一条，例如：&#10;开头=先写意义，再写现状&#10;风险分析=必须量化到指标"></textarea>
+                  </label>
+                  <div class="mini">不会写也没关系。只有当你想特别强调“某一段必须怎么写”时，再填这里。</div>
+                </details>
                 <div id="template-preview" class="summary-box">选择模板后，这里会显示模板摘要与建议。</div>
               </div>
 

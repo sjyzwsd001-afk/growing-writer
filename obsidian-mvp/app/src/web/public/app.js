@@ -1372,6 +1372,49 @@ function updateWizardMaterialSelectionSummary() {
   }
 }
 
+function getWizardTemplatePool() {
+  return Array.isArray(state.dashboard?.templateCandidates)
+    ? state.dashboard.templateCandidates
+    : Array.isArray(state.dashboard?.templates)
+      ? state.dashboard.templates
+      : [];
+}
+
+function getRankedTemplatesForCurrentTask(items = getWizardTemplatePool()) {
+  return [...items]
+    .map((item) => ({
+      item,
+      recommendation: scoreTemplateForCurrentTask(item, getCurrentWizardTemplateSignals()),
+    }))
+    .sort((a, b) => b.recommendation.score - a.recommendation.score);
+}
+
+function renderTemplatePrimaryAction(rankedItems, selectedId = "") {
+  const container = document.getElementById("template-primary-action");
+  if (!container) {
+    return;
+  }
+  const primary = rankedItems[0] || null;
+  if (!primary || primary.recommendation.score <= 0) {
+    container.innerHTML = `
+      <strong>这次可以直接写背景。</strong>
+      <div class="mini">当前没有特别强的模板信号，系统会更多依赖历史材料、规则和你这次输入的事实来写。</div>
+    `;
+    return;
+  }
+
+  const selected = primary.item.id === selectedId;
+  container.innerHTML = `
+    <strong>系统首推：${escapeHtml(primary.item.title || "未命名模板")}</strong>
+    <div class="mini">如果你觉得这次确实有固定套路，最省事的方式就是直接采用它，再进入背景填写。</div>
+    ${renderRecommendationReasonChips(primary.recommendation)}
+    <div class="editor-actions">
+      <button type="button" class="mini-btn" data-action="pick-template-card" data-template-id="${escapeHtml(primary.item.id)}">${selected ? "当前已采用" : "采用首推模板"}</button>
+      <button type="button" class="mini-btn" data-action="pick-template-card-next" data-template-id="${escapeHtml(primary.item.id)}">${selected ? "带着当前模板继续" : "采用并继续写背景"}</button>
+    </div>
+  `;
+}
+
 function renderTemplateChoiceCards(items, selectedId = "") {
   const container = document.getElementById("template-choice-cards");
   if (!container) {
@@ -1382,15 +1425,10 @@ function renderTemplateChoiceCards(items, selectedId = "") {
     return;
   }
 
-  const ranked = items
-    .map((item) => ({
-      item,
-      recommendation: scoreTemplateForCurrentTask(item, getCurrentWizardTemplateSignals()),
-    }))
-    .sort((a, b) => b.recommendation.score - a.recommendation.score)
-    .slice(0, 3);
+  const ranked = getRankedTemplatesForCurrentTask(items).slice(0, 3);
   const primary = ranked[0] || null;
   const alternatives = ranked.slice(1);
+  renderTemplatePrimaryAction(ranked, selectedId);
 
   container.innerHTML = `
     ${
@@ -1456,6 +1494,7 @@ function renderTemplateSelector(items) {
   renderTemplateChoiceCards(sortedItems, String(select.value || "").trim());
   renderTemplatePreview();
   updateWizardMaterialSelectionSummary();
+  updateTemplateAdvancedPanel();
 }
 
 function getCurrentWizardTemplateSignals() {
@@ -1596,18 +1635,8 @@ function renderTemplatePreview() {
 
   const templateId = String(document.getElementById("template-selector")?.value || "").trim();
   const templateMode = String(document.querySelector("[name='templateMode']")?.value || "hybrid");
-  const templates = Array.isArray(state.dashboard?.templateCandidates)
-    ? state.dashboard.templateCandidates
-    : Array.isArray(state.dashboard?.templates)
-      ? state.dashboard.templates
-      : [];
-  const signals = getCurrentWizardTemplateSignals();
-  const rankedTemplates = templates
-    .map((item) => ({
-      item,
-      recommendation: scoreTemplateForCurrentTask(item, signals),
-    }))
-    .sort((a, b) => b.recommendation.score - a.recommendation.score);
+  const templates = getWizardTemplatePool();
+  const rankedTemplates = getRankedTemplatesForCurrentTask(templates);
   const selected = templates.find((item) => item.id === templateId) || null;
 
   if (!selected) {
@@ -1627,7 +1656,7 @@ function renderTemplatePreview() {
     return;
   }
 
-  const recommendation = scoreTemplateForCurrentTask(selected, signals);
+  const recommendation = scoreTemplateForCurrentTask(selected, getCurrentWizardTemplateSignals());
   const recommendationLabel =
     recommendation.score >= 5 ? "优先推荐" : recommendation.score >= 3 ? "可作为备选" : "仅作参考";
   const modeHint =
@@ -1651,6 +1680,17 @@ function renderTemplatePreview() {
     <div class="mini">常见结构：${escapeHtml(structure.join(" / ") || "暂无结构摘要")}</div>
     <div class="mini">可参考表达：${escapeHtml(phrases.join(" / ") || "暂无表达摘要")}</div>
   `;
+}
+
+function updateTemplateAdvancedPanel() {
+  const panel = document.getElementById("template-advanced-panel");
+  const templateId = String(document.getElementById("template-selector")?.value || "").trim();
+  if (!(panel instanceof HTMLDetailsElement)) {
+    return;
+  }
+  if (!templateId) {
+    panel.open = false;
+  }
 }
 
 function renderSimpleList(containerId, items, renderItem) {
@@ -4213,37 +4253,51 @@ function bindWizard() {
       if (select instanceof HTMLSelectElement) {
         select.value = "";
       }
-      renderTemplateChoiceCards(
-        Array.isArray(state.dashboard?.templateCandidates)
-          ? state.dashboard.templateCandidates
-          : Array.isArray(state.dashboard?.templates)
-            ? state.dashboard.templates
-            : [],
-        "",
-      );
+      renderTemplateChoiceCards(getWizardTemplatePool(), "");
       renderTemplatePreview();
+      updateTemplateAdvancedPanel();
       setInfo("这次已改为不使用模板，系统会按历史材料和规则综合生成。");
       return;
     }
-    const button = event.target.closest("button[data-action='pick-template-card']");
-    if (!button) {
+
+    const skipAndNextButton = event.target.closest("#skip-template-and-next");
+    if (skipAndNextButton) {
+      const select = document.getElementById("template-selector");
+      if (select instanceof HTMLSelectElement) {
+        select.value = "";
+      }
+      renderTemplateChoiceCards(getWizardTemplatePool(), "");
+      renderTemplatePreview();
+      updateTemplateAdvancedPanel();
+      if (state.wizardStep < 4) {
+        state.wizardStep = 4;
+        updateWizardStep();
+      }
+      setInfo("已跳过模板，直接进入背景填写。");
       return;
     }
-    const templateId = button.dataset.templateId || "";
+
+    const button = event.target.closest("button[data-action='pick-template-card']");
+    const nextButton = event.target.closest("button[data-action='pick-template-card-next']");
+    const actionButton = button || nextButton;
+    if (!actionButton) {
+      return;
+    }
+    const templateId = actionButton.dataset.templateId || "";
     const select = document.getElementById("template-selector");
     if (!(select instanceof HTMLSelectElement)) {
       return;
     }
     select.value = templateId;
-    renderTemplateChoiceCards(
-      Array.isArray(state.dashboard?.templateCandidates)
-        ? state.dashboard.templateCandidates
-        : Array.isArray(state.dashboard?.templates)
-          ? state.dashboard.templates
-          : [],
-      templateId,
-    );
+    renderTemplateChoiceCards(getWizardTemplatePool(), templateId);
     renderTemplatePreview();
+    updateTemplateAdvancedPanel();
+    if (nextButton && state.wizardStep < 4) {
+      state.wizardStep = 4;
+      updateWizardStep();
+      setInfo("已采用首推模板，直接进入背景填写。");
+      return;
+    }
     setInfo(templateId ? "已选中模板卡片。" : "已取消模板。");
   });
 }
