@@ -2449,6 +2449,7 @@ function clearFeedbackInputs() {
   document.getElementById("feedback-location").value = "";
   document.getElementById("feedback-reason").value = "";
   document.getElementById("feedback-comment").value = "";
+  updateEditorActionStates();
 }
 
 function syncActiveAnnotationFromSelection(selection) {
@@ -2489,15 +2490,49 @@ function summarizeDraftChanges() {
       }, 0) + Math.max(0, currentLines.length - baselineLines.length)
     : 0;
   const charDelta = current.length - baseline.length;
+  const dirty = baseline !== current;
+  const reusableCount = state.pendingAnnotations.filter((item) => item.isReusable).length;
+  const nextStep = state.pendingAnnotations.length
+    ? "本轮已经攒了批注，可以直接提交反馈并再次生成。"
+    : dirty
+      ? "正文已经有改动；如果改的是结构或写法，建议补一条批注再提交。"
+      : "正文还没改动，可以先直接修改，或先从右侧补一条批注。";
   const summary = [
+    `当前状态：${dirty ? "正文已改动" : "正文尚未改动"}`,
     `基线长度：${baseline.length} 字`,
     `当前长度：${current.length} 字`,
     `字数变化：${charDelta >= 0 ? "+" : ""}${charDelta}`,
     `变化行数：约 ${changedLineCount} 行`,
     `本轮批注：${state.pendingAnnotations.length} 条`,
-    `长期偏好：${state.pendingAnnotations.filter((item) => item.isReusable).length} 条`,
+    `长期偏好：${reusableCount} 条`,
+    `建议动作：${nextStep}`,
   ];
   container.innerHTML = summary.map((item) => `<div>${escapeHtml(item)}</div>`).join("");
+}
+
+function hasUnsavedFeedbackInput() {
+  return (
+    normalizeLocation(document.getElementById("feedback-location")?.value) !== "全文" ||
+    Boolean(String(document.getElementById("feedback-reason")?.value || "").trim()) ||
+    Boolean(String(document.getElementById("feedback-comment")?.value || "").trim())
+  );
+}
+
+function updateEditorActionStates() {
+  const submitButton = document.getElementById("submit-feedback");
+  const finalizeButton = document.getElementById("finalize-draft");
+  const current = String(document.getElementById("draft-editor")?.value || "");
+  const dirty = String(state.generatedDraftBaseline || "") !== current;
+  const hasPendingWork = state.pendingAnnotations.length > 0 || hasUnsavedFeedbackInput();
+
+  if (submitButton instanceof HTMLButtonElement) {
+    submitButton.disabled = !hasPendingWork;
+    submitButton.textContent = hasPendingWork ? "提交反馈并再次生成" : "先补批注，再提交反馈";
+  }
+
+  if (finalizeButton instanceof HTMLButtonElement) {
+    finalizeButton.textContent = dirty ? "正文已改，确认后直接定稿" : "直接定稿";
+  }
 }
 
 function renderAnnotationSubmissionSummary() {
@@ -2507,6 +2542,7 @@ function renderAnnotationSubmissionSummary() {
   }
   if (!state.pendingAnnotations.length) {
     container.textContent = "还没有需要提交的批注。";
+    updateEditorActionStates();
     return;
   }
 
@@ -2525,6 +2561,7 @@ function renderAnnotationSubmissionSummary() {
       ${remaining > 0 ? `<div class="mini">还有 ${escapeHtml(String(remaining))} 条会一并提交。</div>` : ""}
     </div>
   `;
+  updateEditorActionStates();
 }
 
 function renderPendingAnnotations() {
@@ -2545,6 +2582,7 @@ function renderPendingAnnotations() {
     state.activeAnnotationIndex = -1;
     summarizeDraftChanges();
     renderAnnotationSubmissionSummary();
+    updateEditorActionStates();
     return;
   }
 
@@ -2596,6 +2634,7 @@ function renderPendingAnnotations() {
   }
   summarizeDraftChanges();
   renderAnnotationSubmissionSummary();
+  updateEditorActionStates();
   if (!state.latestFeedbackLearnResult?.analysis) {
     renderFeedbackLearnResult();
   }
@@ -4407,6 +4446,7 @@ function bindEditorActions() {
     captureDraftSelection({ strict: false });
     summarizeDraftChanges();
     renderRepurposeOutputs();
+    updateEditorActionStates();
   });
 
   document.getElementById("add-annotation").addEventListener("click", () => {
@@ -4523,7 +4563,14 @@ function bindEditorActions() {
     if (action === "annotation-priority" && target instanceof HTMLSelectElement) {
       state.pendingAnnotations[index].priority = target.value;
       summarizeDraftChanges();
+      updateEditorActionStates();
     }
+  });
+
+  ["feedback-location", "feedback-reason", "feedback-comment"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", () => {
+      updateEditorActionStates();
+    });
   });
 
   document.getElementById("feedback-learn-result").addEventListener("click", async (event) => {
