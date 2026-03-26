@@ -1,9 +1,9 @@
 import { createReadStream } from "node:fs";
 import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { access, appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -2318,6 +2318,7 @@ async function buildDashboard(vaultRoot: string) {
         String(item.quality || "") === "high" &&
         candidateRuleCount >= 2 &&
         structureBlockCount >= 3;
+      const folderRelative = relative(join(vaultRoot, "materials"), dirname(item.path));
       return {
         id: item.id,
         title: item.title,
@@ -2336,6 +2337,8 @@ async function buildDashboard(vaultRoot: string) {
         candidateRuleCount,
         structureBlockCount,
         recommendTemplatePromotion,
+        folderPath: folderRelative && folderRelative !== "." ? folderRelative : "",
+        folderLabel: folderRelative && folderRelative !== "." ? folderRelative : "根目录",
         path: item.path,
       };
     })
@@ -3264,6 +3267,27 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         });
 
         sendJson(res, 200, result);
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/materials/delete") {
+        const body = (await readBody(req)) as Record<string, string | undefined>;
+        const rawPath = typeof body.path === "string" ? body.path : "";
+        if (!rawPath) {
+          sendJson(res, 400, { error: "Missing material path." });
+          return;
+        }
+        const resolvedPath = resolve(rawPath);
+        const materialsRoot = join(vaultRoot, "materials");
+        const inMaterialsRoot =
+          resolvedPath === materialsRoot ||
+          resolvedPath.startsWith(`${materialsRoot}${sep}`);
+        if (!inMaterialsRoot || !resolvedPath.endsWith(".md")) {
+          sendJson(res, 400, { error: "只能删除 materials 目录下的材料或模板文件。" });
+          return;
+        }
+        await rm(resolvedPath, { force: false });
+        sendJson(res, 200, { ok: true, path: resolvedPath });
         return;
       }
 

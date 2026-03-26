@@ -62,6 +62,7 @@ const BUTTON_TOOLTIP_BY_ACTION = {
   "copy-path": "复制这条记录对应的文件或目录路径。",
   "open-in-obsidian": "在 Obsidian 里直接打开这条记录对应的文件或目录。",
   "analyze-material": "重新分析这份材料，更新角色判断、结构和规则线索。",
+  "material-delete": "删除这份材料或模板文件。",
   "material-mark-template": "把这份材料转成正式模板，后续生成会优先参考它。",
   "material-mark-history": "把这份模板转回历史材料，不再作为正式模板优先使用。",
   "rule-set-scope": "修改这条规则的适用范围、文种或对象。",
@@ -1837,6 +1838,64 @@ function renderSimpleList(containerId, items, renderItem) {
   }
 }
 
+function groupKnowledgeItemsByFolder(items) {
+  const groups = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const folderKey = String(item.folderPath || "");
+    const folderLabel = String(item.folderLabel || (folderKey ? folderKey : "根目录"));
+    if (!groups.has(folderKey)) {
+      groups.set(folderKey, {
+        key: folderKey,
+        label: folderLabel,
+        items: [],
+      });
+    }
+    groups.get(folderKey).items.push(item);
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (a.key === b.key) {
+      return 0;
+    }
+    if (!a.key) {
+      return -1;
+    }
+    if (!b.key) {
+      return 1;
+    }
+    return a.label.localeCompare(b.label, "zh-CN");
+  });
+}
+
+function renderKnowledgeCardList(containerId, items, renderCard) {
+  const container = document.getElementById(containerId);
+  if (!container) {
+    return;
+  }
+  const entries = Array.isArray(items) ? items : [];
+  if (!entries.length) {
+    container.innerHTML = `<div class="empty">${escapeHtml(container.dataset.empty || "暂无数据")}</div>`;
+    return;
+  }
+
+  const groups = groupKnowledgeItemsByFolder(entries);
+  container.innerHTML = groups
+    .map((group) => `
+      <section class="knowledge-group">
+        <div class="knowledge-group-head">
+          <div>
+            <strong>${escapeHtml(group.label)}</strong>
+            <div class="mini">按文件夹分层展示，便于后续在 Obsidian 里继续整理。</div>
+          </div>
+          <span class="list-group-count">${escapeHtml(String(group.items.length))} 份</span>
+        </div>
+        <div class="knowledge-card-grid">
+          ${group.items.map((item) => renderCard(item)).join("")}
+        </div>
+      </section>
+    `)
+    .join("");
+}
+
 function isMaterialSelected(path) {
   return state.selectedMaterialPaths.includes(String(path || ""));
 }
@@ -2283,24 +2342,29 @@ function renderSettingsLists() {
       Number(b.structureBlockCount || 0) - Number(a.structureBlockCount || 0)
     );
     });
-  renderSimpleList("settings-materials", sortedMaterials, (item) => {
+  renderKnowledgeCardList("settings-materials", sortedMaterials, (item) => {
     const selected = isMaterialSelected(item.path);
-    return `<div class="row-select">
-      <input type="checkbox" data-action="toggle-material-selection" data-path="${escapeHtml(item.path)}" ${selected ? "checked" : ""} />
-    </div>
-    <div class="row-main">
-      <strong>${escapeHtml(item.title)}</strong>
-      <div class="mini">${escapeHtml(item.roleLabel || "参考材料")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
+    return `<article class="knowledge-card">
+      <div class="knowledge-card-top">
+        <label class="row-select knowledge-card-check">
+          <input type="checkbox" data-action="toggle-material-selection" data-path="${escapeHtml(item.path)}" ${selected ? "checked" : ""} />
+        </label>
+        <div class="knowledge-card-meta">
+          <strong>${escapeHtml(item.title)}</strong>
+          <div class="mini">${escapeHtml(item.roleLabel || "参考材料")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.audience || "-")} / ${escapeHtml(item.quality || "-")}</div>
+        </div>
+      </div>
       <div class="mini">${escapeHtml(item.roleReason || "")}</div>
       ${renderMaterialQualityChips(item)}
-    </div>
-    <div class="row-actions">
-      <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
-      <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
-      <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
-      <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
-      <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">${item.recommendTemplatePromotion ? "按建议转模板" : "转模板"}</button>
-    </div>`;
+      <div class="knowledge-card-actions">
+        <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看</button>
+        <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
+        <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
+        <button type="button" class="mini-btn" data-action="analyze-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">重分析</button>
+        <button type="button" class="mini-btn" data-action="material-mark-template" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">${item.recommendTemplatePromotion ? "按建议转模板" : "转模板"}</button>
+        <button type="button" class="mini-btn danger" data-action="material-delete" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">删除</button>
+      </div>
+    </article>`;
   });
 
   const sortedTemplates = [...(data.templates || [])].sort((a, b) => {
@@ -2311,23 +2375,28 @@ function renderSettingsLists() {
       String(a.title || "").localeCompare(String(b.title || ""), "zh-CN")
     );
   });
-  renderSimpleList("settings-templates", sortedTemplates, (item) => {
+  renderKnowledgeCardList("settings-templates", sortedTemplates, (item) => {
     const selected = isMaterialSelected(item.path);
-    return `<div class="row-select">
-      <input type="checkbox" data-action="toggle-material-selection" data-path="${escapeHtml(item.path)}" ${selected ? "checked" : ""} />
-    </div>
-    <div class="row-main">
-      <strong>${escapeHtml(item.title)}</strong>
-      <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
+    return `<article class="knowledge-card">
+      <div class="knowledge-card-top">
+        <label class="row-select knowledge-card-check">
+          <input type="checkbox" data-action="toggle-material-selection" data-path="${escapeHtml(item.path)}" ${selected ? "checked" : ""} />
+        </label>
+        <div class="knowledge-card-meta">
+          <strong>${escapeHtml(item.title)}</strong>
+          <div class="mini">${escapeHtml(item.roleLabel || "模板")} / ${escapeHtml(item.docType || "-")} / ${escapeHtml(item.scenario || "-")}</div>
+        </div>
+      </div>
       <div class="mini">${escapeHtml(normalizeTemplateUiCopy(item.roleReason || "正式模板会优先参与生成。"))}</div>
       ${renderTemplateQualityChips(item)}
-    </div>
-    <div class="row-actions">
-      <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
-      <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
-      <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
-      <button type="button" class="mini-btn" data-action="material-mark-history" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转历史材料</button>
-    </div>`;
+      <div class="knowledge-card-actions">
+        <button type="button" class="mini-btn" data-action="view-material" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">查看模板</button>
+        <button type="button" class="mini-btn" data-action="open-in-obsidian" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">在 Obsidian 中打开</button>
+        <button type="button" class="mini-btn" data-action="copy-path" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)} 文件路径">复制路径</button>
+        <button type="button" class="mini-btn" data-action="material-mark-history" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">转历史材料</button>
+        <button type="button" class="mini-btn danger" data-action="material-delete" data-path="${escapeHtml(item.path)}" data-title="${escapeHtml(item.title)}">删除</button>
+      </div>
+    </article>`;
   });
 
   renderGroupedRuleList("settings-rules", data.rules || []);
@@ -5697,6 +5766,22 @@ async function runSettingsAction(action, button) {
     applyMaterialRoleUpdate(result);
     setInfo(statusText);
     await new Promise((resolve) => window.setTimeout(resolve, 250));
+    await loadDashboard();
+    return;
+  }
+
+  if (action === "material-delete") {
+    const confirmed = await confirmDestructiveAction(`确认删除“${title || "这份材料"}”吗？删除后将从知识库移除。`);
+    if (!confirmed) {
+      return;
+    }
+    const result = await api("/api/materials/delete", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+    setSettingsResult(`${title || "材料"} - 已删除`, result);
+    state.selectedMaterialPaths = state.selectedMaterialPaths.filter((item) => item !== path);
+    setInfo(`已删除：${title || "材料"}`);
     await loadDashboard();
     return;
   }
