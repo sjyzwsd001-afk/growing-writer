@@ -3026,6 +3026,39 @@ function generateLeaderBrief(text) {
   ].join("\n");
 }
 
+function setRepurposeBox(container, text) {
+  if (!container) {
+    return;
+  }
+  container.textContent = text;
+  container.dataset.manual = "true";
+  container.dataset.generatedAt = new Date().toISOString();
+}
+
+function updateRepurposeGenerationStatus() {
+  const container = document.getElementById("repurpose-generation-status");
+  if (!container) {
+    return;
+  }
+  const items = [
+    { label: "普通摘要", node: document.getElementById("repurpose-summary") },
+    { label: "领导摘要", node: document.getElementById("repurpose-leader-brief") },
+    { label: "汇报提纲", node: document.getElementById("repurpose-outline") },
+  ];
+  const generated = items.filter((item) => item.node?.dataset.generatedAt);
+  if (!generated.length) {
+    container.innerHTML = `
+      <strong>一稿多用还没生成。</strong>
+      <div class="mini">你可以单独生成，也可以直接点“一键生成全部”，拿到可复制、可继续加工的版本。</div>
+    `;
+    return;
+  }
+  container.innerHTML = `
+    <strong>当前已生成 ${escapeHtml(String(generated.length))} 项派生结果。</strong>
+    <div class="mini">${generated.map((item) => item.label).join(" / ")} 已可直接复制；如果正文继续改过，建议重新生成一遍。</div>
+  `;
+}
+
 function renderRepurposeOutputs() {
   const draft = String(document.getElementById("draft-editor")?.value || "").trim();
   const summary = document.getElementById("repurpose-summary");
@@ -3040,6 +3073,14 @@ function renderRepurposeOutputs() {
   if (outline && !outline.dataset.manual) {
     outline.textContent = draft ? "点击“生成提纲”后，这里会整理出一版适合继续汇报或转 PPT 的提纲。" : "生成后，这里会给出适合继续汇报或转 PPT 的提纲。";
   }
+  if (!draft) {
+    [summary, leaderBrief, outline].forEach((node) => {
+      if (node) {
+        delete node.dataset.generatedAt;
+      }
+    });
+  }
+  updateRepurposeGenerationStatus();
 }
 
 function setRepurposeCopyStatus(message) {
@@ -4755,8 +4796,8 @@ function bindEditorActions() {
       return;
     }
     const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    container.textContent = generateRepurposeSummary(draft);
-    container.dataset.manual = "true";
+    setRepurposeBox(container, generateRepurposeSummary(draft));
+    updateRepurposeGenerationStatus();
     setRepurposeCopyStatus("");
     setInfo("已生成一版摘要。");
   });
@@ -4767,8 +4808,8 @@ function bindEditorActions() {
       return;
     }
     const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    container.textContent = generateLeaderBrief(draft);
-    container.dataset.manual = "true";
+    setRepurposeBox(container, generateLeaderBrief(draft));
+    updateRepurposeGenerationStatus();
     setRepurposeCopyStatus("");
     setInfo("已生成一版领导摘要。");
   });
@@ -4779,10 +4820,24 @@ function bindEditorActions() {
       return;
     }
     const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    container.textContent = generateRepurposeOutline(draft);
-    container.dataset.manual = "true";
+    setRepurposeBox(container, generateRepurposeOutline(draft));
+    updateRepurposeGenerationStatus();
     setRepurposeCopyStatus("");
     setInfo("已生成一版提纲。");
+  });
+
+  document.getElementById("generate-all-briefs").addEventListener("click", () => {
+    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
+    if (!draft) {
+      setInfo("请先生成或填写正文。", true);
+      return;
+    }
+    setRepurposeBox(document.getElementById("repurpose-summary"), generateRepurposeSummary(draft));
+    setRepurposeBox(document.getElementById("repurpose-leader-brief"), generateLeaderBrief(draft));
+    setRepurposeBox(document.getElementById("repurpose-outline"), generateRepurposeOutline(draft));
+    updateRepurposeGenerationStatus();
+    setRepurposeCopyStatus("");
+    setInfo("已一键生成摘要、领导摘要和提纲。");
   });
 
   document.getElementById("copy-brief-summary").addEventListener("click", async () => {
