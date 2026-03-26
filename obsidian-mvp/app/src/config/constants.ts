@@ -1,6 +1,38 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 
-export const DEFAULT_VAULT_ROOT = resolve(process.cwd(), "..");
+function resolveDefaultVaultRoot(): string {
+  const explicit = process.env.GROWING_WRITER_VAULT_ROOT?.trim();
+  if (explicit) {
+    return resolve(explicit);
+  }
+
+  const obsidianConfigPath = resolve(homedir(), "Library/Application Support/obsidian/obsidian.json");
+  if (existsSync(obsidianConfigPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(obsidianConfigPath, "utf8")) as {
+        vaults?: Record<string, { path?: string; open?: boolean; ts?: number }>;
+      };
+      const vaultEntries = Object.values(raw.vaults ?? {}).filter(
+        (item): item is { path: string; open?: boolean; ts?: number } =>
+          typeof item?.path === "string" && item.path.trim().length > 0,
+      );
+      const preferred =
+        vaultEntries.find((item) => item.open) ??
+        vaultEntries.sort((left, right) => Number(right.ts ?? 0) - Number(left.ts ?? 0))[0];
+      if (preferred?.path) {
+        return resolve(preferred.path);
+      }
+    } catch {
+      // Fall back to the local repo vault when Obsidian config cannot be parsed.
+    }
+  }
+
+  return resolve(process.cwd(), "..");
+}
+
+export const DEFAULT_VAULT_ROOT = resolveDefaultVaultRoot();
 export const LLM_SETTINGS_FILE_NAME = ".writer-llm-config.json";
 export const OPENAI_CODEX_PROVIDER = "openai-codex-oauth";
 export const OPENAI_CODEX_PROVIDER_LABEL = "OpenAI Codex OAuth";
