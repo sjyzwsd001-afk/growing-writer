@@ -27,6 +27,7 @@ const state = {
 
 const MAX_WIZARD_STEP = 7;
 const DEFAULT_API_TIMEOUT_MS = 30000;
+const MATERIAL_IMPORT_API_TIMEOUT_MS = 180000;
 const WORKFLOW_START_TIMEOUT_MS = 90000;
 const trustedOrigins = new Set([
   window.location.origin,
@@ -591,7 +592,7 @@ async function api(path, options = {}, timeoutMs = DEFAULT_API_TIMEOUT_MS) {
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`请求超时（>${Math.round(timeoutMs / 1000)} 秒）。如果后台仍停留在旧进程，请重启 \`npm run web\` 后再试。`);
+      throw new Error(`请求超时（>${Math.round(timeoutMs / 1000)} 秒）。这通常表示文件解析或材料分析仍在进行；如果长时间反复出现，再重启 \`npm run web\` 后重试。`);
     }
     throw error;
   } finally {
@@ -5229,10 +5230,14 @@ function bindMaterialImport() {
         submitButton.textContent = "导入中...";
       }
       setInlineStatus("material-form-status", "正在导入并分析材料，请稍等...");
-      const result = await api("/api/materials/import", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const result = await api(
+        "/api/materials/import",
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+        MATERIAL_IMPORT_API_TIMEOUT_MS,
+      );
       form.reset();
       updateMaterialUploadSummary();
       await loadDashboard();
@@ -5250,7 +5255,11 @@ function bindMaterialImport() {
       setSettingsResult(mode === "template" ? "正式模板导入完成" : "历史材料导入完成", result, { reveal: false });
       toggleView("settings");
     } catch (error) {
-      setInlineStatus("material-form-status", `材料导入失败：${error.message}`, true);
+      setInlineStatus(
+        "material-form-status",
+        `材料导入失败：${error.message}`,
+        true,
+      );
       setInfo(`材料导入失败：${error.message}`, true);
     } finally {
       if (submitButton instanceof HTMLButtonElement) {
