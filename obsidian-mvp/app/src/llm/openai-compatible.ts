@@ -327,4 +327,14 @@ export class OpenAiCompatibleClient {
       return options.schema.parse(tryParseJsonCandidates(repaired));
     }
   }
+
+  async generateText(options: {
+    system: string;
+    user: string;
+    schemaHint?: string;
+    maxTokens?: number;
+    timeoutMs?: number;
+  }): Promise<string> {
+    return this.requestText(options);
+  }
 }

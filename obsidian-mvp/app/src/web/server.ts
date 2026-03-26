@@ -582,15 +582,31 @@ async function runLlmConnectivityTest(settings: StoredLlmSettings) {
   });
 
   try {
-    const result = await client.generateJson({
-      system:
-        "You are a connectivity test for a writing assistant. Respond with JSON only.",
-      user: 'Return exactly this JSON: {"reply":"GW_LLM_OK"}',
-      schema: z.object({
-        reply: z.string(),
-      }),
-      timeoutMs: LLM_CALIBRATION_TIMEOUT_MS,
-    });
+    const result = isLikelyLocalLlmProfile(settings)
+      ? await client.generateText({
+          system:
+            "You are a connectivity test for a writing assistant. Reply with plain text only.",
+          user: "Reply exactly with GW_LLM_OK",
+          timeoutMs: LLM_CALIBRATION_TIMEOUT_MS,
+          maxTokens: 64,
+        })
+      : await client.generateJson({
+          system:
+            "You are a connectivity test for a writing assistant. Respond with JSON only.",
+          user: 'Return exactly this JSON: {"reply":"GW_LLM_OK"}',
+          schema: z.object({
+            reply: z.string(),
+          }),
+          timeoutMs: LLM_CALIBRATION_TIMEOUT_MS,
+        });
+
+    const connectivityOk = isLikelyLocalLlmProfile(settings)
+      ? String(result).trim().includes("GW_LLM_OK")
+      : z.object({ reply: z.string() }).parse(result).reply.trim() === "GW_LLM_OK";
+
+    if (!connectivityOk) {
+      throw new Error("Connectivity probe did not return the expected confirmation text.");
+    }
 
     return {
       ok: true,
@@ -3288,6 +3304,31 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         }
         await rm(resolvedPath, { force: false });
         sendJson(res, 200, { ok: true, path: resolvedPath });
+        return;
+      }
+
+      if (req.method === "POST" && url.pathname === "/api/materials/delete-batch") {
+        const body = (await readBody(req)) as Record<string, string[] | undefined>;
+        const rawPaths = Array.isArray(body.paths) ? body.paths.filter((item) => typeof item === "string" && item.trim()) : [];
+        if (!rawPaths.length) {
+          sendJson(res, 400, { error: "Missing material paths." });
+          return;
+        }
+        const materialsRoot = join(vaultRoot, "materials");
+        const deleted: string[] = [];
+        for (const rawPath of rawPaths) {
+          const resolvedPath = resolve(String(rawPath));
+          const inMaterialsRoot =
+            resolvedPath === materialsRoot ||
+            resolvedPath.startsWith(`${materialsRoot}${sep}`);
+          if (!inMaterialsRoot || !resolvedPath.endsWith(".md")) {
+            sendJson(res, 400, { error: "只能删除 materials 目录下的材料或模板文件。" });
+            return;
+          }
+          await rm(resolvedPath, { force: false });
+          deleted.push(resolvedPath);
+        }
+        sendJson(res, 200, { ok: true, deleted, count: deleted.length });
         return;
       }
 
