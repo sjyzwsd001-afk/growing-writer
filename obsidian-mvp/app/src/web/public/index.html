@@ -137,7 +137,7 @@
                 </div>
                 <label>本次背景材料上传（可选）</label>
                 <input id="background-upload-input" class="visually-hidden" type="file" name="backgroundUpload" accept=".txt,.md,.docx,.pdf,.xlsx,.pptx" />
-                <label id="background-upload-trigger" class="btn ghost file-trigger" for="background-upload-input" role="button" tabindex="0">选择背景文件</label>
+                <button id="background-upload-trigger" type="button" class="btn ghost file-trigger">选择背景文件</button>
                 <div id="background-upload-summary" class="mini summary-inline">还没有选择背景文件。</div>
                 <label>背景说明
                   <textarea name="background" rows="5" placeholder="例如：项目已进入联调阶段，目前整体推进正常，但接口稳定性和测试节奏仍有风险。"></textarea>
@@ -604,11 +604,12 @@
                 <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
                 <label>上传文件</label>
                 <input id="material-upload-input" class="visually-hidden" name="uploadFile" type="file" multiple accept=".txt,.md,.docx,.pdf,.xlsx,.pptx" />
-                <label id="material-upload-trigger" class="btn ghost file-trigger" for="material-upload-input" role="button" tabindex="0">选择导入文件</label>
+                <button id="material-upload-trigger" type="button" class="btn ghost file-trigger">选择导入文件</button>
                 <div id="material-upload-summary" class="mini summary-inline">还没有选择导入文件。</div>
                 <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx（本地路径模式仍一次仅支持一个文件）" /></label>
                 <label>正文<textarea name="body" rows="6" placeholder="可直接粘贴"></textarea></label>
                 <button class="btn primary" type="submit">导入材料</button>
+                <div id="material-form-status" class="summary-box mini">填写完文档类型后即可导入。导入时会在这里显示进度和结果。</div>
               </form>
             </section>
 

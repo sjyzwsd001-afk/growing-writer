@@ -256,6 +256,14 @@ function setInfo(message, isError = false) {
   summary.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
 }
 
+function setInlineStatus(elementId, message, isError = false) {
+  const container = document.getElementById(elementId);
+  if (!container) {
+    return;
+  }
+  container.innerHTML = `<div class="${isError ? "msg error" : "msg"}">${escapeHtml(message)}</div>`;
+}
+
 function setConfirmModalOpen(open, message = "") {
   const modal = document.getElementById("confirm-modal");
   const messageEl = document.getElementById("confirm-modal-message");
@@ -4969,6 +4977,7 @@ function bindMaterialImport() {
   const materialUploadInput = document.getElementById("material-upload-input");
   const materialUploadSummary = document.getElementById("material-upload-summary");
   const materialUploadTrigger = document.getElementById("material-upload-trigger");
+  const submitButton = form?.querySelector("button[type='submit']");
 
   function openFilePicker(input) {
     if (!(input instanceof HTMLInputElement)) {
@@ -5065,13 +5074,6 @@ function bindMaterialImport() {
     updateMaterialUploadSummary();
   });
   materialUploadTrigger?.addEventListener("click", () => openFilePicker(materialUploadInput));
-  materialUploadTrigger?.addEventListener("keydown", (event) => {
-    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) {
-      return;
-    }
-    event.preventDefault();
-    openFilePicker(materialUploadInput);
-  });
 
   analyzeMaterialImportMode();
   updateMaterialUploadSummary();
@@ -5100,16 +5102,19 @@ function bindMaterialImport() {
     };
 
     if (!payload.docType) {
+      setInlineStatus("material-form-status", "请先填写文档类型。", true);
       setInfo("请先填写文档类型。", true);
       return;
     }
 
     if (!title && !uploadFiles.length) {
+      setInlineStatus("material-form-status", "单文件手工导入时，请填写标题；批量上传时可以留空。", true);
       setInfo("单文件手工导入时，请填写标题；批量上传时可以留空。", true);
       return;
     }
 
     if (sourceFile && uploadFiles.length > 0) {
+      setInlineStatus("material-form-status", "批量上传时，请不要同时填写本地文件路径。", true);
       setInfo("批量上传时，请不要同时填写本地文件路径。", true);
       return;
     }
@@ -5124,6 +5129,11 @@ function bindMaterialImport() {
     }
 
     try {
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = true;
+        submitButton.textContent = "导入中...";
+      }
+      setInlineStatus("material-form-status", "正在导入并分析材料，请稍等...");
       const result = await api("/api/materials/import", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -5133,13 +5143,25 @@ function bindMaterialImport() {
       await loadDashboard();
       const count = Number(result?.count || 0);
       if (count > 1) {
+        setInlineStatus(
+          "material-form-status",
+          mode === "template" ? `已批量导入 ${count} 份正式模板。` : `已批量导入 ${count} 份历史材料。`,
+        );
         setInfo(mode === "template" ? `已批量导入 ${count} 份正式模板。` : `已批量导入 ${count} 份历史材料。`);
       } else {
+        setInlineStatus("material-form-status", mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
         setInfo(mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
       }
+      setSettingsResult(mode === "template" ? "正式模板导入完成" : "历史材料导入完成", result, { reveal: false });
       toggleView("settings");
     } catch (error) {
+      setInlineStatus("material-form-status", `材料导入失败：${error.message}`, true);
       setInfo(`材料导入失败：${error.message}`, true);
+    } finally {
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = false;
+        submitButton.textContent = "导入材料";
+      }
     }
   });
 }
@@ -5173,13 +5195,6 @@ function bindBackgroundUploadSummary() {
 
   input.addEventListener("change", update);
   trigger?.addEventListener("click", openFilePicker);
-  trigger?.addEventListener("keydown", (event) => {
-    if (!(event instanceof KeyboardEvent) || (event.key !== "Enter" && event.key !== " ")) {
-      return;
-    }
-    event.preventDefault();
-    openFilePicker();
-  });
   update();
 }
 

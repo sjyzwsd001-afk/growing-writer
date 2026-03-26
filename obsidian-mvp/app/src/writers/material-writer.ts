@@ -421,6 +421,22 @@ export async function analyzeMaterialWithLlm(
   });
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Material analysis timed out after ${timeoutMs}ms.`)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function createMaterialAnalyzer(client: OpenAiCompatibleClient | null) {
   return async (payload: {
     title: string;
@@ -434,13 +450,16 @@ export function createMaterialAnalyzer(client: OpenAiCompatibleClient | null) {
     }
 
     try {
-      return await analyzeMaterialWithLlm(client, {
-        title: payload.title,
-        rawBody: payload.rawBody,
-        docType: payload.docType,
-        audience: payload.audience,
-        scenario: payload.scenario,
-      });
+      return await withTimeout(
+        analyzeMaterialWithLlm(client, {
+          title: payload.title,
+          rawBody: payload.rawBody,
+          docType: payload.docType,
+          audience: payload.audience,
+          scenario: payload.scenario,
+        }),
+        12000,
+      );
     } catch {
       return analyzeMaterialHeuristically(payload.rawBody, payload.docType);
     }
