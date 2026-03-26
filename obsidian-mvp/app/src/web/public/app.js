@@ -2544,6 +2544,36 @@ function setEditorVisible(visible) {
   document.getElementById("editor-panel").classList.toggle("hidden", !visible);
 }
 
+function updateEditorNextGuide(mode = "idle") {
+  const container = document.getElementById("editor-next-guide");
+  if (!container) {
+    return;
+  }
+  const messages = {
+    idle: "先看约束和正文，再在右侧补批注、提交反馈或直接定稿。",
+    generated: "初稿已经生成，建议先快速扫一遍正文，再决定是直接改正文还是先补批注。",
+    regenerated: "新稿已经按反馈重写，优先看刚才重点修改的位置，再决定是否继续迭代。",
+    finalized: "当前版本已经定稿，可以继续回看复盘，或一稿多用输出摘要、提纲。",
+  };
+  container.textContent = messages[mode] || messages.idle;
+}
+
+function focusEditorWorkbench(options = {}) {
+  const { focusDraft = false } = options;
+  const panel = document.getElementById("editor-panel");
+  const editor = document.getElementById("draft-editor");
+  if (panel && typeof panel.scrollIntoView === "function") {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (focusDraft && editor instanceof HTMLTextAreaElement) {
+    const length = String(editor.value || "").length;
+    requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(length, length);
+    });
+  }
+}
+
 function updateSelectionPreview(selection) {
   const preview = document.getElementById("selection-preview");
   const editor = document.getElementById("draft-editor");
@@ -4163,6 +4193,7 @@ async function createAndRunTask() {
     renderFinalizeReview();
     renderTaskContextSummary();
     renderRepurposeOutputs();
+    updateEditorNextGuide("generated");
 
     state.currentTask = {
       id: created.taskId,
@@ -4177,6 +4208,7 @@ async function createAndRunTask() {
     renderFeedbackHistory();
     renderFinalizeReview();
     setEditorVisible(true);
+    focusEditorWorkbench({ focusDraft: true });
     state.wizardStep = 7;
     updateWizardStep();
     setTaskBadge(`当前任务：${taskPayload.title}`);
@@ -4368,6 +4400,8 @@ async function submitFeedbackAndRegenerate() {
   renderTaskContextSummary();
   renderRepurposeOutputs();
   renderWorkflowStageTracker();
+  updateEditorNextGuide("regenerated");
+  focusEditorWorkbench({ focusDraft: true });
   return evaluation;
 }
 
@@ -4453,7 +4487,7 @@ function bindWizard() {
       setInfo("当前还没有可编辑正文，请先完成生成。", true);
       return;
     }
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    focusEditorWorkbench({ focusDraft: true });
   });
 
   document.getElementById("wizard-form").addEventListener("input", (event) => {
@@ -4917,6 +4951,7 @@ function bindEditorActions() {
       state.finalizeMeta = { finalizedAt: new Date().toISOString() };
       setTaskBadge("已定稿");
       renderWorkflowStageTracker();
+      updateEditorNextGuide("finalized");
       setInfo("已定稿并写入任务文件。");
       renderFinalizeReview();
       await loadDashboard();
