@@ -1972,6 +1972,25 @@ async function bulkAnalyzeMaterials() {
   await loadDashboard();
 }
 
+async function bulkDeleteMaterials() {
+  const paths = state.selectedMaterialPaths.filter(Boolean);
+  if (!paths.length) {
+    throw new Error("请先勾选至少一份材料。");
+  }
+  const confirmed = await confirmDestructiveAction(`确认批量删除已勾选的 ${paths.length} 份材料吗？删除后将从知识库移除。`);
+  if (!confirmed) {
+    return;
+  }
+  const result = await api("/api/materials/delete-batch", {
+    method: "POST",
+    body: JSON.stringify({ paths }),
+  });
+  clearMaterialSelection();
+  setSettingsResult("材料批量删除完成", result);
+  setInfo(`已批量删除 ${Array.isArray(result.deleted) ? result.deleted.length : 0} 份材料。`);
+  await loadDashboard();
+}
+
 function renderGroupedRuleList(containerId, items) {
   const container = document.getElementById(containerId);
   if (!container) {
@@ -4013,6 +4032,13 @@ function renderLlmCards(data) {
     container.innerHTML = `<div class="empty">还没有模型卡片。先在下方新建一个。</div>`;
     return;
   }
+  const isReadyCard = (card) => String(card.calibration?.status || "") === "ready";
+  const isLightweightCard = (card) =>
+    String(card.calibration?.structuredOutput || "") === "connectivity-only" ||
+    String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作");
+  const isFormalCard = (card) =>
+    isReadyCard(card) &&
+    !isLightweightCard(card);
   const sections = [
     {
       title: "当前启用",
@@ -4022,17 +4048,17 @@ function renderLlmCards(data) {
     {
       title: "正式写作",
       hint: "更适合稳定生成正文、提纲和规则学习。",
-      cards: cards.filter((card) => !card.isActive && String(card.calibration?.status || "") === "ready" && !String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作")),
+      cards: cards.filter((card) => !card.isActive && isFormalCard(card)),
     },
     {
       title: "轻量与实验",
       hint: "更适合本地草拟、兼容性测试或轻量写作。",
-      cards: cards.filter((card) => !card.isActive && (String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作") || isLocalLlmCard(card))),
+      cards: cards.filter((card) => !card.isActive && isLightweightCard(card)),
     },
     {
       title: "待处理",
       hint: "还没有完全就绪，建议先看详情或编辑修正。",
-      cards: cards.filter((card) => !card.isActive && String(card.calibration?.status || "") !== "ready" && !(String(getCalibrationCapabilityText(card.calibration || null) || "").includes("普通写作") || isLocalLlmCard(card))),
+      cards: cards.filter((card) => !card.isActive && !isReadyCard(card)),
     },
   ].filter((section) => section.cards.length);
 
@@ -6013,6 +6039,21 @@ function bindSettingsActions() {
       await bulkUpdateMaterialRole("history");
     } catch (error) {
       setSettingsResult("批量转历史材料失败", { error: error.message });
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  });
+
+  document.getElementById("bulk-delete-materials").addEventListener("click", async () => {
+    const button = document.getElementById("bulk-delete-materials");
+    const original = button.textContent;
+    button.disabled = true;
+    button.textContent = "处理中...";
+    try {
+      await bulkDeleteMaterials();
+    } catch (error) {
+      setSettingsResult("批量删除失败", { error: error.message });
     } finally {
       button.disabled = false;
       button.textContent = original;
