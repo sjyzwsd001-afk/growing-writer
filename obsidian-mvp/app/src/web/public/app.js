@@ -2704,6 +2704,10 @@ function renderFinalizeReview() {
     : [];
   const topMaterials = Array.isArray(context?.matchedMaterials) ? context.matchedMaterials.slice(0, 3) : [];
   const modelRoute = Array.isArray(context?.modelRouting) ? context.modelRouting.slice(0, 3) : [];
+  const templateRule = Array.isArray(context?.matchedRules)
+    ? context.matchedRules.find((item) => String(item?.source || "") === "template") || null
+    : null;
+  const templateMaterial = context?.templateMaterial || null;
   const reusableCount = state.feedbackHistory.filter((item) => item.isReusableRule).length;
   const annotationCount = state.feedbackHistory.reduce((sum, item) => sum + Number(item.annotationCount || 0), 0);
   const avgAbsorption = state.feedbackHistory.length
@@ -2721,6 +2725,24 @@ function renderFinalizeReview() {
       ? "还有待提交的批注，建议先再生成一轮，确认关键位置都已经改顺。"
       : "如果正文已经顺手、没有新的批注要补，可以直接定稿。";
 
+  const templateSummary =
+    templateMaterial?.title || templateRule?.title || (context?.templateRule ? "本次启用了模板约束" : "这次没有启用固定模板");
+  const ruleSummary = topRules.length
+    ? topRules.map((item) => item.title || item.rule_id || "未命名规则").join(" / ")
+    : "这次没有明显命中高优先规则。";
+  const materialSummary = topMaterials.length
+    ? topMaterials.map((item) => item.title || item.id || "未命名材料").join(" / ")
+    : "这次主要依赖本次输入，没有明显引用历史材料。";
+  const modelSummary = modelRoute.length
+    ? modelRoute
+        .map((item) => `${item.stage || "阶段"}：${item.usedModel || item.model || "默认模型"}`)
+        .join(" / ")
+    : "本次没有记录到完整模型链路。";
+  const learningSummary =
+    latestAnalysis?.candidate_rule?.title
+      ? `系统已经提炼出候选规则「${latestAnalysis.candidate_rule.title}」。`
+      : latestAnalysis?.suggested_update || latestAnalysis?.reasoning || "这次还没有形成明确的学习结论。";
+
   container.innerHTML = `
     <div class="learn-result">
       <div class="learn-result-grid">
@@ -2737,9 +2759,7 @@ function renderFinalizeReview() {
       </div>
       <div class="learn-result-grid">
         <div class="learn-result-item">
-          <strong>这次主要学到了什么：</strong>${escapeHtml(
-            latestAnalysis?.suggested_update || latestAnalysis?.reasoning || "还没有形成明确学习结论。",
-          )}
+          <strong>这次主要学到了什么：</strong>${escapeHtml(learningSummary)}
         </div>
         <div class="learn-result-item">
           <strong>最新一轮修改重点：</strong>${escapeHtml(
@@ -2747,15 +2767,16 @@ function renderFinalizeReview() {
           )}
         </div>
         <div class="learn-result-item">
-          <strong>本次主要依据：</strong>${escapeHtml(
-            [
-              topRules.length ? `规则 ${topRules.length} 条` : "",
-              topMaterials.length ? `材料 ${topMaterials.length} 份` : "",
-              modelRoute.length ? `模型链路 ${modelRoute.length} 段` : "",
-            ]
-              .filter(Boolean)
-              .join(" / ") || "当前主要依赖任务输入。",
-          )}
+          <strong>模板依据：</strong>${escapeHtml(templateSummary)}
+        </div>
+        <div class="learn-result-item">
+          <strong>命中的高优先规则：</strong>${escapeHtml(ruleSummary)}
+        </div>
+        <div class="learn-result-item">
+          <strong>参考材料：</strong>${escapeHtml(materialSummary)}
+        </div>
+        <div class="learn-result-item">
+          <strong>模型链路：</strong>${escapeHtml(modelSummary)}
         </div>
         <div class="learn-result-item">
           <strong>下一步建议：</strong>${escapeHtml(recommendation)}
