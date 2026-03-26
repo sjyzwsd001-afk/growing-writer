@@ -1932,6 +1932,45 @@ function renderGroupedRuleList(containerId, items) {
     .join("")}</div>`;
 }
 
+function renderRuleConflictSummary(items) {
+  const container = document.getElementById("rule-conflict-summary");
+  if (!container) {
+    return;
+  }
+  const rules = Array.isArray(items) ? items : [];
+  const conflicted = rules
+    .map((item) => ({
+      title: item.title || "未命名规则",
+      status: item.status || "",
+      hints: Array.isArray(item.conflictHints) ? item.conflictHints.filter(Boolean) : [],
+    }))
+    .filter((item) => item.hints.length > 0)
+    .sort((a, b) => b.hints.length - a.hints.length);
+
+  if (!conflicted.length) {
+    container.innerHTML = `
+      <strong>当前没有明显规则冲突。</strong>
+      <div class="mini">已确认规则之间暂时没有发现明显打架的写法要求，可以继续放心使用。</div>
+    `;
+    return;
+  }
+
+  const top = conflicted.slice(0, 3);
+  const candidateCount = conflicted.filter((item) => item.status === "candidate").length;
+  container.innerHTML = `
+    <strong>当前有 ${escapeHtml(String(conflicted.length))} 条规则出现潜在冲突。</strong>
+    <div class="mini">其中候选规则 ${escapeHtml(String(candidateCount))} 条，建议优先确认它们是否真的要长期保留，避免后续生成时左右互搏。</div>
+    <div class="annotation-submit-lines">
+      ${top
+        .map(
+          (item, index) =>
+            `<div>${escapeHtml(`${index + 1}. ${item.title}：${item.hints.slice(0, 2).join(" / ")}`)}</div>`,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderGroupedFeedbackList(containerId, items) {
   const container = document.getElementById(containerId);
   if (!container) {
@@ -2199,6 +2238,7 @@ function renderSettingsLists() {
   });
 
   renderGroupedRuleList("settings-rules", data.rules || []);
+  renderRuleConflictSummary(data.rules || []);
   renderMaterialSelectionStatus();
 
   renderProfileList("settings-profiles", data.profiles || []);
