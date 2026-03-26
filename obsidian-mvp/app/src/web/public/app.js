@@ -1009,6 +1009,38 @@ function renderWizardCheckResult(report) {
   }
 }
 
+function renderWizardBackgroundStatus() {
+  const container = document.getElementById("wizard-background-status");
+  const form = document.getElementById("wizard-form");
+  if (!container || !(form instanceof HTMLFormElement)) {
+    return;
+  }
+  const formData = new FormData(form);
+  const background = String(formData.get("background") || "").trim();
+  const facts = String(formData.get("facts") || "").trim();
+  const hasUpload =
+    formData.get("backgroundUpload") instanceof File && formData.get("backgroundUpload").size > 0;
+  const factCount = facts
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+  const mustIncludeCount = String(formData.get("mustInclude") || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+  const specialRequirementCount = String(formData.get("specialRequirements") || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+  const ready = Boolean(background || factCount || hasUpload);
+
+  container.innerHTML = `
+    <strong>${ready ? "背景信息已经够进入检查。" : "先补一段背景或几条关键事实。"}</strong>
+    <div class="mini">背景说明 ${escapeHtml(background ? "已填写" : "未填")} / 关键事实 ${escapeHtml(String(factCount))} 条 / 背景文件 ${escapeHtml(hasUpload ? "已上传" : "未上传")}</div>
+    <div class="mini">补充要求：必写点 ${escapeHtml(String(mustIncludeCount))} 条 / 特殊要求 ${escapeHtml(String(specialRequirementCount))} 条</div>
+  `;
+}
+
 function focusWizardField(selector) {
   const field = document.querySelector(selector);
   if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
@@ -1295,6 +1327,9 @@ function updateWizardStep() {
   }
   if (state.wizardStep === 5) {
     renderWizardCheckResult(state.wizardCheckReport);
+  }
+  if (state.wizardStep >= 4) {
+    renderWizardBackgroundStatus();
   }
   updateDocTypeGuidance();
   updateWizardActionButtons();
@@ -4147,12 +4182,36 @@ function bindWizard() {
     const report = runWizardCheck();
     renderWizardCheckResult(report);
     if (report.ok) {
-      setInfo("检查通过，可进入确认步骤。");
+      state.wizardStep = 6;
+      updateWizardStep();
+      setInfo("检查通过，已带你进入最后确认。");
     } else {
       setInfo("检查未通过，请先修复阻塞项。", true);
     }
     updateWizardSummary();
     updateWizardActionButtons();
+  });
+
+  document.getElementById("wizard-go-check").addEventListener("click", () => {
+    const blocker = validateStepBeforeNextHard(4);
+    if (blocker) {
+      setInfo(blocker, true);
+      return;
+    }
+    state.wizardStep = 5;
+    updateWizardStep();
+    setInfo("已进入检查步骤。");
+  });
+
+  document.getElementById("wizard-go-confirm").addEventListener("click", () => {
+    if (!state.wizardCheckPassed) {
+      document.getElementById("wizard-run-check")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setInfo("请先执行检查并通过，再进入最后确认。", true);
+      return;
+    }
+    state.wizardStep = 6;
+    updateWizardStep();
+    setInfo("已进入最后确认。");
   });
 
   document.getElementById("wizard-confirm-check").addEventListener("change", () => {
@@ -4207,6 +4266,9 @@ function bindWizard() {
       }
       if ((target.name || target.id) === "sourceMaterialIds") {
         updateWizardMaterialSelectionSummary();
+      }
+      if (["background", "facts", "mustInclude", "specialRequirements", "backgroundUpload"].includes(target.name || target.id)) {
+        renderWizardBackgroundStatus();
       }
     }
     if (state.wizardStep >= 6) {

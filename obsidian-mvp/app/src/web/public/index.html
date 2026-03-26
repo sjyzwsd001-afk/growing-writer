@@ -145,6 +145,7 @@
                 <label>关键事实与数据（每行一条）
                   <textarea name="facts" rows="5" placeholder="例如：&#10;核心接口失败率 2.8%&#10;本周完成 12 个接口联调&#10;还有 3 个接口待对方环境开放"></textarea>
                 </label>
+                <div id="wizard-background-status" class="summary-box">填完背景说明、关键事实或上传背景文件后，就可以直接去执行检查。</div>
                 <details class="wizard-optional-panel">
                   <summary>补充要求（可选）</summary>
                   <div class="wizard-quick-adds">
@@ -174,6 +175,9 @@
                     <textarea name="specialRequirements" rows="4" placeholder="例如：先写意义再写措施 / 不要写空话 / 结尾要落到下一步安排"></textarea>
                   </label>
                 </details>
+                <div class="editor-actions">
+                  <button type="button" id="wizard-go-check" class="mini-btn">背景够了，去执行检查</button>
+                </div>
               </div>
 
               <div class="wizard-step" data-step="5">
@@ -192,6 +196,7 @@
                 </div>
                 <div class="editor-actions">
                   <button type="button" id="wizard-run-check" class="btn ghost">执行检查</button>
+                  <button type="button" id="wizard-go-confirm" class="mini-btn">检查通过后，直接去最后确认</button>
                 </div>
               </div>
 
