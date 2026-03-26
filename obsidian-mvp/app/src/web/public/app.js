@@ -3501,6 +3501,88 @@ function renderLlmOverview(data) {
   `;
 }
 
+function renderKnowledgeOverview(data) {
+  const container = document.getElementById("knowledge-overview");
+  if (!container) {
+    return;
+  }
+  const materials = Array.isArray(data.materials) ? data.materials : [];
+  const templates = Array.isArray(data.templates) ? data.templates : [];
+  const highQualityCount = [...materials, ...templates].filter((item) => item.quality === "high").length;
+  const candidateTemplateCount = materials.filter((item) => item.recommendTemplatePromotion).length;
+  const sourceCount = [...materials, ...templates].filter((item) => String(item.source || "").trim()).length;
+
+  container.innerHTML = `
+    <div class="llm-overview-card llm-overview-primary">
+      <div class="result-summary-label">知识库状态</div>
+      <strong>${escapeHtml(String(materials.length + templates.length))} 份资产</strong>
+      <div class="mini">历史材料、正式模板和 Obsidian 资产已经进入同一套工作台。</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">历史材料</div>
+      <strong>${escapeHtml(String(materials.length))}</strong>
+      <div class="mini">系统主要从这里学习你的写法</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">正式模板</div>
+      <strong>${escapeHtml(String(templates.length))}</strong>
+      <div class="mini">会优先影响结构与语气</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">高质量资产</div>
+      <strong>${escapeHtml(String(highQualityCount))}</strong>
+      <div class="mini">更适合作为模板候选或高权重参考</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">建议升模板</div>
+      <strong>${escapeHtml(String(candidateTemplateCount))}</strong>
+      <div class="mini">值得优先整理成正式模板</div>
+    </div>
+  `;
+}
+
+function renderLearningOverview(data) {
+  const container = document.getElementById("learning-overview");
+  if (!container) {
+    return;
+  }
+  const rules = Array.isArray(data.rules) ? data.rules : [];
+  const profiles = Array.isArray(data.profiles) ? data.profiles : [];
+  const feedback = Array.isArray(data.feedback) ? data.feedback : [];
+  const confirmedRules = rules.filter((item) => item.status === "confirmed").length;
+  const candidateRules = rules.filter((item) => item.status === "candidate").length;
+  const reusableFeedback = feedback.filter((item) => item.isReusableRule || item.reusableFeedback).length;
+  const latestProfile = profiles[0] || null;
+
+  container.innerHTML = `
+    <div class="llm-overview-card llm-overview-primary">
+      <div class="result-summary-label">学习状态</div>
+      <strong>${escapeHtml(latestProfile?.name || "画像待完善")}</strong>
+      <div class="mini">${escapeHtml(latestProfile ? "系统已经在用画像、规则和反馈一起塑造你的写法。" : "导入更多材料并改几轮稿子后，这里会越来越完整。")}</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">已确认规则</div>
+      <strong>${escapeHtml(String(confirmedRules))}</strong>
+      <div class="mini">已经会稳定参与后续生成</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">候选规则</div>
+      <strong>${escapeHtml(String(candidateRules))}</strong>
+      <div class="mini">值得你继续确认或观察</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">反馈记录</div>
+      <strong>${escapeHtml(String(feedback.length))}</strong>
+      <div class="mini">系统正在从你的改稿习惯里学习</div>
+    </div>
+    <div class="llm-overview-card">
+      <div class="result-summary-label">可复用反馈</div>
+      <strong>${escapeHtml(String(reusableFeedback))}</strong>
+      <div class="mini">更像长期偏好，适合沉淀成规则</div>
+    </div>
+  `;
+}
+
 function renderLlmCards(data) {
   const llm = data.llm || {};
   const cards = Array.isArray(llm.cards)
@@ -3641,6 +3723,8 @@ function fillLlmForm(card) {
 
 function hydrateLlmSettings(data) {
   renderLlmOverview(data);
+  renderKnowledgeOverview(data);
+  renderLearningOverview(data);
   renderLlmCards(data);
   const activeProfileId = data.llm?.activeProfileId || "";
   const editingProfileId = state.editingLlmProfileId || activeProfileId;

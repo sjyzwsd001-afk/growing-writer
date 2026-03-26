@@ -947,52 +947,72 @@ legend {
 }
 
 .learn-result-item {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
-  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(17, 36, 61, 0.92) 0%, rgba(10, 22, 39, 0.92) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(149, 201, 255, 0.08),
+    0 16px 34px rgba(0, 0, 0, 0.16);
+  padding: 10px 11px;
   line-height: 1.5;
 }
 
 .simple-list {
   display: grid;
-  gap: 8px;
-  padding: 12px 14px 14px;
+  gap: 10px;
+  padding: 14px 16px 16px;
   max-height: 300px;
   overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(13, 29, 50, 0.86) 0%, rgba(8, 18, 32, 0.86) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(160, 220, 255, 0.06),
+    0 22px 44px rgba(0, 0, 0, 0.16);
 }
 
 .bulk-toolbar {
   display: grid;
-  gap: 8px;
-  padding: 0 14px 10px;
+  gap: 10px;
+  padding: 0 2px 12px;
 }
 
 .row-item {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
-  padding: 10px 11px;
+  border: 1px solid rgba(103, 133, 171, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(19, 40, 67, 0.96) 0%, rgba(10, 22, 39, 0.96) 100%);
+  padding: 12px 13px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(170, 225, 255, 0.06),
+    0 14px 28px rgba(0, 0, 0, 0.14);
 }
 
 .row-item.selectable {
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 12px;
   align-items: start;
+}
+
+.row-item strong {
+  color: #f7fbff;
+  font-weight: 600;
 }
 
 .row-select {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 2px;
+  padding-top: 4px;
 }
 
 .row-select input {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
 }
 
 .grouped-list {
@@ -1014,11 +1034,16 @@ legend {
 
 .list-group-head strong {
   font-size: 14px;
+  color: #f4f8ff;
 }
 
 .list-group-count {
   font-size: 12px;
-  color: var(--muted);
+  color: #8fb6d7;
+  padding: 4px 9px;
+  border: 1px solid rgba(93, 132, 181, 0.2);
+  border-radius: 999px;
+  background: rgba(13, 31, 54, 0.72);
 }
 
 .rule-provenance {
@@ -1372,14 +1397,14 @@ legend {
 }
 
 .validation-item.warn {
-  border: 1px solid rgba(170, 119, 31, 0.2);
-  background: #fff7e9;
-  color: #8a5a0a;
+  border: 1px solid rgba(214, 172, 82, 0.18);
+  background: rgba(52, 40, 17, 0.72);
+  color: #ffd88e;
 }
 
 .validation-item.error {
-  border: 1px solid rgba(155, 46, 46, 0.22);
-  background: #fff1f1;
+  border: 1px solid rgba(255, 143, 156, 0.18);
+  background: rgba(57, 23, 31, 0.72);
   color: var(--danger);
 }
 
@@ -1402,16 +1427,20 @@ legend {
 }
 
 .result-summary-item {
-  border: 1px solid var(--border);
-  background: rgba(255, 252, 246, 0.9);
-  border-radius: 12px;
-  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(19, 38, 63, 0.92) 0%, rgba(11, 24, 43, 0.92) 100%);
+  border-radius: 16px;
+  padding: 11px 13px;
+  box-shadow:
+    inset 0 1px 0 rgba(157, 214, 255, 0.06),
+    0 14px 28px rgba(0, 0, 0, 0.12);
 }
 
 .result-summary-label {
   color: var(--muted);
   font-size: 12px;
   margin-bottom: 6px;
+  letter-spacing: 0.02em;
 }
 
 .result-viewer pre {
@@ -1432,17 +1461,22 @@ legend {
 }
 
 .context-card {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fffefb;
-  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(18, 38, 63, 0.92) 0%, rgba(9, 21, 38, 0.92) 100%);
+  padding: 11px 13px;
   display: grid;
   gap: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(155, 214, 255, 0.06),
+    0 16px 30px rgba(0, 0, 0, 0.14);
 }
 
 .context-card.context-card-emphasis {
-  background: linear-gradient(180deg, #fff8eb 0%, #fffef9 100%);
-  border-color: rgba(194, 120, 64, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(32, 189, 255, 0.14), transparent 36%),
+    linear-gradient(180deg, rgba(16, 45, 74, 0.98) 0%, rgba(9, 24, 42, 0.96) 100%);
+  border-color: rgba(61, 190, 255, 0.26);
 }
 
 .context-card strong {
