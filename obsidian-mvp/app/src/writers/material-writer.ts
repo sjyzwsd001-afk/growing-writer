@@ -1,4 +1,5 @@
 import { mkdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { basename, dirname, extname, join } from "node:path";
 import AdmZip, { type IZipEntry } from "adm-zip";
 import fg from "fast-glob";
@@ -202,6 +203,41 @@ ${input.rawBody || "在这里粘贴或整理历史材料正文。"}
 - `;
 }
 
+function hashMaterialBody(input: { title: string; docType: string; rawBody: string }): string {
+  return createHash("sha256")
+    .update(`${input.title}\n${input.docType}\n${input.rawBody}`)
+    .digest("hex");
+}
+
+async function findExistingMaterialPath(input: {
+  vaultRoot: string;
+  title: string;
+  docType: string;
+  rawBody: string;
+}): Promise<{ path: string; frontmatter: Record<string, unknown> } | null> {
+  const expectedHash = hashMaterialBody(input);
+  const materialFiles = await fg("materials/*.md", {
+    cwd: input.vaultRoot,
+    absolute: true,
+  });
+
+  for (const materialPath of materialFiles) {
+    const doc = await readMarkdownDocument(materialPath);
+    const title = typeof doc.frontmatter.title === "string" ? doc.frontmatter.title : "";
+    const docType = typeof doc.frontmatter.doc_type === "string" ? doc.frontmatter.doc_type : "";
+    const bodyHash =
+      typeof doc.frontmatter.body_hash === "string" ? doc.frontmatter.body_hash : "";
+    if (title === input.title && docType === input.docType && bodyHash === expectedHash) {
+      return {
+        path: materialPath,
+        frontmatter: doc.frontmatter,
+      };
+    }
+  }
+
+  return null;
+}
+
 export async function importMaterial(input: {
   vaultRoot: string;
   title: string;
@@ -216,13 +252,26 @@ export async function importMaterial(input: {
   analysis?: MaterialAnalysis;
 }): Promise<{ path: string; materialId: string }> {
   const now = new Date().toISOString();
-  const timestamp = now.replace(/[:.]/g, "-");
-  const materialId = `material-${timestamp}`;
-  const fileName = `${materialId}-${slugify(input.title)}.md`;
-  const path = join(input.vaultRoot, "materials", fileName);
-
   const importedBody = input.sourceFile ? await extractTextFromFile(input.sourceFile) : "";
   const rawBody = (input.body ?? importedBody).trim();
+  const bodyHash = hashMaterialBody({
+    title: input.title,
+    docType: input.docType,
+    rawBody,
+  });
+  const existing = await findExistingMaterialPath({
+    vaultRoot: input.vaultRoot,
+    title: input.title,
+    docType: input.docType,
+    rawBody,
+  });
+  const timestamp = now.replace(/[:.]/g, "-");
+  const materialId =
+    typeof existing?.frontmatter.id === "string" && existing.frontmatter.id.trim()
+      ? existing.frontmatter.id
+      : `material-${timestamp}`;
+  const fileName = `${materialId}-${slugify(input.title)}.md`;
+  const path = existing?.path || join(input.vaultRoot, "materials", fileName);
 
   const frontmatter = {
     id: materialId,
@@ -236,6 +285,7 @@ export async function importMaterial(input: {
     tags: input.tags ?? [],
     created_at: now,
     updated_at: now,
+    body_hash: bodyHash,
   };
 
   const content = buildMaterialContent({
@@ -250,7 +300,13 @@ export async function importMaterial(input: {
   });
 
   await mkdir(dirname(path), { recursive: true });
-  await writeMarkdownDocument(path, frontmatter, content);
+  await writeMarkdownDocument(path, {
+    ...frontmatter,
+    created_at:
+      typeof existing?.frontmatter.created_at === "string" && existing.frontmatter.created_at
+        ? existing.frontmatter.created_at
+        : now,
+  }, content);
 
   return { path, materialId };
 }
