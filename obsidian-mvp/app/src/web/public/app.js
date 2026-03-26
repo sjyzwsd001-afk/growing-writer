@@ -1244,6 +1244,90 @@ function getDocTypeGuidance(docTypeRaw) {
   };
 }
 
+function getDocTypePresets(docTypeRaw) {
+  const docType = String(docTypeRaw || "").trim();
+  if (/汇报|报告|简报/.test(docType)) {
+    return {
+      summary: "这类材料通常要把结论、风险、影响和下一步说清，最好让领导一眼看到判断。",
+      chips: [
+        { target: "mustInclude", line: "当前结论" },
+        { target: "mustInclude", line: "主要风险" },
+        { target: "mustInclude", line: "影响范围" },
+        { target: "mustInclude", line: "下一步安排" },
+        { target: "specialRequirements", line: "结论前置" },
+        { target: "specialRequirements", line: "先判断再展开事实" },
+      ],
+    };
+  }
+  if (/讲话|发言|致辞/.test(docType)) {
+    return {
+      summary: "讲话稿更看重对象感和口语感，通常要先交代场合，再铺观点和情绪节奏。",
+      chips: [
+        { target: "mustInclude", line: "开场称呼" },
+        { target: "mustInclude", line: "核心观点" },
+        { target: "mustInclude", line: "希望强调的人或事" },
+        { target: "specialRequirements", line: "更像口头表达" },
+        { target: "specialRequirements", line: "段落不要太长" },
+        { target: "specialRequirements", line: "结尾留一句收束" },
+      ],
+    };
+  }
+  if (/方案|计划|建议书/.test(docType)) {
+    return {
+      summary: "方案类材料通常要讲清目标、路径、资源和风险，避免只有想法没有落地方式。",
+      chips: [
+        { target: "mustInclude", line: "目标与边界" },
+        { target: "mustInclude", line: "方案路径" },
+        { target: "mustInclude", line: "资源需求" },
+        { target: "mustInclude", line: "实施节奏" },
+        { target: "specialRequirements", line: "先讲问题再给方案" },
+        { target: "specialRequirements", line: "措施要可执行" },
+      ],
+    };
+  }
+  if (/总结|复盘/.test(docType)) {
+    return {
+      summary: "总结复盘通常要把结果、问题、经验和后续动作拆开，不要只写成绩或只写感受。",
+      chips: [
+        { target: "mustInclude", line: "关键结果" },
+        { target: "mustInclude", line: "主要问题" },
+        { target: "mustInclude", line: "经验教训" },
+        { target: "mustInclude", line: "后续改进" },
+        { target: "specialRequirements", line: "成绩和问题都要写" },
+        { target: "specialRequirements", line: "经验要能复用" },
+      ],
+    };
+  }
+  return {
+    summary: "如果你已经知道这类材料常见的必写点，可以先点几条加入，后面生成会更稳。",
+    chips: [
+      { target: "mustInclude", line: "关键结论" },
+      { target: "mustInclude", line: "重要事实" },
+      { target: "mustInclude", line: "下一步安排" },
+      { target: "specialRequirements", line: "不要写空话" },
+    ],
+  };
+}
+
+function renderDocTypePresets(docTypeRaw) {
+  const summary = document.getElementById("wizard-doc-preset-summary");
+  const container = document.getElementById("wizard-doc-presets");
+  if (!summary || !container) {
+    return;
+  }
+  const preset = getDocTypePresets(docTypeRaw);
+  summary.innerHTML = `
+    <strong>按当前文种推荐：</strong>
+    <div class="mini">${escapeHtml(preset.summary)}</div>
+  `;
+  container.innerHTML = preset.chips
+    .map(
+      (item) =>
+        `<button type="button" class="chip wizard-quick-chip" data-target-field="${escapeHtml(item.target)}" data-add-line="${escapeHtml(item.line)}">${escapeHtml(item.line)}</button>`,
+    )
+    .join("");
+}
+
 function updateDocTypeGuidance() {
   const form = document.getElementById("wizard-form");
   if (!(form instanceof HTMLFormElement)) {
@@ -1263,6 +1347,7 @@ function updateDocTypeGuidance() {
   if (step5) {
     step5.textContent = guide.step5;
   }
+  renderDocTypePresets(String(formData.get("docType") || ""));
 }
 
 function updateWizardActionButtons() {

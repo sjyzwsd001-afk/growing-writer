@@ -146,9 +146,14 @@
                   <textarea name="facts" rows="5" placeholder="例如：&#10;核心接口失败率 2.8%&#10;本周完成 12 个接口联调&#10;还有 3 个接口待对方环境开放"></textarea>
                 </label>
                 <div id="wizard-background-status" class="summary-box">填完背景说明、关键事实或上传背景文件后，就可以直接去执行检查。</div>
+                <div id="wizard-doc-preset-summary" class="summary-box">系统会根据文种，提示这一类材料常见的必写点和写法提醒。</div>
                 <details class="wizard-optional-panel">
                   <summary>补充要求（可选）</summary>
                   <div class="wizard-quick-adds">
+                    <div>
+                      <div class="mini">按当前文种推荐：</div>
+                      <div id="wizard-doc-presets" class="inline-chips"></div>
+                    </div>
                     <div>
                       <div class="mini">常见必写点，一键加入：</div>
                       <div class="inline-chips">
