@@ -493,7 +493,12 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   });
 }
 
-export function createMaterialAnalyzer(client: OpenAiCompatibleClient | null) {
+export function createMaterialAnalyzer(client: OpenAiCompatibleClient | OpenAiCompatibleClient[] | null) {
+  const clients = Array.isArray(client)
+    ? client.filter((item): item is OpenAiCompatibleClient => Boolean(item?.isEnabled()))
+    : client && client.isEnabled()
+      ? [client]
+      : [];
   return async (payload: {
     title: string;
     rawBody: string;
@@ -501,23 +506,27 @@ export function createMaterialAnalyzer(client: OpenAiCompatibleClient | null) {
     audience?: string;
     scenario?: string;
   }): Promise<MaterialAnalysis> => {
-    if (!client || !client.isEnabled()) {
+    if (!clients.length) {
       return analyzeMaterialHeuristically(payload.rawBody, payload.docType);
     }
 
-    try {
-      return await withTimeout(
-        analyzeMaterialWithLlm(client, {
-          title: payload.title,
-          rawBody: payload.rawBody,
-          docType: payload.docType,
-          audience: payload.audience,
-          scenario: payload.scenario,
-        }),
-        12000,
-      );
-    } catch {
-      return analyzeMaterialHeuristically(payload.rawBody, payload.docType);
+    for (const llmClient of clients) {
+      try {
+        return await withTimeout(
+          analyzeMaterialWithLlm(llmClient, {
+            title: payload.title,
+            rawBody: payload.rawBody,
+            docType: payload.docType,
+            audience: payload.audience,
+            scenario: payload.scenario,
+          }),
+          12000,
+        );
+      } catch {
+        // Try the next available model card before falling back locally.
+      }
     }
+
+    return analyzeMaterialHeuristically(payload.rawBody, payload.docType);
   };
 }

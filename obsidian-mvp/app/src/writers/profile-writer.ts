@@ -224,12 +224,17 @@ ${listOrPlaceholder(summary.pending_observations).map((item) => `- ${item}`).joi
 }
 
 async function buildProfileContentWithLlm(input: {
-  client: OpenAiCompatibleClient;
+  client: OpenAiCompatibleClient | OpenAiCompatibleClient[];
   rules: Rule[];
   materials: Material[];
   feedbackEntries: Feedback[];
 }): Promise<string | null> {
-  if (!input.client.isEnabled()) {
+  const clients = Array.isArray(input.client)
+    ? input.client.filter((item): item is OpenAiCompatibleClient => Boolean(item?.isEnabled()))
+    : input.client && input.client.isEnabled()
+      ? [input.client]
+      : [];
+  if (!clients.length) {
     return null;
   }
 
@@ -238,21 +243,25 @@ async function buildProfileContentWithLlm(input: {
     return null;
   }
 
-  try {
-    const summary = await input.client.generateJson({
-      system: BASE_SYSTEM_PROMPT,
-      user: buildProfilePrompt({
-        confirmedRules,
-        materials: input.materials,
-        feedbackEntries: input.feedbackEntries,
-      }),
-      schema: profileSummarySchema,
-    });
+  for (const client of clients) {
+    try {
+      const summary = await client.generateJson({
+        system: BASE_SYSTEM_PROMPT,
+        user: buildProfilePrompt({
+          confirmedRules,
+          materials: input.materials,
+          feedbackEntries: input.feedbackEntries,
+        }),
+        schema: profileSummarySchema,
+      });
 
-    return buildProfileContentFromLlm(summary);
-  } catch {
-    return null;
+      return buildProfileContentFromLlm(summary);
+    } catch {
+      // Try the next available model card before falling back.
+    }
   }
+
+  return null;
 }
 
 export async function refreshDefaultProfile(input: {
@@ -261,7 +270,7 @@ export async function refreshDefaultProfile(input: {
   rules: Rule[];
   materials?: Material[];
   feedbackEntries?: Feedback[];
-  client?: OpenAiCompatibleClient;
+  client?: OpenAiCompatibleClient | OpenAiCompatibleClient[];
 }): Promise<string> {
   const now = new Date().toISOString();
   const profile =

@@ -486,6 +486,27 @@ function createLlmClient(vaultRoot: string): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient(getLlmConfig(vaultRoot));
 }
 
+function createAllAvailableLlmClients(vaultRoot: string): OpenAiCompatibleClient[] {
+  const stored = listStoredLlmProfiles(vaultRoot);
+  const activeId = stored.activeProfileId || "";
+  const orderedProfiles = [...stored.profiles].sort((left, right) => {
+    const activeDelta = Number(right.id === activeId) - Number(left.id === activeId);
+    if (activeDelta !== 0) {
+      return activeDelta;
+    }
+    const usableDelta =
+      Number(Boolean(right.calibration?.usable)) - Number(Boolean(left.calibration?.usable));
+    if (usableDelta !== 0) {
+      return usableDelta;
+    }
+    return String(left.name || "").localeCompare(String(right.name || ""), "zh-CN");
+  });
+
+  return orderedProfiles
+    .filter((profile) => Boolean(profile.bearerToken?.trim()))
+    .map((profile) => createLlmClientWithProfile(profile));
+}
+
 function createLlmClientWithProfile(profile: StoredLlmSettings): OpenAiCompatibleClient {
   return new OpenAiCompatibleClient({
     bearerToken: profile.bearerToken?.trim() || null,
@@ -1165,7 +1186,7 @@ async function syncAfterRuleMutation(input: {
   updatedRuleStatus: string;
 }) {
   const repo = new VaultRepository(input.vaultRoot);
-  const client = createLlmClient(input.vaultRoot);
+  const clients = createAllAvailableLlmClients(input.vaultRoot);
   const [rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
     repo.loadRules(),
     repo.loadProfiles(),
@@ -1186,7 +1207,7 @@ async function syncAfterRuleMutation(input: {
     rules,
     materials,
     feedbackEntries,
-    client,
+    client: clients,
   });
 
   return { updatedTasks, profilePath };
@@ -2254,7 +2275,7 @@ async function advanceWorkflowRunForAction(input: {
   });
 
   const repo = new VaultRepository(input.vaultRoot);
-  const client = createLlmClient(input.vaultRoot);
+  const clients = createAllAvailableLlmClients(input.vaultRoot);
   const [profiles, rules, materials, feedbackEntries] = await Promise.all([
     repo.loadProfiles(),
     repo.loadRules(),
@@ -2267,7 +2288,7 @@ async function advanceWorkflowRunForAction(input: {
     rules,
     materials,
     feedbackEntries,
-    client,
+    client: clients,
   });
 
   run = await appendWorkflowEvent(input.vaultRoot, {
@@ -3208,8 +3229,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           return;
         }
 
-        const client = createLlmClient(vaultRoot);
-        const analyzer = createMaterialAnalyzer(client);
+        const analyzer = createMaterialAnalyzer(createAllAvailableLlmClients(vaultRoot));
         const tags = normalizeTagList(body.tags);
         const isTemplate = body.isTemplate === "true" || body.mode === "template";
         if (isTemplate) {
@@ -3430,7 +3450,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const materialPath = resolve(body.path);
 
         await analyzeImportedMaterial(materialPath, {
-          analyze: createMaterialAnalyzer(createLlmClient(vaultRoot)),
+          analyze: createMaterialAnalyzer(createAllAvailableLlmClients(vaultRoot)),
         });
         const repo = new VaultRepository(vaultRoot);
         const materials = await repo.loadMaterials();
@@ -3469,7 +3489,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           sendJson(res, 400, { error: "Missing material paths." });
           return;
         }
-        const analyzer = createMaterialAnalyzer(createLlmClient(vaultRoot));
+        const analyzer = createMaterialAnalyzer(createAllAvailableLlmClients(vaultRoot));
         const repo = new VaultRepository(vaultRoot);
         const updated = [];
         for (const item of paths) {
