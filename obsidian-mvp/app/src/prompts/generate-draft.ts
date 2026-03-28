@@ -11,6 +11,39 @@ import {
   compactTemplateRewritePlan,
 } from "./context.js";
 
+function buildSectionWriteBriefs(input: {
+  outline: OutlineResult;
+  templateRewritePlan: TemplateRewriteStep[];
+}): Array<Record<string, unknown>> {
+  const rewriteMap = new Map(
+    input.templateRewritePlan.map((step) => [step.section, step] as const),
+  );
+
+  return input.outline.sections.slice(0, 6).map((section, index) => {
+    const matchedStep =
+      rewriteMap.get(section.heading) ||
+      input.templateRewritePlan[index] ||
+      null;
+
+    return {
+      heading: section.heading,
+      purpose: section.purpose,
+      must_cover: section.key_points.slice(0, 5),
+      assigned_facts: matchedStep?.assigned_facts.slice(0, 5) ?? [],
+      assigned_requirements: matchedStep?.assigned_requirements.slice(0, 5) ?? [],
+      fill_strategy: matchedStep?.fill_strategy ?? "",
+      logic_after: matchedStep?.logic_after
+        ? {
+            from: matchedStep.logic_after.from,
+            to: matchedStep.logic_after.to,
+            reason: matchedStep.logic_after.reason,
+          }
+        : null,
+      source_basis: section.source_basis.slice(0, 4),
+    };
+  });
+}
+
 export function buildGenerateDraftPrompt(input: {
   taskAnalysis: TaskAnalysis;
   diagnosis: DiagnosisResult;
@@ -39,6 +72,9 @@ export function buildGenerateDraftPrompt(input: {
 13. self_review.missing_points 必须优先检查每个 rewrite_step 的 assigned_requirements 是否已在对应段落真正覆盖；如果没覆盖，要明确写出“哪一段漏了什么”
 14. self_review.rule_violations 必须检查正文是否偏离 rewrite_steps 的逻辑顺序、段落意图和模板槽位要求，而不是泛泛而谈
 15. self_review.strengths 也要尽量对应到具体段落，例如“某段已覆盖采购结果”
+16. 写正文时请按 section_write_briefs 逐段完成，不要让所有段落重复同一组事实
+17. 每一段优先使用自己被分配到的 assigned_facts 和 assigned_requirements，再补充全局事实
+18. 如果某段存在 logic_after，对应段落顺序和承接关系必须体现出来
 
 然后做一轮自检：
 - 哪些地方写得比较稳
@@ -72,5 +108,15 @@ ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 ${JSON.stringify(compactProfiles(input.profiles), null, 2)}
 
 模板改写计划:
-${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}`;
+${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}
+
+section_write_briefs:
+${JSON.stringify(
+    buildSectionWriteBriefs({
+      outline: input.outline,
+      templateRewritePlan: input.templateRewritePlan ?? [],
+    }),
+    null,
+    2,
+  )}`;
 }
