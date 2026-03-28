@@ -63,18 +63,18 @@ export function compactMaterialSummaries(
     style_summary: clipList(material.style_summary, 3, 80),
     useful_phrases: clipList(material.useful_phrases, 1, 100),
     logic_chain: material.logic_chain.slice(0, 4).map((item) => ({
-      from: clip(item.from, 40),
-      to: clip(item.to, 40),
+      from: item.from,
+      to: item.to,
       reason: clip(item.reason, 90),
     })),
     template_slots: material.template_slots.slice(0, 5).map((item) => ({
-      section: clip(item.section, 40),
+      section: item.section,
       slot_name: clip(item.slot_name, 70),
       fill_rule: clip(item.fill_rule, 120),
       source_hint: clip(item.source_hint, 90),
     })),
     section_intents: material.section_intents.slice(0, 5).map((item) => ({
-      section: clip(item.section, 40),
+      section: item.section,
       intent: clip(item.intent, 90),
       trigger: clip(item.trigger, 80),
     })),
@@ -104,7 +104,7 @@ export function compactTemplateRewritePlan(
   rewriteSteps: TemplateRewriteStep[],
 ): Array<Record<string, unknown>> {
   return rewriteSteps.slice(0, 6).map((step) => ({
-    section: clip(step.section, 40),
+    section: step.section,
     slot_name: clip(step.slot_name, 90),
     intent: clip(step.intent, 90),
     assigned_facts: clipList(step.assigned_facts, 5, 140),
@@ -114,8 +114,8 @@ export function compactTemplateRewritePlan(
     evidence_card_ids: clipList(step.evidence_card_ids, 3, 20),
     logic_after: step.logic_after
       ? {
-          from: clip(step.logic_after.from, 40),
-          to: clip(step.logic_after.to, 40),
+          from: step.logic_after.from,
+          to: step.logic_after.to,
           reason: clip(step.logic_after.reason, 90),
         }
       : null,

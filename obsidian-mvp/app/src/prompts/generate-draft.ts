@@ -76,6 +76,8 @@ export function buildGenerateDraftPrompt(input: {
 17. 每一段优先使用自己被分配到的 assigned_facts 和 assigned_requirements，再补充全局事实
 18. 如果某段存在 logic_after，对应段落顺序和承接关系必须体现出来
 19. 相似材料里的 logic_chain / template_slots / section_intents 是结构化约束；请直接利用 from -> to、section、intent、fill_rule 这些字段，不要把它们降成泛泛参考
+20. 如果模板逻辑链与历史材料逻辑链冲突，优先服从模板逻辑链；历史材料逻辑链只作为局部承接或补充理由
+21. 如果没有可执行的模板逻辑链或历史逻辑链，默认按“背景/现状 -> 主体事项 -> 结论/安排”的顺序组织正文
 
 然后做一轮自检：
 - 哪些地方写得比较稳

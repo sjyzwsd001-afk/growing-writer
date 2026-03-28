@@ -32,6 +32,8 @@ export function buildOutlinePrompt(input: {
 8. 如果模板改写计划中已经给出 rewrite_steps，sections 应尽量按 rewrite_steps 的 section 顺序生成，至少前几节不要偏离该顺序
 9. 每一节 key_points 都要能对应 rewrite_steps 里的 fill_strategy 或 must_include，不要只写空泛标题
 10. 相似材料里的 logic_chain / template_slots / section_intents 是结构化约束；请直接利用 from -> to、section、intent 这些字段，不要把它们当普通示例
+11. 如果模板逻辑链与历史材料逻辑链冲突，优先遵循模板逻辑链；历史材料逻辑链只用于补充承接理由或局部排序
+12. 如果没有可执行的模板逻辑链或历史逻辑链，默认按“背景/现状 -> 主体事项 -> 结论/安排”的顺序组织 sections
 
 输出要求：
 - 只输出 JSON

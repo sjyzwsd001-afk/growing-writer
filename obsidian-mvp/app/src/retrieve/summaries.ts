@@ -212,17 +212,23 @@ function deriveTemplateSections(content: string, count: number): string[] {
 }
 
 function inferSectionIntent(section: string): string {
-  if (/概况|背景|总体|情况/.test(section)) {
+  if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(section)) {
     return "先交代背景、范围和总体情况";
   }
-  if (/采购组|组织|分工|成员/.test(section)) {
+  if (/组织|分工|成员|职责|责任|机制|协同|专班|小组/.test(section)) {
     return "交代参与主体、组织方式和责任安排";
   }
-  if (/方案建议|建议|措施|安排|计划/.test(section)) {
+  if (/方案|建议|措施|安排|计划|路径|抓手|动作|落实/.test(section)) {
     return "承接前文事实后，落到方案、建议或下一步动作";
   }
-  if (/风险|问题/.test(section)) {
+  if (/风险|问题|挑战|难点|短板|隐患|影响/.test(section)) {
     return "展开风险、问题及影响，为后续措施做铺垫";
+  }
+  if (/结果|成效|成果|产出|数据|指标|进展/.test(section)) {
+    return "集中呈现关键结果、进展或量化成效，作为后续判断基础";
+  }
+  if (/结论|收尾|总结|建议事项|下一步/.test(section)) {
+    return "在主体事实之后收束判断，并明确后续安排或决策建议";
   }
   return "作为固定结构段落，需结合本次背景替换旧事实和旧结论";
 }
@@ -241,7 +247,7 @@ export function summarizeMaterial(material: Material): MaterialSummary {
   const sectionIntents = frontmatterSectionIntents.length
     ? frontmatterSectionIntents
     : parseSectionIntentItems(material.content, 8);
-  const derivedSections = materialRole === "template" ? deriveTemplateSections(material.content, 6) : [];
+  const derivedSections = deriveTemplateSections(material.content, 6);
   const derivedTemplateSlots =
     materialRole === "template" && !templateSlots.length
       ? derivedSections.map(
@@ -255,7 +261,7 @@ export function summarizeMaterial(material: Material): MaterialSummary {
         )
       : [];
   const derivedIntents =
-    materialRole === "template" && !sectionIntents.length
+    derivedSections.length && !sectionIntents.length
       ? derivedSections.map(
           (section) =>
             ({
@@ -266,7 +272,7 @@ export function summarizeMaterial(material: Material): MaterialSummary {
         )
       : [];
   const derivedLogic =
-    materialRole === "template" && !logicChain.length && derivedSections.length >= 2
+    !logicChain.length && derivedSections.length >= 2
       ? derivedSections.slice(0, -1).map((section, index) => {
           const nextSection = derivedSections[index + 1];
           return {
@@ -323,6 +329,54 @@ function normalizePieces(input: string[]): string[] {
     .flatMap((item) => String(item || "").split(/[；;。.!！?\n]/))
     .map((item) => item.trim())
     .filter((item) => item.length >= 2);
+}
+
+function normalizeStructureLabel(text: string): string {
+  return String(text || "")
+    .replace(/^[\s#-]+/, "")
+    .replace(
+      /^(?:(?:[一二三四五六七八九十百]+、)|(?:（[一二三四五六七八九十百]+）)|(?:【[一二三四五六七八九十百]+】)|(?:第[一二三四五六七八九十百]+[章节部分条点项])|(?:\(\d+\))|(?:（\d+）)|(?:\d+[.、]))\s*/u,
+      "",
+    )
+    .replace(/\s+/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function scoreStructureMatch(left: string, right: string): number {
+  const normalizedLeft = normalizeStructureLabel(left);
+  const normalizedRight = normalizeStructureLabel(right);
+  if (!normalizedLeft || !normalizedRight) {
+    return 0;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return 4;
+  }
+  if (
+    normalizedLeft.includes(normalizedRight) ||
+    normalizedRight.includes(normalizedLeft)
+  ) {
+    return 2.4;
+  }
+
+  const chunks = [normalizedLeft, normalizedRight];
+  const overlap = chunks[0]
+    .split(/(?=[\u4e00-\u9fff])/)
+    .filter((item) => item && item.length >= 1)
+    .filter((token) => chunks[1].includes(token)).length;
+  return overlap * 0.4;
+}
+
+function collectStructureSections(summary: MaterialSummary): string[] {
+  const sections = [
+    ...summary.template_slots.map((item) => item.section),
+    ...summary.section_intents.map((item) => item.section),
+    ...summary.logic_chain.flatMap((item) => [item.from, item.to]),
+  ]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  return [...new Set(sections)];
 }
 
 function isFactLikeText(text: string): boolean {
@@ -589,20 +643,37 @@ export function buildTemplateRewriteHint(input: {
     .map((material) => summarizeMaterial(material))
     .filter((item) => item.material_role !== "template");
   const historyLogicChain = historySummaries.flatMap((item) => item.logic_chain).slice(0, 8);
+  const historySectionHints = historySummaries
+    .flatMap((item) =>
+      collectStructureSections(item).map((section) => ({
+        title: item.title,
+        section,
+      })),
+    )
+    .slice(0, 12);
   const rewriteSteps: TemplateRewriteStep[] = summary.template_slots.slice(0, 6).map((slot, index) => {
     const section = slot.section?.trim() || `段落${index + 1}`;
     const intent =
       summary.section_intents.find((item) => item.section === section)?.intent ||
       summary.section_intents[index]?.intent ||
       "沿用模板段落功能，但改写为本次任务语境";
-    const matchedHistoryLogic =
-      historyLogicChain.find(
-        (item) =>
-          item.to.includes(section) ||
-          item.from.includes(section) ||
-          intent.includes(item.to) ||
-          intent.includes(item.from),
-      ) || null;
+    const matchedHistoryLogic = historyLogicChain
+      .map((item) => ({
+        item,
+        score:
+          Math.max(scoreStructureMatch(item.to, section), scoreStructureMatch(item.from, section)) +
+          Math.max(scoreStructureMatch(item.to, intent), scoreStructureMatch(item.from, intent)),
+      }))
+      .filter((entry) => entry.score >= 2)
+      .sort((left, right) => right.score - left.score)[0]?.item ?? null;
+    const matchedHistorySections = historySectionHints
+      .map((item) => ({
+        ...item,
+        score: scoreStructureMatch(item.section, section) + scoreStructureMatch(item.section, intent),
+      }))
+      .filter((entry) => entry.score >= 2)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 2);
     const logicAfter =
       (index > 0 ? logicChain[index - 1] || logicChain[0] || null : null) ||
       matchedHistoryLogic;
@@ -633,8 +704,8 @@ export function buildTemplateRewriteHint(input: {
       }；替换规则：${slot.fill_rule || "保留段落结构，替换旧事实和旧结论"}`,
       source_hint:
         slot.source_hint ||
-        historySummaries
-          .map((item) => item.title)
+        matchedHistorySections
+          .map((item) => `${item.title}:${item.section}`)
           .slice(0, 2)
           .join("、") ||
         evidence ||
@@ -645,7 +716,7 @@ export function buildTemplateRewriteHint(input: {
   });
 
   const plan = rewriteSteps.map((step) => {
-    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；并放在「${step.logic_after.from} -> ${step.logic_after.to}」之后` : ""}`;
+    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；逻辑承接：from=${step.logic_after.from}；to=${step.logic_after.to}；reason=${step.logic_after.reason}` : ""}`;
   });
 
   if (!plan.length) {
@@ -670,6 +741,9 @@ export function buildTemplateRewriteHint(input: {
   });
   historyLogicChain.slice(0, 2).forEach((item) => {
     plan.push(`历史材料逻辑参考：先写「${item.from}」再写「${item.to}」；原因：${item.reason}`);
+  });
+  historySectionHints.slice(0, 2).forEach((item) => {
+    plan.push(`历史材料结构参考：${item.title} 中存在段落「${item.section}」可作为补充结构线索`);
   });
 
   return {

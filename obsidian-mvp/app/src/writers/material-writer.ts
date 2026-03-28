@@ -122,8 +122,8 @@ export function analyzeMaterialHeuristically(text: string, docType: string): Mat
     return `第${index + 1}部分可围绕“${shortened}”展开`;
   });
 
-  const isFormal = /项目|工作|推进|完成|风险|措施|情况|阶段/.test(normalized);
-  const hasConclusion = /总体|整体|下一步|后续|建议|措施|计划/.test(last);
+  const isFormal = /项目|工作|推进|完成|风险|措施|情况|阶段|方案|建议|总结|评估|复盘|计划|安排|成效|结果/.test(normalized);
+  const hasConclusion = /总体|整体|下一步|后续|建议|措施|计划|结论|安排|建议事项|收尾|总结/.test(last);
 
   return {
     opening:
@@ -140,8 +140,8 @@ export function analyzeMaterialHeuristically(text: string, docType: string): Mat
     tone: isFormal ? "正式、客观、偏工作汇报语气" : "偏说明性语气，建议进一步统一正式表达",
     sentence_style:
       normalized.length > 120 ? "以完整陈述句为主，适合做正式材料" : "篇幅较短，后续可补充更完整的陈述句",
-    logic_order: "通常可按背景/现状 -> 重点事项 -> 结论或安排的顺序组织",
-    taboo: "避免口语化、空泛表述，避免只有结论没有事实支撑",
+    logic_order: "通常可按背景/现状 -> 主体事项 -> 结论或安排的顺序组织；有风险场景时可插入风险分析段。",
+    taboo: "避免口语化、空泛表述，避免只有结论没有事实支撑，也避免结构跳跃导致读者难以跟上。",
     candidate_rules: ["待人工确认"],
     logic_chain: [
       {
@@ -165,8 +165,8 @@ export function analyzeMaterialHeuristically(text: string, docType: string): Mat
       {
         section: "主体",
         slot_name: "事实与数据",
-        fill_rule: "将项目进展、风险、措施或数据替换进对应段落，不保留空泛占位句。",
-        source_hint: "优先使用本次背景材料中的事实、数据和动作信息。",
+        fill_rule: "将进展、风险、措施、结果或数据替换进对应段落，不保留空泛占位句。",
+        source_hint: "优先使用本次背景材料中的事实、数据、动作和结果信息。",
       },
     ],
     section_intents: [
