@@ -226,6 +226,66 @@ function scoreFactForStep(input: {
   return score;
 }
 
+function scoreRequirementForStep(input: {
+  requirement: string;
+  section: string;
+  intent: string;
+}): number {
+  const text = `${input.section} ${input.intent}`.toLowerCase();
+  const requirement = input.requirement.toLowerCase();
+  let score = 0;
+
+  if (/概况|背景|总体|需求|来源/.test(text) && /背景|总体|概况|需求|来源/.test(requirement)) {
+    score += 2.2;
+  }
+  if (/风险|问题|影响/.test(text) && /风险|问题|影响/.test(requirement)) {
+    score += 3;
+  }
+  if (/安排|计划|建议|措施|下一步|采购方案/.test(text) && /下一步|安排|计划|建议|措施/.test(requirement)) {
+    score += 3;
+  }
+  if (/采购|结果|资金/.test(text) && /采购结果|结果|资金|预算/.test(requirement)) {
+    score += 2.8;
+  }
+  if (/采购组|组织|分工|责任/.test(text) && /分工|责任|组织/.test(requirement)) {
+    score += 2.6;
+  }
+  if (/采购组|组织|分工|责任/.test(text) && /采购结果|结果|风险提示|风险/.test(requirement)) {
+    score -= 2.2;
+  }
+  if (/方案建议|建议|措施|安排|计划/.test(text) && /下一步安排|风险提示/.test(requirement)) {
+    score += 1.6;
+  }
+  if (/概况|背景|总体|情况/.test(text) && /采购结果/.test(requirement)) {
+    score += 0.8;
+  }
+  if (/优化情况/.test(text) && /风险提示/.test(requirement)) {
+    score += 1.1;
+  }
+
+  return score;
+}
+
+function pickRequirementsForStep(input: {
+  section: string;
+  intent: string;
+  mustInclude: string[];
+}): string[] {
+  return input.mustInclude
+    .map((requirement) => ({
+      requirement,
+      score: scoreRequirementForStep({
+        requirement,
+        section: input.section,
+        intent: input.intent,
+      }),
+    }))
+    .filter((item) => item.score > 0.6)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((item) => item.requirement);
+}
+
 function pickFactsForStep(input: {
   section: string;
   intent: string;
@@ -338,12 +398,24 @@ export function buildTemplateRewriteHint(input: {
       mustInclude: mustIncludeItems,
       evidenceCards,
     });
+    const assignedRequirements = pickRequirementsForStep({
+      section,
+      intent,
+      mustInclude: mustIncludeItems,
+    });
     return {
       section,
       slot_name: slot,
       intent,
       assigned_facts: assignedFacts,
-      fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}`,
+      assigned_requirements: assignedRequirements,
+      fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${
+        assignedRequirements.length
+          ? `；本段重点覆盖「${assignedRequirements.join("；")}」`
+          : mustInclude
+            ? `；并确保覆盖「${mustInclude}」`
+            : ""
+      }`,
       source_hint: evidence || "优先使用本次背景材料与任务事实",
       evidence_card_ids: evidenceIds,
       logic_after: logicAfter,
@@ -360,6 +432,7 @@ export function buildTemplateRewriteHint(input: {
       slot_name: "沿用模板整体结构",
       intent: "保持模板的整体段落顺序和表达功能",
       assigned_facts: normalizePieces(input.taskAnalysis.raw_facts).slice(0, 3),
+      assigned_requirements: mustIncludeItems,
       fill_strategy: `将旧背景、旧事实和旧结论替换为本次任务事实：${facts || "待从背景材料中抽取"}`,
       source_hint: evidence || "优先使用本次背景材料与任务事实",
       evidence_card_ids: evidenceIds,

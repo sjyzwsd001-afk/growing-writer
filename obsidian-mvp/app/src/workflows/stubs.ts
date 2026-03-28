@@ -46,6 +46,7 @@ function applyTemplateRewritePlanToOutline(
       ...(existing?.source_basis ?? []),
     ].filter(Boolean);
     const keyPoints = [
+      ...step.assigned_requirements.map((item) => `必须覆盖：${item}`),
       step.fill_strategy,
       ...(existing?.key_points ?? []),
     ].filter(Boolean);
@@ -290,7 +291,10 @@ export function buildOutline(input: {
         ? input.templateRewritePlan.slice(0, 6).map((step) => ({
             heading: step.section,
             purpose: step.intent,
-            key_points: [step.fill_strategy],
+            key_points: [
+              ...step.assigned_requirements.map((item) => `必须覆盖：${item}`),
+              step.fill_strategy,
+            ].slice(0, 5),
             source_basis: [
               `模板槽位:${step.section}`,
               ...(step.logic_after ? [`逻辑承接:${step.logic_after}`] : []),

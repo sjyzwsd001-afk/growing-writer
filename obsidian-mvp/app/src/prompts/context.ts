@@ -95,6 +95,7 @@ export function compactTemplateRewritePlan(
     slot_name: clip(step.slot_name, 90),
     intent: clip(step.intent, 90),
     assigned_facts: clipList(step.assigned_facts, 4, 90),
+    assigned_requirements: clipList(step.assigned_requirements, 4, 60),
     fill_strategy: clip(step.fill_strategy, 120),
     source_hint: clip(step.source_hint, 90),
     evidence_card_ids: clipList(step.evidence_card_ids, 3, 20),
