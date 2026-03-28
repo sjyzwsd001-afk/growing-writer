@@ -20,6 +20,44 @@ import { listWorkflowRuns } from "../workflows/orchestration.js";
 import { sendJson } from "./http.js";
 import { classifyMaterialRole, isTemplateMaterial } from "./materials.js";
 
+function extractProfileBulletSection(content: string, heading: string): string[] {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`^##\\s+${escaped}\\s*\\n([\\s\\S]*?)(?=^##\\s+|^#\\s+|\\Z)`, "m");
+  const match = regex.exec(content);
+  if (!match?.[1]) {
+    return [];
+  }
+  return match[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.replace(/^- /, "").trim())
+    .filter(Boolean)
+    .filter((line) => line !== "-");
+}
+
+function extractProfileField(content: string, label: string): string {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`^-\\s+${escaped}\\s*(.+)$`, "m");
+  return regex.exec(content)?.[1]?.trim() || "";
+}
+
+function extractProfileScenarioBullets(content: string, heading: string): string[] {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`^###\\s+${escaped}\\s*\\n([\\s\\S]*?)(?=^###\\s+|^##\\s+|^#\\s+|\\Z)`, "m");
+  const match = regex.exec(content);
+  if (!match?.[1]) {
+    return [];
+  }
+  return match[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("- "))
+    .map((line) => line.replace(/^- /, "").trim())
+    .filter(Boolean)
+    .filter((line) => line !== "-");
+}
+
 export async function buildDashboard(input: {
   vaultRoot: string;
   detectRuleConflictHints: (rules: Array<{
@@ -247,6 +285,22 @@ export async function buildDashboard(input: {
       generatedBy: typeof item.frontmatter.generated_by === "string" ? item.frontmatter.generated_by : "unknown",
       updatedAt: typeof item.frontmatter.updated_at === "string" ? item.frontmatter.updated_at : "",
       sourceStats: item.frontmatter.source_stats && typeof item.frontmatter.source_stats === "object" ? item.frontmatter.source_stats : null,
+      overview: {
+        tone: extractProfileField(item.content, "语气特点："),
+        sentenceStyle: extractProfileField(item.content, "句式特点："),
+        opening: extractProfileField(item.content, "开头通常怎么写："),
+        body: extractProfileField(item.content, "主体通常怎么展开："),
+        ending: extractProfileField(item.content, "结尾通常怎么收："),
+      },
+      highPriorityPreferences: extractProfileBulletSection(item.content, "高优先级偏好").slice(0, 4),
+      commonTaboos: extractProfileBulletSection(item.content, "常见禁忌").slice(0, 4),
+      stableRuleSummary: extractProfileBulletSection(item.content, "当前稳定规则摘要").slice(0, 4),
+      pendingObservations: extractProfileBulletSection(item.content, "待确认观察").slice(0, 4),
+      scenarioGuidance: {
+        leadershipReport: extractProfileScenarioBullets(item.content, "领导汇报").slice(0, 3),
+        proposalDoc: extractProfileScenarioBullets(item.content, "方案材料").slice(0, 3),
+        reviewDoc: extractProfileScenarioBullets(item.content, "总结复盘").slice(0, 3),
+      },
       path: item.path,
     })),
     workflowRuns: workflowRuns.slice(0, 30).map((item) => ({
