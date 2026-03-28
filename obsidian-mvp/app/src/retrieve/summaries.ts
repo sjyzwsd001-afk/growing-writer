@@ -154,6 +154,110 @@ function extractTaskKeywords(task: Task): string[] {
     .slice(0, 18);
 }
 
+function normalizePieces(input: string[]): string[] {
+  return input
+    .flatMap((item) => String(item || "").split(/[；;。.!！?\n]/))
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2);
+}
+
+function isFactLikeText(text: string): boolean {
+  const normalized = String(text || "").trim();
+  if (!normalized) {
+    return false;
+  }
+  if (/^-\s*(标题|类型|来源|使用场景|面向对象|质量判断)：/.test(normalized)) {
+    return false;
+  }
+  if (/(标题：|类型：|来源：|使用场景：|面向对象：|质量判断：)/.test(normalized) && normalized.length < 120) {
+    return false;
+  }
+  return true;
+}
+
+function scoreFactForStep(input: {
+  fact: string;
+  section: string;
+  intent: string;
+  mustInclude: string[];
+}): number {
+  const text = `${input.section} ${input.intent}`.toLowerCase();
+  const fact = input.fact.toLowerCase();
+  let score = 0;
+
+  if (/概况|背景|总体|需求|来源/.test(text) && /背景|项目|总体|需求|预算|来源|情况|阶段/.test(fact)) {
+    score += 2.2;
+  }
+  if (/风险|问题|影响/.test(text) && /风险|问题|影响|延迟|不足|隐患|挑战/.test(fact)) {
+    score += 2.5;
+  }
+  if (/安排|计划|建议|措施|下一步|采购方案/.test(text) && /下一步|安排|计划|措施|建议|签署|上线|推进/.test(fact)) {
+    score += 2.3;
+  }
+  if (/采购组|组织|分工|责任/.test(text) && /责任|部门|分工|组织|人员/.test(fact)) {
+    score += 2.2;
+  }
+  if (/采购组|组织|分工|责任/.test(text) && /风险|问题|影响|延迟|隐患/.test(fact)) {
+    score -= 1.8;
+  }
+  if (/采购组|组织|分工|责任/.test(text) && /下一步|安排|计划|签署|上线/.test(fact)) {
+    score -= 1.1;
+  }
+  if (/采购|结果|资金/.test(text) && /采购|金额|供应商|结果|资金|预算/.test(fact)) {
+    score += 1.8;
+  }
+
+  input.mustInclude.forEach((item) => {
+    const keyword = item.trim();
+    if (keyword && text.includes(keyword.toLowerCase()) && fact.includes(keyword.toLowerCase())) {
+      score += 1.4;
+    }
+  });
+
+  if (!score) {
+    if (fact.includes("项目") || fact.includes("采购")) {
+      score += 0.4;
+    }
+    if (fact.includes("下一步")) {
+      score += 0.6;
+    }
+  }
+
+  return score;
+}
+
+function pickFactsForStep(input: {
+  section: string;
+  intent: string;
+  rawFacts: string[];
+  mustInclude: string[];
+  evidenceCards: EvidenceCard[];
+}): string[] {
+  const candidateFacts = [
+    ...normalizePieces(input.rawFacts),
+    ...normalizePieces(input.mustInclude),
+    ...input.evidenceCards
+      .slice(0, 3)
+      .map((card) => card.excerpt)
+      .filter(isFactLikeText),
+  ];
+
+  return candidateFacts
+    .map((fact) => ({
+      fact,
+      score: scoreFactForStep({
+        fact,
+        section: input.section,
+        intent: input.intent,
+        mustInclude: input.mustInclude,
+      }),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .filter((item, index, list) => item.score > 0 && list.findIndex((entry) => entry.fact === item.fact) === index)
+    .slice(0, 3)
+    .map((item) => item.fact);
+}
+
 export function buildEvidenceCards(input: {
   task: Task;
   materials: Material[];
@@ -214,7 +318,8 @@ export function buildTemplateRewriteHint(input: {
 
   const summary = summarizeMaterial(input.selectedTemplate);
   const facts = input.taskAnalysis.raw_facts.slice(0, 3).join("；") || "优先从本次背景材料中提取";
-  const mustInclude = input.taskAnalysis.must_include.slice(0, 4).join("；");
+  const mustIncludeItems = input.taskAnalysis.must_include.slice(0, 4);
+  const mustInclude = mustIncludeItems.join("；");
   const evidenceCards = input.evidenceCards.slice(0, 3);
   const evidenceIds = evidenceCards.map((card) => card.card_id);
   const evidence = evidenceCards.map((card) => `${card.material_title}#${card.card_id}`).join("、");
@@ -226,11 +331,19 @@ export function buildTemplateRewriteHint(input: {
       summary.section_intents[index] ||
       "沿用模板段落功能，但改写为本次任务语境";
     const logicAfter = index > 0 ? logicChain[index - 1] || logicChain[0] || null : null;
+    const assignedFacts = pickFactsForStep({
+      section,
+      intent,
+      rawFacts: input.taskAnalysis.raw_facts,
+      mustInclude: mustIncludeItems,
+      evidenceCards,
+    });
     return {
       section,
       slot_name: slot,
       intent,
-      fill_strategy: `优先填入本次背景事实「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}`,
+      assigned_facts: assignedFacts,
+      fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}`,
       source_hint: evidence || "优先使用本次背景材料与任务事实",
       evidence_card_ids: evidenceIds,
       logic_after: logicAfter,
@@ -246,6 +359,7 @@ export function buildTemplateRewriteHint(input: {
       section: "整体结构",
       slot_name: "沿用模板整体结构",
       intent: "保持模板的整体段落顺序和表达功能",
+      assigned_facts: normalizePieces(input.taskAnalysis.raw_facts).slice(0, 3),
       fill_strategy: `将旧背景、旧事实和旧结论替换为本次任务事实：${facts || "待从背景材料中抽取"}`,
       source_hint: evidence || "优先使用本次背景材料与任务事实",
       evidence_card_ids: evidenceIds,

@@ -77,6 +77,7 @@ export type TemplateRewriteStep = {
   section: string;
   slot_name: string;
   intent: string;
+  assigned_facts: string[];
   fill_strategy: string;
   source_hint: string;
   evidence_card_ids: string[];
