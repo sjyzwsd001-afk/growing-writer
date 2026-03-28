@@ -105,6 +105,13 @@ import {
   handleUpdateTaskDraftRoute,
 } from "./tasks.js";
 import {
+  handleWorkflowAdvanceRoute,
+  handleWorkflowDefinitionGetRoute,
+  handleWorkflowDefinitionSaveRoute,
+  handleWorkflowRunRoute,
+  handleWorkflowStartRoute,
+} from "./workflow.js";
+import {
   handleCreateFeedbackRoute,
   handleEvaluateFeedbackRoute,
   handleLearnFeedbackRoute,
@@ -2270,74 +2277,56 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "GET" && url.pathname === "/api/workflow/run") {
-        const runId = url.searchParams.get("runId");
-        if (!runId) {
-          sendJson(res, 400, { error: "Missing runId parameter." });
-          return;
-        }
-
-        const run = await loadWorkflowRun(vaultRoot, runId);
-        sendJson(res, 200, { run });
+        await handleWorkflowRunRoute({
+          vaultRoot,
+          runId: url.searchParams.get("runId"),
+          res,
+          loadWorkflowRun,
+        });
         return;
       }
 
       if (req.method === "GET" && url.pathname === "/api/workflow/definition") {
-        const workflowDefinition = await loadWorkflowDefinition(vaultRoot);
-        sendJson(res, 200, workflowDefinition);
+        await handleWorkflowDefinitionGetRoute({
+          vaultRoot,
+          res,
+          loadWorkflowDefinition,
+        });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/workflow/definition") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const rawDefinition = body.definition ?? body;
-        const saved = await saveWorkflowDefinition(vaultRoot, rawDefinition);
-        const reloaded = await loadWorkflowDefinition(vaultRoot);
-        sendJson(res, 200, {
-          saved,
-          reloaded,
+        await handleWorkflowDefinitionSaveRoute({
+          vaultRoot,
+          body,
+          res,
+          saveWorkflowDefinition,
+          loadWorkflowDefinition,
         });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/workflow/start") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const request = toTaskCreateRequest(body);
-        if (!request.title || !request.docType) {
-          sendJson(res, 400, { error: "title 和 docType 是必填项。" });
-          return;
-        }
-
-        const result = await startWorkflowRunForTask({
+        await handleWorkflowStartRoute({
           vaultRoot,
-          request,
+          body,
+          res,
+          toTaskCreateRequest,
+          startWorkflowRunForTask,
         });
-        sendJson(res, 200, result);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/workflow/advance") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const runId = typeof body.runId === "string" ? body.runId : "";
-        const action = typeof body.action === "string" ? body.action : "";
-        const taskPath = typeof body.taskPath === "string" ? body.taskPath : undefined;
-
-        if (!runId || !action) {
-          sendJson(res, 400, { error: "Missing runId or action." });
-          return;
-        }
-
-        if (action !== "regenerate" && action !== "finalize") {
-          sendJson(res, 400, { error: "Unsupported workflow action." });
-          return;
-        }
-
-        const result = await advanceWorkflowRunForAction({
+        await handleWorkflowAdvanceRoute({
           vaultRoot,
-          runId,
-          action,
-          taskPath,
+          body,
+          res,
+          advanceWorkflowRunForAction,
         });
-        sendJson(res, 200, result);
         return;
       }
 

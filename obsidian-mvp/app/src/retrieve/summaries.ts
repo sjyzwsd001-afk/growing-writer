@@ -261,7 +261,7 @@ export function summarizeMaterial(material: Material): MaterialSummary {
         )
       : [];
   const derivedIntents =
-    derivedSections.length && !sectionIntents.length
+    materialRole === "template" && derivedSections.length && !sectionIntents.length
       ? derivedSections.map(
           (section) =>
             ({

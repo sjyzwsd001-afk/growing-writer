@@ -245,16 +245,16 @@ function classifyFeedbackIntent(text: string): FeedbackIntent {
 
 function intentRuleKeywords(intent: FeedbackIntent): string[] {
   if (intent === "structure") {
-    return ["结构", "顺序", "层次", "提纲", "开头", "结尾", "段落", "先", "后"];
+    return ["结构", "顺序", "层次", "提纲", "开头", "结尾", "段落", "先", "后", "structure", "outline", "section", "order", "sequence"];
   }
   if (intent === "logic") {
-    return ["逻辑", "因果", "依据", "推导", "结论", "风险", "措施", "分析"];
+    return ["逻辑", "因果", "依据", "推导", "结论", "风险", "措施", "分析", "logic", "reasoning", "evidence", "conclusion", "because"];
   }
   if (intent === "missing_info") {
-    return ["补充", "具体", "数据", "事实", "影响", "动作", "量化", "完整性"];
+    return ["补充", "具体", "数据", "事实", "影响", "动作", "量化", "完整性", "missing", "omit", "add", "detail", "data", "fact", "action", "specific"];
   }
   if (intent === "tone") {
-    return ["语气", "措辞", "表达", "正式", "简洁", "风格"];
+    return ["语气", "措辞", "表达", "正式", "简洁", "风格", "tone", "wording", "expression", "formal", "casual", "concise"];
   }
   return [];
 }
