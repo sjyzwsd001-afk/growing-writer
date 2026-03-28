@@ -42,7 +42,9 @@ function applyTemplateRewritePlanToOutline(
     const existing = outline.sections[index];
     const sourceBasis = [
       `模板槽位:${step.section}`,
-      ...(step.logic_after ? [`逻辑承接:${step.logic_after}`] : []),
+      ...(step.logic_after
+        ? [`逻辑承接:${step.logic_after.from} -> ${step.logic_after.to}（${step.logic_after.reason}）`]
+        : []),
       ...(existing?.source_basis ?? []),
     ].filter(Boolean);
     const keyPoints = [
@@ -297,7 +299,9 @@ export function buildOutline(input: {
             ].slice(0, 5),
             source_basis: [
               `模板槽位:${step.section}`,
-              ...(step.logic_after ? [`逻辑承接:${step.logic_after}`] : []),
+              ...(step.logic_after
+                ? [`逻辑承接:${step.logic_after.from} -> ${step.logic_after.to}（${step.logic_after.reason}）`]
+                : []),
               ...input.matchedRules.slice(0, 2).map((rule) => rule.title),
             ].slice(0, 5),
           }))

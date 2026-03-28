@@ -62,9 +62,22 @@ export function compactMaterialSummaries(
     structure_summary: clipList(material.structure_summary, 2, 100),
     style_summary: clipList(material.style_summary, 3, 80),
     useful_phrases: clipList(material.useful_phrases, 1, 100),
-    logic_chain: clipList(material.logic_chain, 3, 120),
-    template_slots: clipList(material.template_slots, 4, 120),
-    section_intents: clipList(material.section_intents, 4, 100),
+    logic_chain: material.logic_chain.slice(0, 4).map((item) => ({
+      from: clip(item.from, 40),
+      to: clip(item.to, 40),
+      reason: clip(item.reason, 90),
+    })),
+    template_slots: material.template_slots.slice(0, 5).map((item) => ({
+      section: clip(item.section, 40),
+      slot_name: clip(item.slot_name, 70),
+      fill_rule: clip(item.fill_rule, 120),
+      source_hint: clip(item.source_hint, 90),
+    })),
+    section_intents: material.section_intents.slice(0, 5).map((item) => ({
+      section: clip(item.section, 40),
+      intent: clip(item.intent, 90),
+      trigger: clip(item.trigger, 80),
+    })),
   }));
 }
 
@@ -94,12 +107,18 @@ export function compactTemplateRewritePlan(
     section: clip(step.section, 40),
     slot_name: clip(step.slot_name, 90),
     intent: clip(step.intent, 90),
-    assigned_facts: clipList(step.assigned_facts, 4, 90),
-    assigned_requirements: clipList(step.assigned_requirements, 4, 60),
+    assigned_facts: clipList(step.assigned_facts, 5, 140),
+    assigned_requirements: clipList(step.assigned_requirements, 5, 100),
     fill_strategy: clip(step.fill_strategy, 120),
     source_hint: clip(step.source_hint, 90),
     evidence_card_ids: clipList(step.evidence_card_ids, 3, 20),
-    logic_after: step.logic_after ? clip(step.logic_after, 90) : null,
+    logic_after: step.logic_after
+      ? {
+          from: clip(step.logic_after.from, 40),
+          to: clip(step.logic_after.to, 40),
+          reason: clip(step.logic_after.reason, 90),
+        }
+      : null,
   }));
 }
 

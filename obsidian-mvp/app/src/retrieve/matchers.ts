@@ -1,4 +1,5 @@
 import type { Feedback, Material, MatchedRule, Profile, Rule, Task } from "../types/domain.js";
+import { summarizeMaterial } from "./summaries.js";
 
 type RuleMatchInput = {
   task: Task;
@@ -30,6 +31,20 @@ type TaskFeedbackSignalEntry = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function tokenizeForMatch(text: string): string[] {
+  const normalized = String(text || "").toLowerCase().trim();
+  if (!normalized) {
+    return [];
+  }
+  const roughTokens = normalized
+    .split(/[\s,.;:!?，。；：！？、（）()\[\]{}"'`~\-_/\\]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 2);
+
+  const hanChunks = [...normalized.matchAll(/[\u4e00-\u9fff]{2,8}/g)].map((item) => item[0]);
+  return [...new Set([...roughTokens, ...hanChunks])].slice(0, 18);
 }
 
 function isTemplateMaterial(material: Material): boolean {
@@ -459,6 +474,11 @@ export function matchMaterials(task: Task, materials: Material[]): Material[] {
   return materials
     .map((material) => {
       let score = 0;
+      const summary = summarizeMaterial(material);
+      const taskTokens = tokenizeForMatch(
+        `${task.title} ${task.docType} ${task.audience} ${task.scenario}`,
+      );
+
       if (material.docType && material.docType === task.docType) {
         score += 4;
       }
@@ -471,8 +491,32 @@ export function matchMaterials(task: Task, materials: Material[]): Material[] {
       if (material.quality === "high") {
         score += 2;
       }
-      if (material.tags.some((tag) => /template|模板/i.test(tag))) {
+      if (isTemplateMaterial(material)) {
         score += 6;
+        score += Math.min(4, summary.template_slots.length * 0.8);
+        score += Math.min(2.4, summary.logic_chain.length * 0.6);
+        score += Math.min(1.8, summary.section_intents.length * 0.3);
+
+        const structureSignals = [
+          ...summary.template_slots.map((item) => `${item.section} ${item.slot_name}`.toLowerCase()),
+          ...summary.section_intents.map((item) => `${item.section} ${item.intent}`.toLowerCase()),
+          ...summary.logic_chain.map((item) => `${item.from} ${item.to} ${item.reason}`.toLowerCase()),
+        ];
+
+        const overlapCount = structureSignals.reduce((hits, item) => {
+          if (!item) {
+            return hits;
+          }
+          return hits + (taskTokens.some((token) => token && item.includes(token)) ? 1 : 0);
+        }, 0);
+        score += Math.min(3, overlapCount * 0.4);
+
+        if (summary.template_slots.length >= 4) {
+          score += 1.2;
+        }
+        if (summary.logic_chain.length >= 2) {
+          score += 0.8;
+        }
       }
       return { material, score };
     })

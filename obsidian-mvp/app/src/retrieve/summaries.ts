@@ -1,8 +1,11 @@
 import type {
   EvidenceCard,
+  LogicChainItem,
   Material,
   MaterialSummary,
+  SectionIntentSummary,
   Task,
+  TemplateSlotSummary,
   TemplateRewriteHint,
   TemplateRewriteStep,
 } from "../types/domain.js";
@@ -51,6 +54,58 @@ function parseSectionBullets(content: string, heading: string, count: number): s
     .slice(0, count);
 }
 
+function parseLogicChainItems(content: string, count: number): LogicChainItem[] {
+  return parseSectionBullets(content, "逻辑关系", count)
+    .map((line) => {
+      const normalized = line.replace(/^逻辑\d+：/, "").trim();
+      const match = normalized.match(/^先写「(.+?)」再写「(.+?)」；原因：(.+)$/);
+      if (!match) {
+        return null;
+      }
+      return {
+        from: match[1].trim(),
+        to: match[2].trim(),
+        reason: match[3].trim(),
+      } satisfies LogicChainItem;
+    })
+    .filter((item): item is LogicChainItem => Boolean(item));
+}
+
+function parseTemplateSlotItems(content: string, count: number): TemplateSlotSummary[] {
+  return parseSectionBullets(content, "模板槽位", count)
+    .map((line) => {
+      const normalized = line.replace(/^槽位\d+：/, "").trim();
+      const match = normalized.match(/^(.+?)\s*\/\s*(.+?)；替换规则：(.+?)；取材依据：(.+)$/);
+      if (!match) {
+        return null;
+      }
+      return {
+        section: match[1].trim(),
+        slot_name: match[2].trim(),
+        fill_rule: match[3].trim(),
+        source_hint: match[4].trim(),
+      } satisfies TemplateSlotSummary;
+    })
+    .filter((item): item is TemplateSlotSummary => Boolean(item));
+}
+
+function parseSectionIntentItems(content: string, count: number): SectionIntentSummary[] {
+  return parseSectionBullets(content, "段落意图", count)
+    .map((line) => {
+      const normalized = line.replace(/^意图\d+：/, "").trim();
+      const match = normalized.match(/^(.+?)；写作意图：(.+?)；触发条件：(.+)$/);
+      if (!match) {
+        return null;
+      }
+      return {
+        section: match[1].trim(),
+        intent: match[2].trim(),
+        trigger: match[3].trim(),
+      } satisfies SectionIntentSummary;
+    })
+    .filter((item): item is SectionIntentSummary => Boolean(item));
+}
+
 function detectMaterialRole(material: Material): "template" | "history" | "unknown" {
   const source = String(material.frontmatter.source || "");
   if (material.tags.some((tag) => /template|模板/i.test(tag)) || /template|模板/i.test(source)) {
@@ -67,7 +122,11 @@ function deriveTemplateSections(content: string, count: number): string[] {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => /^(?:[一二三四五六七八九十]+、|（[一二三四五六七八九十]+）|\d+\.)/.test(line))
+    .filter((line) =>
+      /^(?:(?:[一二三四五六七八九十百]+、)|(?:（[一二三四五六七八九十百]+）)|(?:【[一二三四五六七八九十百]+】)|(?:第[一二三四五六七八九十百]+[章节部分条点项])|(?:\(\d+\))|(?:（\d+）)|(?:\d+[.、]))/.test(
+        line,
+      ),
+    )
     .filter((line) => line.length <= 40);
   return [...new Set(candidates)].slice(0, count);
 }
@@ -90,26 +149,42 @@ function inferSectionIntent(section: string): string {
 
 export function summarizeMaterial(material: Material): MaterialSummary {
   const materialRole = detectMaterialRole(material);
-  const logicChain = parseSectionBullets(material.content, "逻辑关系", 4);
-  const templateSlots = parseSectionBullets(material.content, "模板槽位", 6);
-  const sectionIntents = parseSectionBullets(material.content, "段落意图", 6);
+  const logicChain = parseLogicChainItems(material.content, 6);
+  const templateSlots = parseTemplateSlotItems(material.content, 8);
+  const sectionIntents = parseSectionIntentItems(material.content, 8);
   const derivedSections = materialRole === "template" ? deriveTemplateSections(material.content, 6) : [];
   const derivedTemplateSlots =
     materialRole === "template" && !templateSlots.length
       ? derivedSections.map(
           (section) =>
-            `${section}；替换规则：保留该段结构与标题，但把旧项目背景、旧数据和旧结论替换为本次任务事实；取材依据：优先使用本次背景材料和任务事实`,
+            ({
+              section,
+              slot_name: "沿用该段标题与结构",
+              fill_rule: "保留该段结构与标题，但把旧背景、旧数据和旧结论替换为本次任务事实。",
+              source_hint: "优先使用本次背景材料、任务事实和命中的历史材料证据。",
+            }) satisfies TemplateSlotSummary,
         )
       : [];
   const derivedIntents =
     materialRole === "template" && !sectionIntents.length
-      ? derivedSections.map((section) => `${section}；段落意图：${inferSectionIntent(section)}`)
+      ? derivedSections.map(
+          (section) =>
+            ({
+              section,
+              intent: inferSectionIntent(section),
+              trigger: "当本次任务仍沿用这一固定段落功能时触发",
+            }) satisfies SectionIntentSummary,
+        )
       : [];
   const derivedLogic =
     materialRole === "template" && !logicChain.length && derivedSections.length >= 2
       ? derivedSections.slice(0, -1).map((section, index) => {
           const nextSection = derivedSections[index + 1];
-          return `先写「${section}」再写「${nextSection}」；原因：先按模板固定结构铺开，再承接到后续章节`;
+          return {
+            from: section,
+            to: nextSection,
+            reason: "先按模板固定结构铺开，再承接到后续章节。",
+          } satisfies LogicChainItem;
         })
       : [];
 
@@ -184,41 +259,64 @@ function scoreFactForStep(input: {
   const text = `${input.section} ${input.intent}`.toLowerCase();
   const fact = input.fact.toLowerCase();
   let score = 0;
+  const semanticBuckets: Array<{ intent: RegExp; fact: RegExp; hit: number; miss?: number }> = [
+    {
+      intent: /概况|背景|总体|情况|现状|目标|缘由|依据|范围|需求|来源/,
+      fact: /背景|现状|总体|目标|缘由|依据|范围|需求|来源|情况|阶段|项目|任务/,
+      hit: 2.2,
+    },
+    {
+      intent: /风险|问题|挑战|影响|难点|短板|隐患/,
+      fact: /风险|问题|挑战|影响|难点|短板|隐患|延迟|不足|波动/,
+      hit: 2.5,
+    },
+    {
+      intent: /措施|建议|安排|计划|下一步|路径|方案|动作|抓手/,
+      fact: /措施|建议|安排|计划|下一步|路径|方案|动作|推进|落实|优化|整改/,
+      hit: 2.3,
+    },
+    {
+      intent: /组织|分工|职责|责任|机制|成员|协同|专班|小组/,
+      fact: /组织|分工|职责|责任|机制|成员|协同|专班|小组|部门|牵头/,
+      hit: 2.2,
+      miss: -1.4,
+    },
+    {
+      intent: /结果|成效|产出|金额|预算|资金|指标|数据/,
+      fact: /结果|成效|产出|金额|预算|资金|指标|数据|供应商|数量|比例/,
+      hit: 1.8,
+    },
+  ];
 
-  if (/概况|背景|总体|需求|来源/.test(text) && /背景|项目|总体|需求|预算|来源|情况|阶段/.test(fact)) {
-    score += 2.2;
-  }
-  if (/风险|问题|影响/.test(text) && /风险|问题|影响|延迟|不足|隐患|挑战/.test(fact)) {
-    score += 2.5;
-  }
-  if (/安排|计划|建议|措施|下一步|采购方案/.test(text) && /下一步|安排|计划|措施|建议|签署|上线|推进/.test(fact)) {
-    score += 2.3;
-  }
-  if (/采购组|组织|分工|责任/.test(text) && /责任|部门|分工|组织|人员/.test(fact)) {
-    score += 2.2;
-  }
-  if (/采购组|组织|分工|责任/.test(text) && /风险|问题|影响|延迟|隐患/.test(fact)) {
-    score -= 1.8;
-  }
-  if (/采购组|组织|分工|责任/.test(text) && /下一步|安排|计划|签署|上线/.test(fact)) {
-    score -= 1.1;
-  }
-  if (/采购|结果|资金/.test(text) && /采购|金额|供应商|结果|资金|预算/.test(fact)) {
-    score += 1.8;
-  }
+  semanticBuckets.forEach((bucket) => {
+    if (!bucket.intent.test(text)) {
+      return;
+    }
+    if (bucket.fact.test(fact)) {
+      score += bucket.hit;
+    } else if (typeof bucket.miss === "number") {
+      score += bucket.miss;
+    }
+  });
 
   input.mustInclude.forEach((item) => {
     const keyword = item.trim();
-    if (keyword && text.includes(keyword.toLowerCase()) && fact.includes(keyword.toLowerCase())) {
-      score += 1.4;
+    if (!keyword) {
+      return;
+    }
+    const normalizedKeyword = keyword.toLowerCase();
+    if (text.includes(normalizedKeyword) && fact.includes(normalizedKeyword)) {
+      score += 1.6;
+    } else if (fact.includes(normalizedKeyword)) {
+      score += 0.9;
     }
   });
 
   if (!score) {
-    if (fact.includes("项目") || fact.includes("采购")) {
+    if (/项目|任务|背景|情况|安排|建议|风险|结果/.test(fact)) {
       score += 0.4;
     }
-    if (fact.includes("下一步")) {
+    if (/下一步|安排|计划/.test(fact)) {
       score += 0.6;
     }
   }
@@ -235,33 +333,45 @@ function scoreRequirementForStep(input: {
   const requirement = input.requirement.toLowerCase();
   let score = 0;
 
-  if (/概况|背景|总体|需求|来源/.test(text) && /背景|总体|概况|需求|来源/.test(requirement)) {
-    score += 2.2;
-  }
-  if (/风险|问题|影响/.test(text) && /风险|问题|影响/.test(requirement)) {
-    score += 3;
-  }
-  if (/安排|计划|建议|措施|下一步|采购方案/.test(text) && /下一步|安排|计划|建议|措施/.test(requirement)) {
-    score += 3;
-  }
-  if (/采购|结果|资金/.test(text) && /采购结果|结果|资金|预算/.test(requirement)) {
-    score += 2.8;
-  }
-  if (/采购组|组织|分工|责任/.test(text) && /分工|责任|组织/.test(requirement)) {
-    score += 2.6;
-  }
-  if (/采购组|组织|分工|责任/.test(text) && /采购结果|结果|风险提示|风险/.test(requirement)) {
-    score -= 2.2;
-  }
-  if (/方案建议|建议|措施|安排|计划/.test(text) && /下一步安排|风险提示/.test(requirement)) {
-    score += 1.6;
-  }
-  if (/概况|背景|总体|情况/.test(text) && /采购结果/.test(requirement)) {
-    score += 0.8;
-  }
-  if (/优化情况/.test(text) && /风险提示/.test(requirement)) {
-    score += 1.1;
-  }
+  const requirementBuckets: Array<{ intent: RegExp; requirement: RegExp; hit: number; miss?: number }> = [
+    {
+      intent: /概况|背景|总体|情况|现状|目标|需求|来源/,
+      requirement: /背景|总体|概况|现状|目标|需求|来源/,
+      hit: 2.2,
+    },
+    {
+      intent: /风险|问题|影响|挑战|难点|隐患/,
+      requirement: /风险|问题|影响|挑战|难点|隐患/,
+      hit: 3,
+    },
+    {
+      intent: /安排|计划|建议|措施|下一步|方案|动作/,
+      requirement: /下一步|安排|计划|建议|措施|方案|动作/,
+      hit: 3,
+    },
+    {
+      intent: /结果|成效|产出|资金|预算|指标|数据/,
+      requirement: /结果|成效|产出|资金|预算|指标|数据/,
+      hit: 2.8,
+    },
+    {
+      intent: /组织|分工|职责|责任|机制|成员/,
+      requirement: /组织|分工|职责|责任|机制|成员/,
+      hit: 2.6,
+      miss: -2.2,
+    },
+  ];
+
+  requirementBuckets.forEach((bucket) => {
+    if (!bucket.intent.test(text)) {
+      return;
+    }
+    if (bucket.requirement.test(requirement)) {
+      score += bucket.hit;
+    } else if (typeof bucket.miss === "number") {
+      score += bucket.miss;
+    }
+  });
 
   return score;
 }
@@ -385,10 +495,10 @@ export function buildTemplateRewriteHint(input: {
   const evidence = evidenceCards.map((card) => `${card.material_title}#${card.card_id}`).join("、");
   const logicChain = summary.logic_chain.slice(0, 8);
   const rewriteSteps: TemplateRewriteStep[] = summary.template_slots.slice(0, 6).map((slot, index) => {
-    const section = slot.split("；")[0]?.trim() || `段落${index + 1}`;
+    const section = slot.section?.trim() || `段落${index + 1}`;
     const intent =
-      summary.section_intents.find((item) => item.includes(section)) ||
-      summary.section_intents[index] ||
+      summary.section_intents.find((item) => item.section === section)?.intent ||
+      summary.section_intents[index]?.intent ||
       "沿用模板段落功能，但改写为本次任务语境";
     const logicAfter = index > 0 ? logicChain[index - 1] || logicChain[0] || null : null;
     const assignedFacts = pickFactsForStep({
@@ -405,7 +515,7 @@ export function buildTemplateRewriteHint(input: {
     });
     return {
       section,
-      slot_name: slot,
+      slot_name: slot.slot_name || `${section}对应内容`,
       intent,
       assigned_facts: assignedFacts,
       assigned_requirements: assignedRequirements,
@@ -415,15 +525,15 @@ export function buildTemplateRewriteHint(input: {
           : mustInclude
             ? `；并确保覆盖「${mustInclude}」`
             : ""
-      }`,
-      source_hint: evidence || "优先使用本次背景材料与任务事实",
+      }；替换规则：${slot.fill_rule || "保留段落结构，替换旧事实和旧结论"}`,
+      source_hint: slot.source_hint || evidence || "优先使用本次背景材料与任务事实",
       evidence_card_ids: evidenceIds,
       logic_after: logicAfter,
     };
   });
 
   const plan = rewriteSteps.map((step) => {
-    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；并放在「${step.logic_after}」之后` : ""}`;
+    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；并放在「${step.logic_after.from} -> ${step.logic_after.to}」之后` : ""}`;
   });
 
   if (!plan.length) {
@@ -444,7 +554,7 @@ export function buildTemplateRewriteHint(input: {
   }
 
   summary.logic_chain.slice(0, 3).forEach((item) => {
-    plan.push(`逻辑顺序约束：${item}`);
+    plan.push(`逻辑顺序约束：先写「${item.from}」再写「${item.to}」；原因：${item.reason}`);
   });
 
   return {

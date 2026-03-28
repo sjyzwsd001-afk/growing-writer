@@ -60,6 +60,25 @@ export type Profile = MarkdownDocument & {
   version: number;
 };
 
+export type LogicChainItem = {
+  from: string;
+  to: string;
+  reason: string;
+};
+
+export type TemplateSlotSummary = {
+  section: string;
+  slot_name: string;
+  fill_rule: string;
+  source_hint: string;
+};
+
+export type SectionIntentSummary = {
+  section: string;
+  intent: string;
+  trigger: string;
+};
+
 export type MaterialSummary = {
   material_id: string;
   title: string;
@@ -68,9 +87,9 @@ export type MaterialSummary = {
   structure_summary: string[];
   style_summary: string[];
   useful_phrases: string[];
-  logic_chain: string[];
-  template_slots: string[];
-  section_intents: string[];
+  logic_chain: LogicChainItem[];
+  template_slots: TemplateSlotSummary[];
+  section_intents: SectionIntentSummary[];
 };
 
 export type TemplateRewriteStep = {
@@ -82,7 +101,7 @@ export type TemplateRewriteStep = {
   fill_strategy: string;
   source_hint: string;
   evidence_card_ids: string[];
-  logic_after?: string | null;
+  logic_after?: LogicChainItem | null;
 };
 
 export type TemplateRewriteHint = {

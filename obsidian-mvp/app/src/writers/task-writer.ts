@@ -74,7 +74,11 @@ function renderReferences(input: {
               `- 填充策略：${step.fill_strategy}\n` +
               `- 证据来源：${step.source_hint}\n` +
               `- 证据卡：${step.evidence_card_ids.join("、") || "无"}\n` +
-              `- 逻辑位置：${step.logic_after ? `承接「${step.logic_after}」之后` : "作为当前结构起点或独立段落"}`,
+              `- 逻辑位置：${
+                step.logic_after
+                  ? `承接「${step.logic_after.from} -> ${step.logic_after.to}」之后（${step.logic_after.reason}）`
+                  : "作为当前结构起点或独立段落"
+              }`,
           )
           .join("\n\n")
       : input.templateRewriteHint?.rewrite_plan?.length
