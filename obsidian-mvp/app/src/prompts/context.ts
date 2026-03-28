@@ -10,6 +10,10 @@ import type {
   OutlineResult,
   TaskAnalysis,
 } from "../types/schemas.js";
+import {
+  normalizeMaterialSummary,
+  normalizeTaskAnalysis,
+} from "../types/normalize.js";
 
 function clip(text: string, maxLength: number): string {
   const normalized = text.replace(/\s+/g, " ").trim();
@@ -27,17 +31,18 @@ function clipList(items: string[], maxItems: number, maxItemLength: number): str
 }
 
 export function compactTaskAnalysis(taskAnalysis: TaskAnalysis): Record<string, unknown> {
+  const normalized = normalizeTaskAnalysis(taskAnalysis);
   return {
-    task_type: clip(taskAnalysis.task_type, 60),
-    audience: clip(taskAnalysis.audience, 60),
-    scenario: clip(taskAnalysis.scenario, 80),
-    goal: clip(taskAnalysis.goal, 140),
-    must_include: clipList(taskAnalysis.must_include, 6, 120),
-    constraints: clipList(taskAnalysis.constraints, 6, 120),
-    raw_facts: clipList(taskAnalysis.raw_facts, 8, 140),
-    missing_info: clipList(taskAnalysis.missing_info, 6, 120),
-    risk_flags: clipList(taskAnalysis.risk_flags, 6, 120),
-    confidence: taskAnalysis.confidence,
+    task_type: clip(normalized.taskType, 60),
+    audience: clip(normalized.audience, 60),
+    scenario: clip(normalized.scenario, 80),
+    goal: clip(normalized.goal, 140),
+    must_include: clipList(normalized.mustInclude, 6, 120),
+    constraints: clipList(normalized.constraints, 6, 120),
+    raw_facts: clipList(normalized.rawFacts, 8, 140),
+    missing_info: clipList(normalized.missingInfo, 6, 120),
+    risk_flags: clipList(normalized.riskFlags, 6, 120),
+    confidence: normalized.confidence,
   };
 }
 
@@ -55,30 +60,33 @@ export function compactMatchedRules(matchedRules: MatchedRule[]): Array<Record<s
 export function compactMaterialSummaries(
   materialSummaries: MaterialSummary[],
 ): Array<Record<string, unknown>> {
-  return materialSummaries.slice(0, 4).map((material) => ({
-    title: clip(material.title, 80),
-    doc_type: clip(material.doc_type, 50),
-    material_role: material.material_role ?? "unknown",
-    structure_summary: clipList(material.structure_summary, 2, 100),
-    style_summary: clipList(material.style_summary, 3, 80),
-    useful_phrases: clipList(material.useful_phrases, 1, 100),
-    logic_chain: material.logic_chain.slice(0, 4).map((item) => ({
-      from: item.from,
-      to: item.to,
-      reason: clip(item.reason, 90),
-    })),
-    template_slots: material.template_slots.slice(0, 5).map((item) => ({
-      section: clip(item.section, 120),
-      slot_name: clip(item.slot_name, 70),
-      fill_rule: clip(item.fill_rule, 120),
-      source_hint: clip(item.source_hint, 90),
-    })),
-    section_intents: material.section_intents.slice(0, 5).map((item) => ({
-      section: item.section,
-      intent: clip(item.intent, 90),
-      trigger: clip(item.trigger, 80),
-    })),
-  }));
+  return materialSummaries.slice(0, 4).map((rawMaterial) => {
+    const material = normalizeMaterialSummary(rawMaterial);
+    return {
+      title: clip(material.title, 80),
+      doc_type: clip(material.docType, 50),
+      material_role: material.materialRole,
+      structure_summary: clipList(material.structureSummary, 2, 100),
+      style_summary: clipList(material.styleSummary, 3, 80),
+      useful_phrases: clipList(material.usefulPhrases, 1, 100),
+      logic_chain: material.logicChain.slice(0, 4).map((item) => ({
+        from: item.from,
+        to: item.to,
+        reason: clip(item.reason, 90),
+      })),
+      template_slots: material.templateSlots.slice(0, 5).map((item) => ({
+        section: clip(item.section, 120),
+        slot_name: clip(item.slotName, 70),
+        fill_rule: clip(item.fillRule, 120),
+        source_hint: clip(item.sourceHint, 90),
+      })),
+      section_intents: material.sectionIntents.slice(0, 5).map((item) => ({
+        section: item.section,
+        intent: clip(item.intent, 90),
+        trigger: clip(item.trigger, 80),
+      })),
+    };
+  });
 }
 
 export function compactEvidenceCards(
