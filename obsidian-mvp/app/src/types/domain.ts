@@ -101,6 +101,7 @@ export type TemplateRewriteStep = {
   history_section_hints?: Array<{
     material_title: string;
     section: string;
+    normalized_section?: string;
   }>;
   fill_strategy: string;
   source_hint: string;

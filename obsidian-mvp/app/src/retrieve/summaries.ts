@@ -648,6 +648,7 @@ export function buildTemplateRewriteHint(input: {
       collectStructureSections(item).map((section) => ({
         title: item.title,
         section,
+        normalized_section: normalizeStructureLabel(section),
       })),
     )
     .slice(0, 12);
@@ -698,6 +699,7 @@ export function buildTemplateRewriteHint(input: {
       history_section_hints: matchedHistorySections.map((item) => ({
         material_title: item.title,
         section: item.section,
+        normalized_section: item.normalized_section,
       })),
       fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${
         assignedRequirements.length
@@ -720,7 +722,7 @@ export function buildTemplateRewriteHint(input: {
   });
 
   const plan = rewriteSteps.map((step) => {
-    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；逻辑承接对象=${JSON.stringify(step.logic_after)}` : ""}`;
+    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；逻辑承接：from=${step.logic_after.from}；to=${step.logic_after.to}；reason=${step.logic_after.reason}` : ""}`;
   });
 
   if (!plan.length) {

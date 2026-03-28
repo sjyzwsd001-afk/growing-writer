@@ -68,7 +68,7 @@ export function compactMaterialSummaries(
       reason: clip(item.reason, 90),
     })),
     template_slots: material.template_slots.slice(0, 5).map((item) => ({
-      section: item.section,
+      section: clip(item.section, 120),
       slot_name: clip(item.slot_name, 70),
       fill_rule: clip(item.fill_rule, 120),
       source_hint: clip(item.source_hint, 90),
@@ -111,7 +111,8 @@ export function compactTemplateRewritePlan(
     assigned_requirements: clipList(step.assigned_requirements, 5, 100),
     history_section_hints: (step.history_section_hints ?? []).slice(0, 3).map((item) => ({
       material_title: clip(item.material_title, 70),
-      section: item.section,
+      section: clip(item.section, 120),
+      normalized_section: clip(item.normalized_section ?? "", 80),
     })),
     fill_strategy: clip(step.fill_strategy, 120),
     source_hint: clip(step.source_hint, 90),
