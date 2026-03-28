@@ -78,6 +78,13 @@ import { createTask } from "../writers/task-create-writer.js";
 import { createFeedback } from "../writers/feedback-create-writer.js";
 import { readMarkdownDocument, replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 import { HttpError, ensureLocalApiRequest, readBody, sendJson, sendText } from "./http.js";
+import {
+  handleDeleteLlmProfile,
+  handleSaveLlmSettings,
+  handleSelectLlmProfile,
+  handleStartCodexOauth,
+  handleTestLlmSettings,
+} from "./llm-settings.js";
 import { buildCodexAuthorizeUrl, createOauthState, createPkcePair, ensureOauthCallbackServer } from "./oauth.js";
 import {
   setPendingOauthRequest,
@@ -2337,404 +2344,49 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const provider =
-          body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
-        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
-        const profiles = listStoredLlmProfiles(vaultRoot);
-        const existing =
-          profileId
-            ? profiles.profiles.find((profile) => profile.id === profileId) ?? null
-            : null;
-        const isEditingExisting = Boolean(profileId && existing?.id === profileId);
-        const profileName = typeof body.name === "string" ? body.name.trim() : "";
-        const isCodex = provider === OPENAI_CODEX_PROVIDER;
-        const model = isCodex
-          ? normalizeCodexModel(body.model ?? existing?.model)
-          : typeof body.model === "string" && body.model.trim()
-            ? body.model.trim()
-            : existing?.model || OPENAI_CODEX_MODEL;
-        const fallbackModels =
-          Array.isArray(body.fallbackModels)
-            ? body.fallbackModels
-                .filter((item): item is string => typeof item === "string")
-                .map((item) => item.trim())
-                .filter(Boolean)
-            : typeof body.fallbackModels === "string"
-              ? body.fallbackModels
-                  .split(",")
-                  .map((item) => item.trim())
-                  .filter(Boolean)
-              : existing?.fallbackModels || [];
-        const fallbackProfileIds =
-          Array.isArray(body.fallbackProfileIds)
-            ? body.fallbackProfileIds
-                .filter((item): item is string => typeof item === "string")
-                .map((item) => item.trim())
-                .filter(Boolean)
-            : typeof body.fallbackProfileIds === "string"
-              ? body.fallbackProfileIds
-                  .split(",")
-                  .map((item) => item.trim())
-                  .filter(Boolean)
-              : existing?.fallbackProfileIds || [];
-
-        const tokenInput = typeof body.bearerToken === "string" ? body.bearerToken : "";
-        if (isCodex && tokenInput.trim()) {
-          sendJson(res, 400, {
-            error: "OAuth 卡片不支持手工填写 token。请保存卡片后点击“开始 OAuth 登录”。",
-          });
-          return;
-        }
-        const preserveExistingToken =
-          isEditingExisting &&
-          !tokenInput;
-
-        const candidateSettings: Partial<StoredLlmSettings> = {
-          id: isEditingExisting ? profileId : undefined,
-          name: profileName || existing?.name || "",
-          provider,
-          apiType:
-            isCodex
-              ? "openai-completions"
-              : body.apiType === "anthropic-messages"
-                ? "anthropic-messages"
-                : "openai-completions",
-          bearerToken:
-            preserveExistingToken
-              ? existing?.bearerToken ?? ""
-              : tokenInput,
-          baseUrl:
-            isCodex
-              ? OPENAI_CODEX_BASE_URL
-              : typeof body.baseUrl === "string" && body.baseUrl.trim()
-                ? body.baseUrl.trim()
-                : existing?.baseUrl || OPENAI_CODEX_BASE_URL,
-          model,
-          authUrl:
-            isCodex
-              ? OPENAI_CODEX_AUTH_URL
-              : typeof body.authUrl === "string" && body.authUrl.trim()
-                ? body.authUrl.trim()
-                : existing?.authUrl || "",
-          tokenUrl:
-            isCodex
-              ? OPENAI_CODEX_TOKEN_URL
-              : typeof body.tokenUrl === "string" && body.tokenUrl.trim()
-                ? body.tokenUrl.trim()
-                : existing?.tokenUrl || "",
-          clientId:
-            isCodex
-              ? OPENAI_CODEX_CLIENT_ID
-              : typeof body.clientId === "string" && body.clientId.trim()
-                ? body.clientId.trim()
-                : existing?.clientId || "",
-          scope:
-            isCodex
-              ? OPENAI_CODEX_SCOPE
-              : typeof body.scope === "string" && body.scope.trim()
-                ? body.scope.trim()
-                : existing?.scope || "",
-          oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
-          oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,
-          refreshToken: isCodex ? existing?.refreshToken : undefined,
-          routingEnabled:
-            typeof body.routingEnabled === "boolean"
-              ? body.routingEnabled
-              : existing?.routingEnabled ?? false,
-          fastProfileId:
-            typeof body.fastProfileId === "string"
-              ? body.fastProfileId.trim()
-              : existing?.fastProfileId || "",
-          strongProfileId:
-            typeof body.strongProfileId === "string"
-              ? body.strongProfileId.trim()
-              : existing?.strongProfileId || "",
-          fallbackProfileIds,
-          fastModel:
-            typeof body.fastModel === "string" && body.fastModel.trim()
-              ? body.fastModel.trim()
-              : existing?.fastModel || model,
-          strongModel:
-            typeof body.strongModel === "string" && body.strongModel.trim()
-              ? body.strongModel.trim()
-              : existing?.strongModel || model,
-          fallbackModels,
-        };
-        const validProfileIds = new Set(profiles.profiles.map((profile) => profile.id));
-        const referencedProfileIds = [
-          candidateSettings.fastProfileId || "",
-          candidateSettings.strongProfileId || "",
-          ...(candidateSettings.fallbackProfileIds || []),
-        ]
-          .filter(Boolean)
-          .filter((id) => id !== profileId);
-        const missingProfileId = referencedProfileIds.find((id) => !validProfileIds.has(id));
-        if (missingProfileId) {
-          sendJson(res, 400, {
-            error: `跨卡路由引用了不存在的模型卡：${missingProfileId}`,
-          });
-          return;
-        }
-        const validation = validateStoredLlmProfile(candidateSettings);
-        if (validation.errors.length) {
-          sendJson(res, 400, {
-            error: validation.errors[0],
-            validation,
-          });
-          return;
-        }
-
-        const shouldActivate =
-          !profiles.activeProfileId || (Boolean(profileId) && profiles.activeProfileId === profileId);
-        const settings = upsertStoredLlmProfile(vaultRoot, {
-          ...candidateSettings,
-        }, { activate: shouldActivate }).profile;
-        const calibration = settings.bearerToken.trim()
-          ? await calibrateAndPersistLlmProfile(vaultRoot, settings)
-          : {
-              ok: false,
-              calibration: updateStoredLlmProfileCalibration(vaultRoot, settings.id, {
-                status: "pending",
-                usable: false,
-                message:
-                  settings.provider === OPENAI_CODEX_PROVIDER
-                    ? "等待 OAuth 登录完成后自动校准。"
-                    : "等待填写可用 token 后自动校准。",
-                checkedAt: new Date().toISOString(),
-                structuredOutput: "unknown",
-              }).profile.calibration,
-              message:
-                settings.provider === OPENAI_CODEX_PROVIDER
-                  ? "等待 OAuth 登录完成后自动校准。"
-                  : "等待填写可用 token 后自动校准。",
-            };
-        const latestSettings =
-          listStoredLlmProfiles(vaultRoot).profiles.find((profile) => profile.id === settings.id) ??
-          settings;
-        const resolved = getLlmConfig(vaultRoot);
-        sendJson(res, 200, { settings: latestSettings, resolved, validation, calibration });
+        await handleSaveLlmSettings({
+          vaultRoot,
+          body,
+          allowedModels: OPENAI_CODEX_ALLOWED_MODELS,
+          calibrateProfile: calibrateAndPersistLlmProfile,
+          res,
+        });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm/test") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
-        const profiles = listStoredLlmProfiles(vaultRoot);
-        const existing =
-          profileId
-            ? profiles.profiles.find((profile) => profile.id === profileId) ?? null
-            : null;
-        const isEditingExisting = Boolean(profileId && existing?.id === profileId);
-
-        let candidate: Partial<StoredLlmSettings> | StoredLlmSettings | null = null;
-        if (profileId && existing?.id === profileId) {
-          candidate = existing;
-        } else if (typeof body.provider === "string") {
-          const provider =
-            body.provider === OPENAI_CODEX_PROVIDER ? OPENAI_CODEX_PROVIDER : OPENAI_KEY_PROVIDER;
-          const isCodex = provider === OPENAI_CODEX_PROVIDER;
-          const model = isCodex
-            ? normalizeCodexModel(body.model ?? existing?.model)
-            : typeof body.model === "string" && body.model.trim()
-              ? body.model.trim()
-              : existing?.model || OPENAI_CODEX_MODEL;
-          const fallbackModels =
-            Array.isArray(body.fallbackModels)
-              ? body.fallbackModels
-                  .filter((item): item is string => typeof item === "string")
-                  .map((item) => item.trim())
-                  .filter(Boolean)
-              : [];
-          const tokenInput = typeof body.bearerToken === "string" ? body.bearerToken : "";
-          if (isCodex && tokenInput.trim()) {
-            sendJson(res, 400, {
-              error: "OAuth 卡片不支持手工填写 token。请保存卡片后点击“开始 OAuth 登录”。",
-            });
-            return;
-          }
-          const preserveExistingToken = isEditingExisting && !tokenInput;
-          candidate = {
-            id: isEditingExisting ? profileId : undefined,
-            name:
-              typeof body.name === "string" && body.name.trim()
-                ? body.name.trim()
-                : existing?.name || "",
-            provider,
-            apiType:
-              isCodex
-                ? "openai-completions"
-                : body.apiType === "anthropic-messages"
-                  ? "anthropic-messages"
-                  : "openai-completions",
-            bearerToken:
-              preserveExistingToken
-                ? existing?.bearerToken ?? ""
-                : tokenInput,
-            baseUrl:
-              isCodex
-                ? OPENAI_CODEX_BASE_URL
-                : typeof body.baseUrl === "string" && body.baseUrl.trim()
-                  ? body.baseUrl.trim()
-                  : existing?.baseUrl || OPENAI_CODEX_BASE_URL,
-            model,
-            authUrl:
-              isCodex
-                ? OPENAI_CODEX_AUTH_URL
-                : typeof body.authUrl === "string" && body.authUrl.trim()
-                  ? body.authUrl.trim()
-                  : existing?.authUrl || "",
-            tokenUrl:
-              isCodex
-                ? OPENAI_CODEX_TOKEN_URL
-                : typeof body.tokenUrl === "string" && body.tokenUrl.trim()
-                  ? body.tokenUrl.trim()
-                  : existing?.tokenUrl || "",
-            clientId:
-              isCodex
-                ? OPENAI_CODEX_CLIENT_ID
-                : typeof body.clientId === "string" && body.clientId.trim()
-                  ? body.clientId.trim()
-                  : existing?.clientId || "",
-            scope:
-              isCodex
-                ? OPENAI_CODEX_SCOPE
-                : typeof body.scope === "string" && body.scope.trim()
-                  ? body.scope.trim()
-                  : existing?.scope || "",
-            oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
-            oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,
-            refreshToken: isCodex ? existing?.refreshToken : undefined,
-            routingEnabled:
-              typeof body.routingEnabled === "boolean"
-                ? body.routingEnabled
-                : existing?.routingEnabled ?? false,
-            fastModel:
-              typeof body.fastModel === "string" && body.fastModel.trim()
-                ? body.fastModel.trim()
-                : existing?.fastModel || model,
-            strongModel:
-              typeof body.strongModel === "string" && body.strongModel.trim()
-                ? body.strongModel.trim()
-                : existing?.strongModel || model,
-            fallbackModels,
-          };
-        }
-
-        if (!candidate) {
-          sendJson(res, 400, { error: "Missing profileId or model config payload." });
-          return;
-        }
-
-        const result = await runLlmConnectivityTest({
-          ...candidate,
-          id:
-            typeof candidate.id === "string" && candidate.id.trim()
-              ? candidate.id
-              : `llm-preview-${Date.now()}`,
-        } as StoredLlmSettings);
-        sendJson(res, result.ok ? 200 : 400, result);
+        await handleTestLlmSettings({
+          vaultRoot,
+          body,
+          allowedModels: OPENAI_CODEX_ALLOWED_MODELS,
+          runConnectivityTest: runLlmConnectivityTest,
+          res,
+        });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm/select") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
-        if (!profileId) {
-          sendJson(res, 400, { error: "Missing profileId." });
-          return;
-        }
-        const store = activateStoredLlmProfile(vaultRoot, profileId);
-        sendJson(res, 200, { activeProfileId: store.activeProfileId });
+        await handleSelectLlmProfile({ vaultRoot, body, res });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm/delete") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
-        if (!profileId) {
-          sendJson(res, 400, { error: "Missing profileId." });
-          return;
-        }
-        const store = deleteStoredLlmProfile(vaultRoot, profileId);
-        sendJson(res, 200, {
-          activeProfileId: store.activeProfileId,
-          remaining: store.profiles.length,
-        });
+        await handleDeleteLlmProfile({ vaultRoot, body, res });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/settings/llm/oauth/start") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        const frontendOrigin = req.headers.host
-          ? `http://${req.headers.host}`
-          : `http://127.0.0.1:${port}`;
-        const profileId = typeof body.profileId === "string" ? body.profileId.trim() : "";
-        const profiles = listStoredLlmProfiles(vaultRoot);
-        const existing =
-          profiles.profiles.find((profile) => profile.id === profileId) ??
-          getStoredLlmSettings(vaultRoot);
-        await ensureOauthCallbackServer({
+        await handleStartCodexOauth({
           vaultRoot,
+          port,
+          body,
+          allowedModels: OPENAI_CODEX_ALLOWED_MODELS,
           calibrateProfile: calibrateAndPersistLlmProfile,
-        });
-        const selectedModel = normalizeCodexModel(body.model ?? existing?.model);
-        const profileName = typeof body.name === "string" ? body.name.trim() : "";
-
-        const settings = upsertStoredLlmProfile(vaultRoot, {
-          id: profileId || undefined,
-          name: profileName || undefined,
-          provider: OPENAI_CODEX_PROVIDER,
-          apiType: "openai-completions",
-          bearerToken: existing?.bearerToken ?? "",
-          baseUrl: OPENAI_CODEX_BASE_URL,
-          model: selectedModel,
-          authUrl: OPENAI_CODEX_AUTH_URL,
-          tokenUrl: OPENAI_CODEX_TOKEN_URL,
-          clientId: OPENAI_CODEX_CLIENT_ID,
-          scope: OPENAI_CODEX_SCOPE,
-          oauthAccessToken: existing?.oauthAccessToken,
-          oauthIdToken: existing?.oauthIdToken,
-          refreshToken: existing?.refreshToken,
-        }, { activate: profiles.activeProfileId === profileId || !profiles.activeProfileId || !profileId }).profile;
-
-        const { verifier, challenge } = createPkcePair();
-        const state = createOauthState();
-        const redirectUri = `http://localhost:${OPENAI_CODEX_CALLBACK_PORT}/auth/callback`;
-        await setPendingOauthRequest(vaultRoot, {
-          state,
-          profileId: settings.id,
-          codeVerifier: verifier,
-          redirectUri,
-          tokenUrl: settings.tokenUrl,
-          clientId: settings.clientId,
-          scope: settings.scope,
-          baseUrl: settings.baseUrl,
-          model: settings.model,
-          frontendOrigin,
-          createdAt: Date.now(),
-        });
-
-        const authUrl = buildCodexAuthorizeUrl({
-          redirectUri,
-          state,
-          challenge,
-          originator: OPENAI_CODEX_ORIGINATOR,
-        });
-        const fallbackOriginator = OPENAI_CODEX_ORIGINATOR === "pi" ? "codex_cli_rs" : "pi";
-        const fallbackAuthUrl = buildCodexAuthorizeUrl({
-          redirectUri,
-          state,
-          challenge,
-          originator: fallbackOriginator,
-        });
-
-        sendJson(res, 200, {
-          authUrl,
-          fallbackAuthUrl,
-          redirectUri,
-          state,
-          profileId: settings.id,
-          provider: OPENAI_CODEX_PROVIDER_LABEL,
+          res,
         });
         return;
       }
