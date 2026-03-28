@@ -346,6 +346,7 @@ export async function importMaterial(input: {
   const fileName = `${materialId}-${slugify(input.title)}.md`;
   const path = existing?.path || join(input.vaultRoot, "materials", fileName);
 
+  const analysis = input.analysis ?? analyzeMaterialHeuristically(rawBody, input.docType);
   const frontmatter = {
     id: materialId,
     title: input.title,
@@ -359,6 +360,9 @@ export async function importMaterial(input: {
     created_at: now,
     updated_at: now,
     body_hash: bodyHash,
+    logic_chain: analysis.logic_chain,
+    template_slots: analysis.template_slots,
+    section_intents: analysis.section_intents,
   };
 
   const content = buildMaterialContent({
@@ -369,12 +373,15 @@ export async function importMaterial(input: {
     audience: input.audience,
     quality: input.quality ?? "high",
     rawBody,
-    analysis: input.analysis ?? analyzeMaterialHeuristically(rawBody, input.docType),
+    analysis,
   });
 
   await mkdir(dirname(path), { recursive: true });
   await writeMarkdownDocument(path, {
     ...frontmatter,
+    logic_chain: analysis.logic_chain,
+    template_slots: analysis.template_slots,
+    section_intents: analysis.section_intents,
     created_at:
       typeof existing?.frontmatter.created_at === "string" && existing.frontmatter.created_at
         ? existing.frontmatter.created_at
@@ -530,7 +537,17 @@ export async function analyzeImportedMaterial(
     analysis,
   });
 
-  await writeMarkdownDocument(materialPath, doc.frontmatter, rebuilt);
+  await writeMarkdownDocument(
+    materialPath,
+    {
+      ...doc.frontmatter,
+      logic_chain: analysis.logic_chain,
+      template_slots: analysis.template_slots,
+      section_intents: analysis.section_intents,
+      updated_at: new Date().toISOString(),
+    },
+    rebuilt,
+  );
 }
 
 export async function analyzeMaterialWithLlm(

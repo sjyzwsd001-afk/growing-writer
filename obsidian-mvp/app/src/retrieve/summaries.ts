@@ -106,6 +106,86 @@ function parseSectionIntentItems(content: string, count: number): SectionIntentS
     .filter((item): item is SectionIntentSummary => Boolean(item));
 }
 
+function parseFrontmatterLogicChain(value: unknown): LogicChainItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+      const entry = item as Record<string, unknown>;
+      if (
+        typeof entry.from !== "string" ||
+        typeof entry.to !== "string" ||
+        typeof entry.reason !== "string"
+      ) {
+        return null;
+      }
+      return {
+        from: entry.from.trim(),
+        to: entry.to.trim(),
+        reason: entry.reason.trim(),
+      } satisfies LogicChainItem;
+    })
+    .filter((item): item is LogicChainItem => Boolean(item));
+}
+
+function parseFrontmatterTemplateSlots(value: unknown): TemplateSlotSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+      const entry = item as Record<string, unknown>;
+      if (
+        typeof entry.section !== "string" ||
+        typeof entry.slot_name !== "string" ||
+        typeof entry.fill_rule !== "string" ||
+        typeof entry.source_hint !== "string"
+      ) {
+        return null;
+      }
+      return {
+        section: entry.section.trim(),
+        slot_name: entry.slot_name.trim(),
+        fill_rule: entry.fill_rule.trim(),
+        source_hint: entry.source_hint.trim(),
+      } satisfies TemplateSlotSummary;
+    })
+    .filter((item): item is TemplateSlotSummary => Boolean(item));
+}
+
+function parseFrontmatterSectionIntents(value: unknown): SectionIntentSummary[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+      const entry = item as Record<string, unknown>;
+      if (
+        typeof entry.section !== "string" ||
+        typeof entry.intent !== "string" ||
+        typeof entry.trigger !== "string"
+      ) {
+        return null;
+      }
+      return {
+        section: entry.section.trim(),
+        intent: entry.intent.trim(),
+        trigger: entry.trigger.trim(),
+      } satisfies SectionIntentSummary;
+    })
+    .filter((item): item is SectionIntentSummary => Boolean(item));
+}
+
 function detectMaterialRole(material: Material): "template" | "history" | "unknown" {
   const source = String(material.frontmatter.source || "");
   if (material.tags.some((tag) => /template|模板/i.test(tag)) || /template|模板/i.test(source)) {
@@ -149,9 +229,18 @@ function inferSectionIntent(section: string): string {
 
 export function summarizeMaterial(material: Material): MaterialSummary {
   const materialRole = detectMaterialRole(material);
-  const logicChain = parseLogicChainItems(material.content, 6);
-  const templateSlots = parseTemplateSlotItems(material.content, 8);
-  const sectionIntents = parseSectionIntentItems(material.content, 8);
+  const frontmatterLogicChain = parseFrontmatterLogicChain(material.frontmatter.logic_chain);
+  const frontmatterTemplateSlots = parseFrontmatterTemplateSlots(material.frontmatter.template_slots);
+  const frontmatterSectionIntents = parseFrontmatterSectionIntents(material.frontmatter.section_intents);
+  const logicChain = frontmatterLogicChain.length
+    ? frontmatterLogicChain
+    : parseLogicChainItems(material.content, 6);
+  const templateSlots = frontmatterTemplateSlots.length
+    ? frontmatterTemplateSlots
+    : parseTemplateSlotItems(material.content, 8);
+  const sectionIntents = frontmatterSectionIntents.length
+    ? frontmatterSectionIntents
+    : parseSectionIntentItems(material.content, 8);
   const derivedSections = materialRole === "template" ? deriveTemplateSections(material.content, 6) : [];
   const derivedTemplateSlots =
     materialRole === "template" && !templateSlots.length
