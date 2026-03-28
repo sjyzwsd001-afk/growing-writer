@@ -30,6 +30,45 @@ import {
   taskAnalysisSchema,
 } from "../types/schemas.js";
 
+function applyTemplateRewritePlanToOutline(
+  outline: OutlineResult,
+  templateRewritePlan: TemplateRewriteStep[],
+): OutlineResult {
+  if (!templateRewritePlan.length) {
+    return outline;
+  }
+
+  const alignedSections = templateRewritePlan.slice(0, 6).map((step, index) => {
+    const existing = outline.sections[index];
+    const sourceBasis = [
+      `模板槽位:${step.section}`,
+      ...(step.logic_after ? [`逻辑承接:${step.logic_after}`] : []),
+      ...(existing?.source_basis ?? []),
+    ].filter(Boolean);
+    const keyPoints = [
+      step.fill_strategy,
+      ...(existing?.key_points ?? []),
+    ].filter(Boolean);
+    return {
+      heading: step.section,
+      purpose: existing?.purpose || step.intent,
+      key_points: [...new Set(keyPoints)].slice(0, 5),
+      source_basis: [...new Set(sourceBasis)].slice(0, 5),
+    };
+  });
+
+  return {
+    ...outline,
+    sections: alignedSections,
+    coverage_check: [
+      ...new Set([
+        ...(outline.coverage_check ?? []),
+        `模板改写步骤已对齐 ${alignedSections.length} 节`,
+      ]),
+    ].slice(0, 6),
+  };
+}
+
 const TASK_ANALYSIS_SCHEMA_HINT = `{
   "task_type": "string",
   "audience": "string",
@@ -198,21 +237,35 @@ export function buildOutline(input: {
   matchedMaterials: Material[];
   evidenceCards?: EvidenceCard[];
   profiles?: Profile[];
+  templateRewritePlan?: TemplateRewriteStep[];
 }): OutlineResult {
-  return {
+  const baseOutline = {
     outline_title: input.task.title,
-    sections: input.diagnosis.recommended_structure.map((section) => ({
-      heading: section.section,
-      purpose: section.purpose,
-      key_points: section.must_cover,
-      source_basis: [
-        ...input.matchedRules.slice(0, 2).map((rule) => rule.title),
-        ...input.matchedMaterials.slice(0, 1).map((material) => material.title),
-      ],
-    })),
+    sections:
+      input.templateRewritePlan?.length
+        ? input.templateRewritePlan.slice(0, 6).map((step) => ({
+            heading: step.section,
+            purpose: step.intent,
+            key_points: [step.fill_strategy],
+            source_basis: [
+              `模板槽位:${step.section}`,
+              ...(step.logic_after ? [`逻辑承接:${step.logic_after}`] : []),
+              ...input.matchedRules.slice(0, 2).map((rule) => rule.title),
+            ].slice(0, 5),
+          }))
+        : input.diagnosis.recommended_structure.map((section) => ({
+            heading: section.section,
+            purpose: section.purpose,
+            key_points: section.must_cover,
+            source_basis: [
+              ...input.matchedRules.slice(0, 2).map((rule) => rule.title),
+              ...input.matchedMaterials.slice(0, 1).map((material) => material.title),
+            ],
+          })),
     tone_notes: ["正式", "克制", "先结论后展开"],
     coverage_check: ["待接入 LLM 细化覆盖检查"],
   };
+  return applyTemplateRewritePlanToOutline(baseOutline, input.templateRewritePlan ?? []);
 }
 
 export async function buildOutlineWithLlm(
@@ -228,7 +281,7 @@ export async function buildOutlineWithLlm(
     templateRewritePlan?: TemplateRewriteStep[];
   },
 ): Promise<OutlineResult> {
-  return client.generateJson({
+  const outline = await client.generateJson({
     system: BASE_SYSTEM_PROMPT,
     user: buildOutlinePrompt({
       taskAnalysis: input.analysis,
@@ -244,6 +297,7 @@ export async function buildOutlineWithLlm(
     maxTokens: 1400,
     timeoutMs: 75_000,
   });
+  return applyTemplateRewritePlanToOutline(outline, input.templateRewritePlan ?? []);
 }
 
 export function generateDraft(input: {

@@ -29,6 +29,8 @@ export function buildOutlinePrompt(input: {
 5. 不要写成正文
 6. 如果材料中有模板槽位，优先把提纲写成“固定结构 + 本次需要替换的内容”
 7. 如果历史材料里存在明确逻辑链，提纲顺序优先遵循该逻辑链，而不是自由重排
+8. 如果模板改写计划中已经给出 rewrite_steps，sections 应尽量按 rewrite_steps 的 section 顺序生成，至少前几节不要偏离该顺序
+9. 每一节 key_points 都要能对应 rewrite_steps 里的 fill_strategy 或 must_include，不要只写空泛标题
 
 输出要求：
 - 只输出 JSON

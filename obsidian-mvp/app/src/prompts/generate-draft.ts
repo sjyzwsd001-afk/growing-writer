@@ -35,6 +35,7 @@ export function buildGenerateDraftPrompt(input: {
 9. revision_suggestions 最多 3 条，短句即可
 10. 如果命中模板槽位，必须结合本次背景材料替换对应部分，不要照抄模板中的旧事实
 11. 如果历史材料中给出了明确逻辑链，正文段落顺序应优先沿用该逻辑链
+12. 如果模板改写计划中已经给出 rewrite_steps，正文各大段顺序应尽量与这些 section 一致，不要跳过前面的关键模板段
 
 然后做一轮自检：
 - 哪些地方写得比较稳
