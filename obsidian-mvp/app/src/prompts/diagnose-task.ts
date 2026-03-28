@@ -26,6 +26,7 @@ export function buildDiagnoseTaskPrompt(input: {
 4. 标出本次真正应启用的规则
 5. 标出如果直接生成，最可能出现的问题
 6. 如果相似材料中存在模板槽位或逻辑关系，明确指出本次应沿用哪些槽位、哪些逻辑顺序
+7. 相似材料里的 logic_chain / template_slots / section_intents 都是结构化线索，不是普通描述文本；请把它们当成可执行约束来诊断
 
 输出要求：
 - 只输出 JSON

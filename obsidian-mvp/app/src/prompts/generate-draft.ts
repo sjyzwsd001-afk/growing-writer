@@ -75,6 +75,7 @@ export function buildGenerateDraftPrompt(input: {
 16. 写正文时请按 section_write_briefs 逐段完成，不要让所有段落重复同一组事实
 17. 每一段优先使用自己被分配到的 assigned_facts 和 assigned_requirements，再补充全局事实
 18. 如果某段存在 logic_after，对应段落顺序和承接关系必须体现出来
+19. 相似材料里的 logic_chain / template_slots / section_intents 是结构化约束；请直接利用 from -> to、section、intent、fill_rule 这些字段，不要把它们降成泛泛参考
 
 然后做一轮自检：
 - 哪些地方写得比较稳

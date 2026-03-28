@@ -1687,6 +1687,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     task,
     taskAnalysis: analysis,
     evidenceCards,
+    referenceMaterials: matchedMaterials,
   });
   const ruleDecisionLog = [
     ...ruleMatch.decisionLog,

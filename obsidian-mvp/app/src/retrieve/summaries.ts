@@ -570,6 +570,7 @@ export function buildTemplateRewriteHint(input: {
   task: Task;
   taskAnalysis: TaskAnalysis;
   evidenceCards: EvidenceCard[];
+  referenceMaterials?: Material[];
 }): TemplateRewriteHint | null {
   if (!input.selectedTemplate) {
     return null;
@@ -583,13 +584,28 @@ export function buildTemplateRewriteHint(input: {
   const evidenceIds = evidenceCards.map((card) => card.card_id);
   const evidence = evidenceCards.map((card) => `${card.material_title}#${card.card_id}`).join("、");
   const logicChain = summary.logic_chain.slice(0, 8);
+  const historySummaries = (input.referenceMaterials ?? [])
+    .filter((material) => material.id !== input.selectedTemplate?.id)
+    .map((material) => summarizeMaterial(material))
+    .filter((item) => item.material_role !== "template");
+  const historyLogicChain = historySummaries.flatMap((item) => item.logic_chain).slice(0, 8);
   const rewriteSteps: TemplateRewriteStep[] = summary.template_slots.slice(0, 6).map((slot, index) => {
     const section = slot.section?.trim() || `段落${index + 1}`;
     const intent =
       summary.section_intents.find((item) => item.section === section)?.intent ||
       summary.section_intents[index]?.intent ||
       "沿用模板段落功能，但改写为本次任务语境";
-    const logicAfter = index > 0 ? logicChain[index - 1] || logicChain[0] || null : null;
+    const matchedHistoryLogic =
+      historyLogicChain.find(
+        (item) =>
+          item.to.includes(section) ||
+          item.from.includes(section) ||
+          intent.includes(item.to) ||
+          intent.includes(item.from),
+      ) || null;
+    const logicAfter =
+      (index > 0 ? logicChain[index - 1] || logicChain[0] || null : null) ||
+      matchedHistoryLogic;
     const assignedFacts = pickFactsForStep({
       section,
       intent,
@@ -615,7 +631,14 @@ export function buildTemplateRewriteHint(input: {
             ? `；并确保覆盖「${mustInclude}」`
             : ""
       }；替换规则：${slot.fill_rule || "保留段落结构，替换旧事实和旧结论"}`,
-      source_hint: slot.source_hint || evidence || "优先使用本次背景材料与任务事实",
+      source_hint:
+        slot.source_hint ||
+        historySummaries
+          .map((item) => item.title)
+          .slice(0, 2)
+          .join("、") ||
+        evidence ||
+        "优先使用本次背景材料与任务事实",
       evidence_card_ids: evidenceIds,
       logic_after: logicAfter,
     };
@@ -644,6 +667,9 @@ export function buildTemplateRewriteHint(input: {
 
   summary.logic_chain.slice(0, 3).forEach((item) => {
     plan.push(`逻辑顺序约束：先写「${item.from}」再写「${item.to}」；原因：${item.reason}`);
+  });
+  historyLogicChain.slice(0, 2).forEach((item) => {
+    plan.push(`历史材料逻辑参考：先写「${item.from}」再写「${item.to}」；原因：${item.reason}`);
   });
 
   return {
