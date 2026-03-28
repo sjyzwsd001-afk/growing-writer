@@ -198,7 +198,7 @@ export function parseTask(task: Task): TaskAnalysis {
     raw_facts: [],
     missing_info: ["待接入 LLM 解析任务原文和素材"],
     risk_flags: [],
-    confidence: 0.35,
+    confidence: 0.1,
   };
 }
 

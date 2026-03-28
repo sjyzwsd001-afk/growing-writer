@@ -41,13 +41,19 @@ export const OPENAI_KEY_PROVIDER_LABEL = "OpenAI API Key";
 export const OPENAI_CODEX_ISSUER = "https://auth.openai.com";
 export const OPENAI_CODEX_AUTH_URL = `${OPENAI_CODEX_ISSUER}/oauth/authorize`;
 export const OPENAI_CODEX_TOKEN_URL = `${OPENAI_CODEX_ISSUER}/oauth/token`;
-export const OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
+export const OPENAI_CODEX_CLIENT_ID =
+  process.env.OPENAI_CODEX_CLIENT_ID?.trim() || "app_EMoamEEZ73f0CkXaXp7hrann";
 export const OPENAI_CODEX_SCOPE = "openid profile email offline_access";
-export const OPENAI_CODEX_ORIGINATOR = "pi";
+export const OPENAI_CODEX_ORIGINATOR = process.env.OPENAI_CODEX_ORIGINATOR?.trim() || "pi";
 export const OPENAI_CODEX_BASE_URL = "https://api.openai.com/v1";
-export const OPENAI_CODEX_MODEL = "gpt-5.4";
-export const OPENAI_CODEX_ALLOWED_MODELS = ["gpt-5.4", "gpt-5.3-codex"] as const;
-export const OPENAI_CODEX_CALLBACK_PORT = 1455;
+export const OPENAI_CODEX_MODEL = process.env.OPENAI_CODEX_MODEL?.trim() || "gpt-5.4";
+export const OPENAI_CODEX_ALLOWED_MODELS = (
+  process.env.OPENAI_CODEX_ALLOWED_MODELS?.split(",").map((item) => item.trim()).filter(Boolean) || [
+    "gpt-5.4",
+    "gpt-5.3-codex",
+  ]
+) as readonly string[];
+export const OPENAI_CODEX_CALLBACK_PORT = Number(process.env.OPENAI_CODEX_CALLBACK_PORT || 1455);
 
 export const TASK_SECTIONS = [
   "写前诊断",

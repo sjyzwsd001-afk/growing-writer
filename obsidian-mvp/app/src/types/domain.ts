@@ -33,10 +33,12 @@ export type Task = MarkdownDocument & {
   docType: string;
   audience: string;
   scenario: string;
-  status: string;
+  status: TaskStatus;
   sourceMaterials: string[];
   matchedRules: string[];
 };
+
+export type TaskStatus = "draft" | "in_progress" | "completed";
 
 export type Feedback = MarkdownDocument & {
   id: string;

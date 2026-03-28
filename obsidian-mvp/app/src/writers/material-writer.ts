@@ -10,16 +10,9 @@ import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
 import { buildAnalyzeMaterialPrompt } from "../prompts/analyze-material.js";
 import { materialAnalysisSchema, type MaterialAnalysis } from "../types/schemas.js";
+import { slugify } from "../utils/text.js";
 import { replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 import { readMarkdownDocument } from "../vault/markdown.js";
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
 
 function decodeXmlText(value: string): string {
   return value

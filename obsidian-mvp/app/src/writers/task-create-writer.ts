@@ -2,15 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { Material } from "../types/domain.js";
+import { slugify } from "../utils/text.js";
 import { writeMarkdownDocument } from "../vault/markdown.js";
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
 
 function toBulletList(items: string[]): string {
   const cleaned = items.map((item) => item.trim()).filter(Boolean);

@@ -2,7 +2,7 @@ import fg from "fast-glob";
 import { join } from "node:path";
 
 import { readMarkdownDocument } from "./markdown.js";
-import type { Feedback, Material, Profile, Rule, Task } from "../types/domain.js";
+import type { Feedback, Material, Profile, Rule, Task, TaskStatus } from "../types/domain.js";
 
 function normalizeString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -14,6 +14,12 @@ function normalizeStringArray(value: unknown): string[] {
 
 function normalizeNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" ? value : fallback;
+}
+
+function normalizeTaskStatus(value: unknown, fallback: TaskStatus = "draft"): TaskStatus {
+  return value === "draft" || value === "in_progress" || value === "completed"
+    ? value
+    : fallback;
 }
 
 export class VaultRepository {
@@ -57,7 +63,7 @@ export class VaultRepository {
       docType: normalizeString(doc.frontmatter.doc_type),
       audience: normalizeString(doc.frontmatter.audience),
       scenario: normalizeString(doc.frontmatter.scenario),
-      status: normalizeString(doc.frontmatter.status, "draft"),
+      status: normalizeTaskStatus(doc.frontmatter.status, "draft"),
       sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
       matchedRules: normalizeStringArray(doc.frontmatter.matched_rules),
     };
@@ -151,7 +157,7 @@ export class VaultRepository {
       docType: normalizeString(matched.frontmatter.doc_type),
       audience: normalizeString(matched.frontmatter.audience),
       scenario: normalizeString(matched.frontmatter.scenario),
-      status: normalizeString(matched.frontmatter.status, "draft"),
+      status: normalizeTaskStatus(matched.frontmatter.status, "draft"),
       sourceMaterials: normalizeStringArray(matched.frontmatter.source_materials),
       matchedRules: normalizeStringArray(matched.frontmatter.matched_rules),
     };
@@ -176,7 +182,7 @@ export class VaultRepository {
       docType: normalizeString(doc.frontmatter.doc_type),
       audience: normalizeString(doc.frontmatter.audience),
       scenario: normalizeString(doc.frontmatter.scenario),
-      status: normalizeString(doc.frontmatter.status, "draft"),
+      status: normalizeTaskStatus(doc.frontmatter.status, "draft"),
       sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
       matchedRules: normalizeStringArray(doc.frontmatter.matched_rules),
     }));

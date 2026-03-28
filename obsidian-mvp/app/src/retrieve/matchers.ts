@@ -228,16 +228,16 @@ type FeedbackIntent = "structure" | "logic" | "missing_info" | "tone" | "none";
 
 function classifyFeedbackIntent(text: string): FeedbackIntent {
   const normalized = text.toLowerCase();
-  if (/结构|顺序|层次|先.+后|段落|提纲/.test(normalized)) {
+  if (/结构|顺序|层次|先.+后|段落|提纲|structure|outline|section|order|sequence/.test(normalized)) {
     return "structure";
   }
-  if (/逻辑|因果|论证|推导|依据|结论/.test(normalized)) {
+  if (/逻辑|因果|论证|推导|依据|结论|logic|reasoning|evidence|conclusion|because/.test(normalized)) {
     return "logic";
   }
-  if (/缺失|遗漏|补充|空泛|具体|数据|事实|动作|量化|影响范围/.test(normalized)) {
+  if (/缺失|遗漏|补充|空泛|具体|数据|事实|动作|量化|影响范围|missing|omit|add|detail|data|fact|action|specific/.test(normalized)) {
     return "missing_info";
   }
-  if (/语气|措辞|表达|正式|口语|简洁/.test(normalized)) {
+  if (/语气|措辞|表达|正式|口语|简洁|tone|wording|expression|formal|casual|concise/.test(normalized)) {
     return "tone";
   }
   return "none";
@@ -378,7 +378,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
           ? "confirmed_rule"
           : "candidate_rule";
       const sourceWeight = SOURCE_WEIGHTS[sourceType];
-      const confidence = clamp(rule.confidence || 0.5, 0.1, 1);
+      const confidence = clamp(rule.confidence || 0.5, 0, 1);
       const recency = recencyFactor(
         typeof rule.frontmatter.updated_at === "string" ? rule.frontmatter.updated_at : "",
       );
