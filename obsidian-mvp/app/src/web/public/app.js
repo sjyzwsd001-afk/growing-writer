@@ -583,6 +583,7 @@ async function api(path, options = {}, timeoutMs = DEFAULT_API_TIMEOUT_MS) {
   try {
     const response = await fetch(path, {
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       ...options,
       signal: controller.signal,
     });

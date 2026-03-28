@@ -1,6 +1,6 @@
-import { appendFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
@@ -58,10 +58,6 @@ import {
 import { loadWorkflowDefinition, saveWorkflowDefinition } from "../workflows/definition.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
 import {
-  analyzeImportedMaterial,
-  createMaterialAnalyzer,
-  extractTextFromBuffer,
-  importMaterial,
 } from "../writers/material-writer.js";
 import { refreshDefaultProfile } from "../writers/profile-writer.js";
 import {
@@ -85,11 +81,38 @@ import {
   handleStartCodexOauth,
   handleTestLlmSettings,
 } from "./llm-settings.js";
+import {
+  classifyMaterialRole,
+  handleAnalyzeMaterial,
+  handleAnalyzeMaterialsBatch,
+  handleDeleteMaterials,
+  handleDeleteMaterialsBatch,
+  handleImportMaterials,
+  handleUpdateMaterialRole,
+  handleUpdateMaterialRoleBatch,
+  isTemplateMaterial,
+  normalizeTagList,
+} from "./materials.js";
 import { buildCodexAuthorizeUrl, createOauthState, createPkcePair, ensureOauthCallbackServer } from "./oauth.js";
 import {
   setPendingOauthRequest,
 } from "./oauth-state.js";
+import { attachApiSessionCookie, ensureApiSession } from "./session.js";
 import { serveStatic } from "./static.js";
+import {
+  handleCreateTaskRoute,
+  handleRunTaskRoute,
+  handleUpdateTaskDraftRoute,
+} from "./tasks.js";
+import {
+  handleCreateFeedbackRoute,
+  handleEvaluateFeedbackRoute,
+  handleLearnFeedbackRoute,
+  handleRuleActionRoute,
+  handleRuleRollbackRoute,
+  handleRuleScopeRoute,
+  handleRuleVersionsRoute,
+} from "./rules-feedback.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -128,187 +151,6 @@ function normalizeCodexModel(model: unknown): string {
   return OPENAI_CODEX_ALLOWED_MODELS.includes(model as (typeof OPENAI_CODEX_ALLOWED_MODELS)[number])
     ? model
     : OPENAI_CODEX_MODEL;
-}
-
-function normalizeTagList(input: unknown): string[] {
-  if (Array.isArray(input)) {
-    return input
-      .map((item) => (typeof item === "string" ? item.trim() : ""))
-      .filter(Boolean);
-  }
-
-  if (typeof input === "string") {
-    return input
-      .split(/[,\n]/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
-function parseMaterialSourceRole(source: string): "template" | "history" | "" {
-  const normalized = source.trim().toLowerCase();
-  if (normalized === "template" || normalized.startsWith("template:")) {
-    return "template";
-  }
-  if (normalized === "history" || normalized.startsWith("history:")) {
-    return "history";
-  }
-  return "";
-}
-
-function stripMaterialSourceRole(source: string): string {
-  return source.replace(/^(template|history)[:：]\s*/i, "").trim();
-}
-
-function isTemplateMaterial(input: { tags?: string[]; source?: string; docType?: string }): boolean {
-  const tags = (input.tags ?? []).map((item) => item.toLowerCase());
-  if (tags.includes("template") || tags.includes("模板")) {
-    return true;
-  }
-
-  const source = (input.source ?? "").toLowerCase();
-  const docType = (input.docType ?? "").toLowerCase();
-  const sourceRole = parseMaterialSourceRole(source);
-  return sourceRole === "template" || (sourceRole === "" && (source.includes("template") || source.includes("模板"))) || docType.includes("模板");
-}
-
-function classifyMaterialRole(input: {
-  isTemplate: boolean;
-  source?: string;
-  quality?: string;
-  docType?: string;
-  scenario?: string;
-}) {
-  if (input.isTemplate) {
-    return {
-      roleLabel: "模板",
-      roleReason: "会以高权重参与结构和表达约束。",
-    };
-  }
-
-  const source = String(input.source || "").toLowerCase();
-  const docType = String(input.docType || "").toLowerCase();
-  const scenario = String(input.scenario || "").toLowerCase();
-  const quality = String(input.quality || "").toLowerCase();
-
-  if (
-    source.includes("background") ||
-    source.includes("upload") ||
-    source.includes("上传") ||
-    docType.includes("背景") ||
-    scenario.includes("背景")
-  ) {
-    return {
-      roleLabel: "背景素材",
-      roleReason: "主要提供事实、数据和本次任务上下文。",
-    };
-  }
-
-  if (quality === "high") {
-    return {
-      roleLabel: "历史范文",
-      roleReason: "更适合提炼结构、语气和常用表达。",
-    };
-  }
-
-  return {
-    roleLabel: "参考材料",
-    roleReason: "作为一般补充信息参与检索和引用。",
-  };
-}
-
-async function updateMaterialRole(input: {
-  vaultRoot: string;
-  materialPath: string;
-  role: "template" | "history";
-  reason?: string;
-}) {
-  const doc = await readMarkdownDocument(input.materialPath);
-  const currentTags = Array.isArray(doc.frontmatter.tags)
-    ? doc.frontmatter.tags.filter((item): item is string => typeof item === "string")
-    : [];
-  const nextTags = currentTags.filter((tag) => !/template|模板/i.test(tag));
-  if (input.role === "template") {
-    nextTags.push("template");
-  }
-  const dedupedTags = [...new Set(nextTags)];
-  const now = new Date().toISOString();
-  const currentSource = typeof doc.frontmatter.source === "string" ? doc.frontmatter.source : "";
-  const sourcePrefix = input.role === "template" ? "template" : "history";
-  const sourceBody = stripMaterialSourceRole(currentSource);
-  const nextSource = sourceBody && sourceBody.toLowerCase() !== sourcePrefix ? `${sourcePrefix}: ${sourceBody}` : sourcePrefix;
-
-  await writeMarkdownDocument(
-    input.materialPath,
-    {
-      ...doc.frontmatter,
-      tags: dedupedTags,
-      quality: input.role === "template" ? "high" : doc.frontmatter.quality ?? "high",
-      source: nextSource,
-      updated_at: now,
-      role_reason: input.reason || (input.role === "template" ? "通过设置页切换为模板材料" : "通过设置页切换为历史材料"),
-    },
-    doc.content,
-  );
-
-  const repo = new VaultRepository(input.vaultRoot);
-  const materials = await repo.loadMaterials();
-  const material = materials.find((item) => item.path === input.materialPath);
-  if (!material) {
-    throw new Error("更新后未找到材料。");
-  }
-  const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
-  const isTemplate = isTemplateMaterial({
-    tags: material.tags,
-    source,
-    docType: material.docType,
-  });
-  const role = classifyMaterialRole({
-    isTemplate,
-    source,
-    quality: material.quality,
-    docType: material.docType,
-    scenario: material.scenario,
-  });
-
-  return {
-    path: input.materialPath,
-    title: material.title,
-    isTemplate,
-    roleLabel: role.roleLabel,
-    roleReason: role.roleReason,
-    recommendTemplatePromotion:
-      !isTemplate &&
-      String(material.quality || "") === "high" &&
-      ((material.content.match(/候选规则\s*\d+：/g) || []).length >= 2) &&
-      ((material.content.match(/^##\s+/gm) || []).length >= 3),
-  };
-}
-
-async function updateMaterialRoleBatch(input: {
-  vaultRoot: string;
-  materialPaths: string[];
-  role: "template" | "history";
-  reason?: string;
-}) {
-  const updated = [];
-  for (const materialPath of input.materialPaths) {
-    updated.push(
-      await updateMaterialRole({
-        vaultRoot: input.vaultRoot,
-        materialPath,
-        role: input.role,
-        reason: input.reason,
-      }),
-    );
-  }
-  return {
-    role: input.role,
-    updated,
-    updatedCount: updated.length,
-  };
 }
 
 type TaskCreateRequest = {
@@ -901,7 +743,7 @@ function detectRuleConflictHints(
   rules: Array<{
     id: string;
     title: string;
-    status: string;
+    status: "candidate" | "confirmed" | "disabled";
     scope: string;
     docTypes: string[];
     audiences: string[];
@@ -2323,15 +2165,18 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       const url = new URL(req.url, `http://127.0.0.1:${port}`);
       if (url.pathname.startsWith("/api/")) {
         ensureLocalApiRequest(req);
+        ensureApiSession(req);
       }
 
       if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/assets/"))) {
         const staticPath = url.pathname === "/" ? "/index.html" : url.pathname.replace(/^\/assets/, "");
+        attachApiSessionCookie(res);
         await serveStatic(publicDir, res, staticPath);
         return;
       }
 
       if (req.method === "GET" && url.pathname === "/favicon.ico") {
+        attachApiSessionCookie(res);
         res.writeHead(204);
         res.end();
         return;
@@ -2403,148 +2248,24 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/materials/import") {
         const body = (await readBody(req)) as Record<string, string | string[] | undefined>;
-        const uploadFiles = Array.isArray(body.uploadFiles)
-          ? body.uploadFiles
-              .filter((item) => typeof item === "string" && item.trim())
-              .map((item) => {
-                try {
-                  return JSON.parse(String(item)) as { name?: string; base64?: string };
-                } catch {
-                  return null;
-                }
-              })
-              .filter((item): item is { name?: string; base64?: string } => Boolean(item?.name && item?.base64))
-          : [];
-        const hasUpload = Boolean(body.uploadName && body.uploadBase64) || uploadFiles.length > 0;
-        if (
-          !body.docType ||
-          (!body.title && !hasUpload) ||
-          (!body.body && !body.sourceFile && !body.uploadName && uploadFiles.length === 0)
-        ) {
-          sendJson(res, 400, { error: "docType 必填；标题在手工输入时必填；正文/文件路径/浏览器上传文件至少要提供一项。" });
-          return;
-        }
-
-        const analyzer = createMaterialAnalyzer(createAllAvailableLlmClients(vaultRoot));
-        const tags = normalizeTagList(body.tags);
-        const isTemplate = body.isTemplate === "true" || body.mode === "template";
-        if (isTemplate) {
-          tags.push("template");
-        }
-        const commonInput = {
+        await handleImportMaterials({
           vaultRoot,
-          docType: String(body.docType),
-          audience: typeof body.audience === "string" ? body.audience : "",
-          scenario: typeof body.scenario === "string" ? body.scenario : "",
-          quality: isTemplate ? "high" : typeof body.quality === "string" ? body.quality : "high",
-          tags,
-        };
-
-        if (uploadFiles.length > 0) {
-          const imported = [];
-          for (const file of uploadFiles) {
-            const rawBody = await extractTextFromBuffer({
-              fileName: String(file.name),
-              buffer: Buffer.from(String(file.base64), "base64"),
-            });
-            const derivedTitle = String(file.name).replace(/\.[^.]+$/, "");
-            const analysis = rawBody
-              ? await analyzer({
-                  title: derivedTitle,
-                  rawBody,
-                  docType: commonInput.docType,
-                  audience: commonInput.audience,
-                  scenario: commonInput.scenario,
-                })
-              : undefined;
-            imported.push(
-              await importMaterial({
-                ...commonInput,
-                title: derivedTitle,
-                source: typeof body.source === "string" && body.source ? `${body.source} / ${file.name}` : file.name,
-                body: rawBody,
-                analysis,
-              }),
-            );
-          }
-          sendJson(res, 200, { imported, count: imported.length, mode: isTemplate ? "template" : "normal" });
-          return;
-        }
-
-        const uploadedBody =
-          body.uploadName && body.uploadBase64
-            ? await extractTextFromBuffer({
-                fileName: String(body.uploadName),
-                buffer: Buffer.from(String(body.uploadBase64), "base64"),
-              })
-            : "";
-        const rawBody = (typeof body.body === "string" ? body.body : "") || uploadedBody;
-        const analysis = rawBody
-          ? await analyzer({
-              title: String(body.title),
-              rawBody,
-              docType: commonInput.docType,
-              audience: commonInput.audience,
-              scenario: commonInput.scenario,
-            })
-          : undefined;
-
-        const result = await importMaterial({
-          ...commonInput,
-          title: String(body.title),
-          source: typeof body.source === "string" ? body.source : "",
-          body: rawBody,
-          sourceFile: typeof body.sourceFile === "string" && body.sourceFile ? resolve(body.sourceFile) : undefined,
-          analysis,
+          body,
+          createClients: () => createAllAvailableLlmClients(vaultRoot),
+          res,
         });
-
-        sendJson(res, 200, result);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/delete") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        const rawPath = typeof body.path === "string" ? body.path : "";
-        if (!rawPath) {
-          sendJson(res, 400, { error: "Missing material path." });
-          return;
-        }
-        const resolvedPath = resolve(rawPath);
-        const materialsRoot = join(vaultRoot, "materials");
-        const inMaterialsRoot =
-          resolvedPath === materialsRoot ||
-          resolvedPath.startsWith(`${materialsRoot}${sep}`);
-        if (!inMaterialsRoot || !resolvedPath.endsWith(".md")) {
-          sendJson(res, 400, { error: "只能删除 materials 目录下的材料或模板文件。" });
-          return;
-        }
-        await rm(resolvedPath, { force: false });
-        sendJson(res, 200, { ok: true, path: resolvedPath });
+        await handleDeleteMaterials({ vaultRoot, body, res });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/delete-batch") {
         const body = (await readBody(req)) as Record<string, string[] | undefined>;
-        const rawPaths = Array.isArray(body.paths) ? body.paths.filter((item) => typeof item === "string" && item.trim()) : [];
-        if (!rawPaths.length) {
-          sendJson(res, 400, { error: "Missing material paths." });
-          return;
-        }
-        const materialsRoot = join(vaultRoot, "materials");
-        const deleted: string[] = [];
-        for (const rawPath of rawPaths) {
-          const resolvedPath = resolve(String(rawPath));
-          const inMaterialsRoot =
-            resolvedPath === materialsRoot ||
-            resolvedPath.startsWith(`${materialsRoot}${sep}`);
-          if (!inMaterialsRoot || !resolvedPath.endsWith(".md")) {
-            sendJson(res, 400, { error: "只能删除 materials 目录下的材料或模板文件。" });
-            return;
-          }
-          await rm(resolvedPath, { force: false });
-          deleted.push(resolvedPath);
-        }
-        sendJson(res, 200, { ok: true, deleted, count: deleted.length });
+        await handleDeleteMaterialsBatch({ vaultRoot, body, res });
         return;
       }
 
@@ -2622,447 +2343,166 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "POST" && url.pathname === "/api/tasks/create") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const request = toTaskCreateRequest(body);
-        if (!request.title || !request.docType) {
-          sendJson(res, 400, { error: "title 和 docType 是必填项。" });
-          return;
-        }
-
-        const { created } = await createTaskFromRequest({
+        await handleCreateTaskRoute({
           vaultRoot,
-          request,
+          body,
+          res,
+          toTaskCreateRequest,
+          createTaskFromRequest,
         });
-
-        sendJson(res, 200, created);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/analyze") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path) {
-          sendJson(res, 400, { error: "Missing material path." });
-          return;
-        }
-        const materialPath = resolve(body.path);
-
-        await analyzeImportedMaterial(materialPath, {
-          analyze: createMaterialAnalyzer(createAllAvailableLlmClients(vaultRoot)),
-        });
-        const repo = new VaultRepository(vaultRoot);
-        const materials = await repo.loadMaterials();
-        const material = materials.find((item) => item.path === materialPath);
-        if (!material) {
-          sendJson(res, 404, { error: "Material not found after analysis." });
-          return;
-        }
-        const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
-        const isTemplate = isTemplateMaterial({
-          tags: material.tags,
-          source,
-          docType: material.docType,
-        });
-        const role = classifyMaterialRole({
-          isTemplate,
-          source,
-          quality: material.quality,
-          docType: material.docType,
-          scenario: material.scenario,
-        });
-        sendJson(res, 200, {
-          path: materialPath,
-          status: "analyzed",
-          title: material.title,
-          roleLabel: role.roleLabel,
-          roleReason: role.roleReason,
+        await handleAnalyzeMaterial({
+          vaultRoot,
+          body,
+          createClients: () => createAllAvailableLlmClients(vaultRoot),
+          res,
         });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/analyze/batch") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const paths = Array.isArray(body.paths) ? body.paths.map((item) => String(item || "")).filter(Boolean) : [];
-        if (!paths.length) {
-          sendJson(res, 400, { error: "Missing material paths." });
-          return;
-        }
-        const analyzer = createMaterialAnalyzer(createAllAvailableLlmClients(vaultRoot));
-        const repo = new VaultRepository(vaultRoot);
-        const updated = [];
-        for (const item of paths) {
-          const materialPath = resolve(item);
-          await analyzeImportedMaterial(materialPath, { analyze: analyzer });
-          const materials = await repo.loadMaterials();
-          const material = materials.find((entry) => entry.path === materialPath);
-          if (!material) {
-            continue;
-          }
-          const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
-          const isTemplate = isTemplateMaterial({
-            tags: material.tags,
-            source,
-            docType: material.docType,
-          });
-          const role = classifyMaterialRole({
-            isTemplate,
-            source,
-            quality: material.quality,
-            docType: material.docType,
-            scenario: material.scenario,
-          });
-          updated.push({
-            path: materialPath,
-            title: material.title,
-            roleLabel: role.roleLabel,
-            roleReason: role.roleReason,
-          });
-        }
-        sendJson(res, 200, { updated, updatedCount: updated.length });
+        await handleAnalyzeMaterialsBatch({
+          vaultRoot,
+          body,
+          createClients: () => createAllAvailableLlmClients(vaultRoot),
+          res,
+        });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/role") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path || !body.role) {
-          sendJson(res, 400, { error: "Missing material path or role." });
-          return;
-        }
-        const result = await updateMaterialRole({
+        await handleUpdateMaterialRole({
           vaultRoot,
-          materialPath: resolve(body.path),
-          role: body.role === "template" ? "template" : "history",
-          reason: typeof body.reason === "string" ? body.reason : "",
+          body,
+          res,
+          readMarkdownDocument,
+          writeMarkdownDocument,
         });
-        sendJson(res, 200, result);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/materials/role/batch") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const paths = Array.isArray(body.paths) ? body.paths.map((item) => String(item || "")).filter(Boolean) : [];
-        if (!paths.length || !body.role) {
-          sendJson(res, 400, { error: "Missing material paths or role." });
-          return;
-        }
-        const result = await updateMaterialRoleBatch({
+        await handleUpdateMaterialRoleBatch({
           vaultRoot,
-          materialPaths: paths.map((item) => resolve(item)),
-          role: body.role === "template" ? "template" : "history",
-          reason: typeof body.reason === "string" ? body.reason : "",
+          body,
+          res,
+          readMarkdownDocument,
+          writeMarkdownDocument,
         });
-        sendJson(res, 200, result);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/tasks/run") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path || !body.action) {
-          sendJson(res, 400, { error: "Missing task path or action." });
-          return;
-        }
-
-        const result = await runTaskAction({
+        await handleRunTaskRoute({
           vaultRoot,
-          taskPath: resolve(body.path),
-          action: body.action as "diagnose" | "outline" | "draft",
+          body,
+          res,
+          runTaskAction,
         });
-        sendJson(res, 200, result);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/tasks/update-draft") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path) {
-          sendJson(res, 400, { error: "Missing task path." });
-          return;
-        }
-
-        const taskPath = resolve(body.path);
-        const repo = new VaultRepository(vaultRoot);
-        const task = await repo.loadTask(taskPath);
-        const now = new Date().toISOString();
-        const draft = (body.draft ?? "").trim();
-        const reason = (body.reason ?? "").trim();
-        const location = (body.location ?? "").trim();
-        const finalized = body.finalized === "true";
-        const version = (body.version ?? "").trim();
-        const currentUpdated = typeof task.frontmatter.updated_at === "string" ? task.frontmatter.updated_at : "";
-        const logLine = `- ${now}${version ? ` [${version}]` : ""}${location ? ` [${location}]` : ""}${reason ? `：${reason}` : ""}`;
-        const historyBody = String(task.content.match(/# 修改记录\n\n([\s\S]*?)(?=\n# )/)?.[1] ?? "- v1：");
-        const mergedHistory = `${historyBody.trim()}\n${logLine}`.trim();
-
-        let nextContent = replaceSection(task.content, "初稿", draft || "在这里生成正文。");
-        nextContent = replaceSection(nextContent, "修改记录", mergedHistory);
-        if (finalized) {
-          const existingFinal = String(task.content.match(/# 定稿说明\n\n([\s\S]*?)(?=\n# )/)?.[1] ?? "- ");
-          const finalLine = `- ${now}：已在前端定稿。`;
-          nextContent = replaceSection(nextContent, "定稿说明", `${existingFinal.trim()}\n${finalLine}`.trim());
-        }
-
-        const ignoreReasons = new Set(["手动保存", "直接定稿"]);
-        const feedbackSignals = normalizeTaskFeedbackSignals(task.frontmatter.feedback_signals);
-        const normalizedLocation = location || "全文";
-        const existingSignal = feedbackSignals[normalizedLocation] ?? {
-          count: 0,
-          latest_reason: "",
-          latest_updated_at: "",
-          latest_version: "",
-          recent_reasons: [],
-        };
-        const shouldCountFeedback = Boolean(reason) && !ignoreReasons.has(reason);
-        const nextCount = shouldCountFeedback ? existingSignal.count + 1 : existingSignal.count;
-        const nextReasons = shouldCountFeedback
-          ? [...existingSignal.recent_reasons, reason].slice(-5)
-          : existingSignal.recent_reasons;
-        feedbackSignals[normalizedLocation] = {
-          count: nextCount,
-          latest_reason: reason || existingSignal.latest_reason,
-          latest_updated_at: now,
-          latest_version: version || existingSignal.latest_version,
-          recent_reasons: nextReasons,
-        };
-
-        await writeMarkdownDocument(task.path, {
-          ...task.frontmatter,
-          status: finalized ? "finalized" : "draft",
-          updated_at: now || currentUpdated,
-          feedback_signals: feedbackSignals,
-        }, nextContent);
-
-        sendJson(res, 200, {
-          path: task.path,
-          updatedAt: now,
-          finalized,
-          feedbackSignal: feedbackSignals[normalizedLocation],
+        await handleUpdateTaskDraftRoute({
+          vaultRoot,
+          body,
+          res,
+          replaceSection,
+          writeMarkdownDocument,
+          normalizeTaskFeedbackSignals,
         });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/feedback/learn") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path) {
-          sendJson(res, 400, { error: "Missing feedback path." });
-          return;
-        }
-
-        const repo = new VaultRepository(vaultRoot);
-        const client = createLlmClient(vaultRoot);
-        const feedback = await repo.loadFeedback(resolve(body.path));
-        const task = await repo.findTaskById(feedback.taskId);
-        const taskAnalysis = task
-          ? client.isEnabled()
-            ? await parseTaskWithLlm(client, task)
-            : parseTask(task)
-          : null;
-        const analysis = client.isEnabled()
-          ? await learnFeedbackWithLlm(client, { feedback, task, taskAnalysis })
-          : learnFeedback(feedback);
-        const candidateRule = await writeCandidateRule({
+        await handleLearnFeedbackRoute({
           vaultRoot,
-          feedback,
-          analysis,
-        });
-        await writeFeedbackResult({
-          feedback,
-          analysis,
-          ruleId: candidateRule?.ruleId ?? null,
-        });
-        if (task) {
-          await attachRuleToTask({
-            task,
-            ruleId: candidateRule?.ruleId ?? null,
-            feedbackId: feedback.id,
-          });
-        }
-        sendJson(res, 200, {
-          analysis,
-          candidateRulePath: candidateRule?.path ?? null,
-          candidateRuleId: candidateRule?.ruleId ?? null,
+          body,
+          res,
+          createLlmClient,
+          parseTaskWithLlm,
+          parseTask,
+          learnFeedbackWithLlm,
+          learnFeedback,
+          writeCandidateRule,
+          writeFeedbackResult,
+          attachRuleToTask,
         });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/feedback/create") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        if (typeof body.rawFeedback !== "string" || !body.rawFeedback.trim()) {
-          sendJson(res, 400, { error: "rawFeedback 是必填项。" });
-          return;
-        }
-
-        const result = await createFeedback({
+        await handleCreateFeedbackRoute({
           vaultRoot,
-          taskId: typeof body.taskId === "string" ? body.taskId : "",
-          feedbackType: typeof body.feedbackType === "string" ? body.feedbackType : "",
-          severity: typeof body.severity === "string" ? body.severity : "medium",
-          action: typeof body.action === "string" ? body.action : "review",
-          rawFeedback: body.rawFeedback,
-          affectedParagraph: typeof body.affectedParagraph === "string" ? body.affectedParagraph : "",
-          affectedSection: typeof body.affectedSection === "string" ? body.affectedSection : "",
-          affectsStructure: typeof body.affectsStructure === "string" ? body.affectsStructure : "",
-          selectedText: typeof body.selectedText === "string" ? body.selectedText : "",
-          selectionStart:
-            typeof body.selectionStart === "number"
-              ? body.selectionStart
-              : Number.isFinite(Number(body.selectionStart))
-                ? Number(body.selectionStart)
-                : undefined,
-          selectionEnd:
-            typeof body.selectionEnd === "number"
-              ? body.selectionEnd
-              : Number.isFinite(Number(body.selectionEnd))
-                ? Number(body.selectionEnd)
-                : undefined,
-          annotations: Array.isArray(body.annotations)
-            ? body.annotations.map((item) => ({
-                location: typeof item?.location === "string" ? item.location : "",
-                reason: typeof item?.reason === "string" ? item.reason : "",
-                comment: typeof item?.comment === "string" ? item.comment : "",
-                isReusable: Boolean(item?.isReusable),
-                priority:
-                  typeof item?.priority === "string" && item.priority.trim()
-                    ? item.priority.trim()
-                    : "medium",
-                selectedText: typeof item?.selectedText === "string" ? item.selectedText : "",
-                selectionStart:
-                  typeof item?.selectionStart === "number"
-                    ? item.selectionStart
-                    : Number.isFinite(Number(item?.selectionStart))
-                      ? Number(item.selectionStart)
-                      : undefined,
-                selectionEnd:
-                  typeof item?.selectionEnd === "number"
-                    ? item.selectionEnd
-                    : Number.isFinite(Number(item?.selectionEnd))
-                      ? Number(item.selectionEnd)
-                      : undefined,
-              }))
-            : [],
+          body,
+          res,
+          createFeedback,
         });
-
-        sendJson(res, 200, result);
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/feedback/evaluate") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        const beforeDraft = typeof body.beforeDraft === "string" ? body.beforeDraft : "";
-        const afterDraft = typeof body.afterDraft === "string" ? body.afterDraft : "";
-        if (!afterDraft.trim()) {
-          sendJson(res, 400, { error: "afterDraft 是必填项。" });
-          return;
-        }
-
-        const evaluation = evaluateFeedbackAbsorption({
-          beforeDraft,
-          afterDraft,
-          reason: typeof body.reason === "string" ? body.reason : "",
-          comment: typeof body.comment === "string" ? body.comment : "",
-          selectedText: typeof body.selectedText === "string" ? body.selectedText : "",
+        await handleEvaluateFeedbackRoute({
+          body,
+          res,
+          evaluateFeedbackAbsorption,
+          persistFeedbackEvaluation,
         });
-
-        if (typeof body.feedbackPath === "string" && body.feedbackPath.trim()) {
-          await persistFeedbackEvaluation({
-            feedbackPath: resolve(body.feedbackPath),
-            evaluation,
-          });
-        }
-
-        sendJson(res, 200, { evaluation });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/rules/action") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path || !body.action) {
-          sendJson(res, 400, { error: "Missing rule path or action." });
-          return;
-        }
-
-        const result = await applyRuleAction({
-          action: body.action as RuleAction,
+        await handleRuleActionRoute({
           vaultRoot,
-          rulePath: resolve(body.path),
-          reason: body.reason,
-        });
-        sendJson(res, 200, {
-          ruleId: result.rule.id,
-          status: result.rule.status,
-          profilePath: result.profilePath,
-          updatedTasks: result.updatedTasks,
-          snapshot: result.snapshot,
+          body,
+          res,
+          applyRuleAction,
         });
         return;
       }
 
       if (req.method === "GET" && url.pathname === "/api/rules/versions") {
-        const path = url.searchParams.get("path");
-        if (!path) {
-          sendJson(res, 400, { error: "Missing rule path." });
-          return;
-        }
-        const repo = new VaultRepository(vaultRoot);
-        const rule = await repo.loadRule(resolve(path));
-        const versions = await listRuleVersions(vaultRoot, rule.id);
-        sendJson(res, 200, {
-          ruleId: rule.id,
-          ruleTitle: rule.title,
-          versions,
+        await handleRuleVersionsRoute({
+          vaultRoot,
+          path: url.searchParams.get("path"),
+          res,
+          listRuleVersions,
         });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/rules/scope") {
         const body = (await readBody(req)) as Record<string, unknown>;
-        if (typeof body.path !== "string" || !body.path.trim()) {
-          sendJson(res, 400, { error: "Missing rule path." });
-          return;
-        }
-
-        const docTypes = normalizeTagList(body.docTypes);
-        const audiences = normalizeTagList(body.audiences);
-        const result = await applyRuleScopeUpdate({
+        await handleRuleScopeRoute({
           vaultRoot,
-          rulePath: resolve(body.path),
-          scope: typeof body.scope === "string" ? body.scope.trim() : "",
-          docTypes,
-          audiences,
-          reason: typeof body.reason === "string" ? body.reason : "",
-        });
-        sendJson(res, 200, {
-          ruleId: result.rule.id,
-          scope: result.rule.scope,
-          docTypes: result.rule.docTypes,
-          audiences: result.rule.audiences,
-          profilePath: result.profilePath,
-          updatedTasks: result.updatedTasks,
-          snapshot: result.snapshot,
+          body,
+          res,
+          normalizeTagList,
+          applyRuleScopeUpdate,
         });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/rules/rollback") {
         const body = (await readBody(req)) as Record<string, string | undefined>;
-        if (!body.path || !body.versionId) {
-          sendJson(res, 400, { error: "Missing rule path or versionId." });
-          return;
-        }
-
-        const result = await rollbackRuleVersion({
+        await handleRuleRollbackRoute({
           vaultRoot,
-          rulePath: resolve(body.path),
-          versionId: body.versionId,
-          reason: body.reason,
-        });
-        sendJson(res, 200, {
-          ruleId: result.rule.id,
-          status: result.rule.status,
-          scope: result.rule.scope,
-          docTypes: result.rule.docTypes,
-          audiences: result.rule.audiences,
-          profilePath: result.profilePath,
-          updatedTasks: result.updatedTasks,
-          rollbackTo: result.rollbackTo,
-          snapshot: result.snapshot,
-          rollbackLog: result.rollbackLog,
+          body,
+          res,
+          rollbackRuleVersion,
         });
         return;
       }
