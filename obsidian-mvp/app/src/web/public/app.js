@@ -3236,6 +3236,10 @@ function buildGenerationContextFromPayload(payload) {
   const matchedMaterials = Array.isArray(payload.matchedMaterials) ? payload.matchedMaterials : [];
   const ruleDecisionLog = Array.isArray(payload.ruleDecisionLog) ? payload.ruleDecisionLog : [];
   const modelRouting = Array.isArray(payload.modelRouting) ? payload.modelRouting : [];
+  const draftReview =
+    payload.draft && typeof payload.draft === "object" && payload.draft.self_review
+      ? payload.draft.self_review
+      : null;
   const templateRewriteHint =
     payload.templateRewriteHint && typeof payload.templateRewriteHint === "object"
       ? payload.templateRewriteHint
@@ -3256,6 +3260,7 @@ function buildGenerationContextFromPayload(payload) {
     templateRule,
     templateMaterial,
     templateRewriteHint,
+    draftReview,
   };
 }
 
@@ -3317,6 +3322,21 @@ function renderTaskContextSummary() {
     : Array.isArray(context.templateRewriteHint?.rewrite_plan)
       ? context.templateRewriteHint.rewrite_plan.slice(0, 3)
       : [];
+  const missingPoints = Array.isArray(context.draftReview?.missing_points)
+    ? context.draftReview.missing_points.slice(0, 5)
+    : [];
+  const sectionChecklist = rewriteSteps.slice(0, 4).map((step) => {
+    const reqs = Array.isArray(step.assigned_requirements) ? step.assigned_requirements : [];
+    const missing = missingPoints.filter((item) =>
+      reqs.some((req) => String(item || "").includes(req)) || String(item || "").includes(step.section || ""),
+    );
+    return {
+      section: step.section || "未命名段落",
+      requirements: reqs,
+      facts: Array.isArray(step.assigned_facts) ? step.assigned_facts.slice(0, 2) : [],
+      missing,
+    };
+  });
 
   container.innerHTML = `<div class="context-summary">
     <div class="context-summary-grid">
@@ -3380,6 +3400,27 @@ function renderTaskContextSummary() {
           rewriteSummary.length
             ? `<ul>${rewriteSummary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
             : `<div class="mini">本次还没有形成清晰的模板改写清单，说明当前更像普通参考生成。</div>`
+        }
+      </div>
+      <div class="context-card">
+        <strong>段落检查</strong>
+        ${
+          sectionChecklist.length
+            ? `<div class="section-checklist">${sectionChecklist
+                .map(
+                  (item) => `<div class="section-check-item">
+                    <div><strong>${escapeHtml(item.section)}</strong></div>
+                    <div class="mini">应覆盖：${escapeHtml(item.requirements.join(" / ") || "待模型继续判断")}</div>
+                    <div class="mini">优先事实：${escapeHtml(item.facts.join(" / ") || "待从背景中补充")}</div>
+                    <div class="mini ${item.missing.length ? "text-danger" : ""}">${
+                      item.missing.length
+                        ? `当前缺口：${escapeHtml(item.missing.join(" / "))}`
+                        : "当前未发现明显漏项。"
+                    }</div>
+                  </div>`,
+                )
+                .join("")}</div>`
+            : `<div class="mini">生成后会按模板段落显示每段应覆盖的要点和当前缺口。</div>`
         }
       </div>
     </div>

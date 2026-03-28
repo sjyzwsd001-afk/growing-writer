@@ -1551,6 +1551,18 @@ legend {
   font-size: 12px;
 }
 
+.section-checklist {
+  display: grid;
+  gap: 10px;
+}
+
+.section-check-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .context-log {
   border-top: 1px dashed rgba(196, 175, 148, 0.9);
   padding-top: 8px;
