@@ -36,6 +36,9 @@ export function buildGenerateDraftPrompt(input: {
 10. 如果命中模板槽位，必须结合本次背景材料替换对应部分，不要照抄模板中的旧事实
 11. 如果历史材料中给出了明确逻辑链，正文段落顺序应优先沿用该逻辑链
 12. 如果模板改写计划中已经给出 rewrite_steps，正文各大段顺序应尽量与这些 section 一致，不要跳过前面的关键模板段
+13. self_review.missing_points 必须优先检查每个 rewrite_step 的 assigned_requirements 是否已在对应段落真正覆盖；如果没覆盖，要明确写出“哪一段漏了什么”
+14. self_review.rule_violations 必须检查正文是否偏离 rewrite_steps 的逻辑顺序、段落意图和模板槽位要求，而不是泛泛而谈
+15. self_review.strengths 也要尽量对应到具体段落，例如“某段已覆盖采购结果”
 
 然后做一轮自检：
 - 哪些地方写得比较稳
