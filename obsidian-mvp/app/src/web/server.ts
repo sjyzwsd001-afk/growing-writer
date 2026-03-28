@@ -81,6 +81,7 @@ import { writeCandidateRule } from "../writers/rule-writer.js";
 import { createTask } from "../writers/task-create-writer.js";
 import { createFeedback } from "../writers/feedback-create-writer.js";
 import { readMarkdownDocument, replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
+import { HttpError, ensureLocalApiRequest, readBody, sendJson, sendText } from "./http.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -110,15 +111,6 @@ type PendingOauthRequest = {
   createdAt: number;
 };
 
-class HttpError extends Error {
-  constructor(
-    message: string,
-    readonly statusCode: number,
-  ) {
-    super(message);
-  }
-}
-
 type OauthCallbackServerState = {
   port: number;
   close: () => Promise<void>;
@@ -141,7 +133,6 @@ const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
 const pendingOauthRequests = new Map<string, PendingOauthRequest>();
 let oauthCallbackServerState: OauthCallbackServerState | null = null;
-const MAX_REQUEST_BODY_BYTES = Number(process.env.GROWING_WRITER_MAX_BODY_BYTES || 5 * 1024 * 1024);
 
 function oauthPendingStatePath(vaultRoot: string): string {
   return join(vaultRoot, ".writer-oauth-pending.json");
@@ -185,24 +176,6 @@ async function consumePendingOauthRequest(
     await persistPendingOauthRequests(vaultRoot);
   }
   return pending;
-}
-
-function isLoopbackRequest(req: IncomingMessage): boolean {
-  const remote = req.socket.remoteAddress || "";
-  return (
-    remote === "127.0.0.1" ||
-    remote === "::1" ||
-    remote === "::ffff:127.0.0.1"
-  );
-}
-
-function ensureLocalApiRequest(req: IncomingMessage): void {
-  if (process.env.GROWING_WRITER_ALLOW_REMOTE_API === "1") {
-    return;
-  }
-  if (!isLoopbackRequest(req)) {
-    throw new HttpError("This API only accepts localhost requests.", 403);
-  }
 }
 
 function normalizeCodexModel(model: unknown): string {
@@ -1085,16 +1058,6 @@ async function exchangeCodexApiKey(idToken: string) {
   return data.access_token;
 }
 
-function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
-  res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(data, null, 2));
-}
-
-function sendText(res: ServerResponse, statusCode: number, message: string) {
-  res.writeHead(statusCode, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end(message);
-}
-
 async function describeListeningProcess(port: number): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("lsof", [
@@ -1131,26 +1094,6 @@ async function closeOauthCallbackServerIfIdle(vaultRoot?: string) {
     // The callback server is best-effort cleanup. A later login attempt will
     // still surface a concrete port conflict if the listener did not stop.
   }
-}
-
-async function readBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    totalBytes += buffer.length;
-    if (totalBytes > MAX_REQUEST_BODY_BYTES) {
-      throw new HttpError(`Request body exceeds ${MAX_REQUEST_BODY_BYTES} bytes.`, 413);
-    }
-    chunks.push(buffer);
-  }
-
-  if (!chunks.length) {
-    return {};
-  }
-
-  const raw = Buffer.concat(chunks).toString("utf8");
-  return raw ? JSON.parse(raw) : {};
 }
 
 function toSafeId(value: string): string {
