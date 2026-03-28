@@ -82,6 +82,13 @@ import { createTask } from "../writers/task-create-writer.js";
 import { createFeedback } from "../writers/feedback-create-writer.js";
 import { readMarkdownDocument, replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 import { HttpError, ensureLocalApiRequest, readBody, sendJson, sendText } from "./http.js";
+import {
+  consumePendingOauthRequest,
+  getPendingOauthRequestCount,
+  loadPendingOauthRequests,
+  setPendingOauthRequest,
+  type PendingOauthRequest,
+} from "./oauth-state.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -97,19 +104,6 @@ type RuleVersionAction =
   | "rollback"
   | "pre_rollback";
 type WorkflowAdvanceAction = "regenerate" | "finalize";
-type PendingOauthRequest = {
-  state: string;
-  profileId: string;
-  codeVerifier: string;
-  redirectUri: string;
-  tokenUrl: string;
-  clientId: string;
-  scope: string;
-  baseUrl: string;
-  model: string;
-  frontendOrigin: string;
-  createdAt: number;
-};
 
 type OauthCallbackServerState = {
   port: number;
@@ -131,52 +125,7 @@ type RuleVersionMeta = {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
-const pendingOauthRequests = new Map<string, PendingOauthRequest>();
 let oauthCallbackServerState: OauthCallbackServerState | null = null;
-
-function oauthPendingStatePath(vaultRoot: string): string {
-  return join(vaultRoot, ".writer-oauth-pending.json");
-}
-
-async function persistPendingOauthRequests(vaultRoot: string): Promise<void> {
-  const payload = JSON.stringify([...pendingOauthRequests.entries()], null, 2);
-  await writeFile(oauthPendingStatePath(vaultRoot), payload, "utf8");
-}
-
-async function loadPendingOauthRequests(vaultRoot: string): Promise<void> {
-  if (pendingOauthRequests.size > 0) {
-    return;
-  }
-  try {
-    const raw = await readFile(oauthPendingStatePath(vaultRoot), "utf8");
-    const parsed = JSON.parse(raw) as Array<[string, PendingOauthRequest]>;
-    parsed.forEach(([state, request]) => {
-      if (state && request?.state) {
-        pendingOauthRequests.set(state, request);
-      }
-    });
-  } catch {
-    // Ignore missing or malformed persisted OAuth pending state.
-  }
-}
-
-async function setPendingOauthRequest(vaultRoot: string, value: PendingOauthRequest): Promise<void> {
-  pendingOauthRequests.set(value.state, value);
-  await persistPendingOauthRequests(vaultRoot);
-}
-
-async function consumePendingOauthRequest(
-  vaultRoot: string,
-  state: string,
-): Promise<PendingOauthRequest | null> {
-  await loadPendingOauthRequests(vaultRoot);
-  const pending = pendingOauthRequests.get(state) ?? null;
-  if (pending) {
-    pendingOauthRequests.delete(state);
-    await persistPendingOauthRequests(vaultRoot);
-  }
-  return pending;
-}
 
 function normalizeCodexModel(model: unknown): string {
   if (typeof model !== "string" || !model.trim()) {
@@ -1083,7 +1032,7 @@ async function closeOauthCallbackServerIfIdle(vaultRoot?: string) {
   if (vaultRoot) {
     await loadPendingOauthRequests(vaultRoot);
   }
-  if (!oauthCallbackServerState || pendingOauthRequests.size > 0) {
+  if (!oauthCallbackServerState || getPendingOauthRequestCount() > 0) {
     return;
   }
 
