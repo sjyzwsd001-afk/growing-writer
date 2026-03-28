@@ -1,6 +1,5 @@
-import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
@@ -57,14 +56,7 @@ import {
 } from "../workflows/orchestration.js";
 import { loadWorkflowDefinition, saveWorkflowDefinition } from "../workflows/definition.js";
 import { writeFeedbackResult } from "../writers/feedback-writer.js";
-import {
-} from "../writers/material-writer.js";
 import { refreshDefaultProfile } from "../writers/profile-writer.js";
-import {
-  confirmRule,
-  disableRule,
-  rejectRule,
-} from "../writers/rule-confirm-writer.js";
 import { syncRuleInTasks } from "../writers/task-rule-sync-writer.js";
 import { refreshTaskReferences } from "../writers/task-refresh-writer.js";
 import { attachRuleToTask } from "../writers/task-link-writer.js";
@@ -126,31 +118,24 @@ import {
   handleRuleScopeRoute,
   handleRuleVersionsRoute,
 } from "./rules-feedback.js";
+import {
+  applyRuleAction,
+  applyRuleScopeUpdate,
+  detectRuleConflictHints,
+  listRuleVersions,
+  rollbackRuleVersion,
+} from "./rule-admin.js";
+import {
+  appendObservabilityEvent,
+  readRecentObservabilityEvents,
+} from "./observability.js";
 
 type ServerOptions = {
   vaultRoot: string;
   port: number;
 };
 
-type RuleAction = "confirm" | "disable" | "reject";
-type RuleVersionAction =
-  | "confirm"
-  | "disable"
-  | "reject"
-  | "update_scope"
-  | "rollback"
-  | "pre_rollback";
 type WorkflowAdvanceAction = "regenerate" | "finalize";
-
-type RuleVersionMeta = {
-  versionId: string;
-  ruleId: string;
-  action: RuleVersionAction;
-  reason: string;
-  createdAt: string;
-  snapshotPath: string;
-  metadataPath: string;
-};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -625,196 +610,6 @@ function toSafeId(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, "");
 }
 
-function replaceBulletLine(content: string, prefix: string, value: string): string {
-  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`^- ${escaped}.*$`, "m");
-  const nextLine = `- ${prefix}${value}`;
-  if (pattern.test(content)) {
-    return content.replace(pattern, nextLine);
-  }
-  return `${content.trim()}\n${nextLine}\n`;
-}
-
-function ruleVersionDir(vaultRoot: string, ruleId: string): string {
-  return join(vaultRoot, "rule-versions", toSafeId(ruleId));
-}
-
-function versionTimestampId(): string {
-  return new Date().toISOString().replace(/[:.]/g, "-");
-}
-
-async function snapshotRuleVersion(input: {
-  vaultRoot: string;
-  ruleId: string;
-  rulePath: string;
-  action: RuleVersionAction;
-  reason?: string;
-}): Promise<RuleVersionMeta> {
-  const createdAt = new Date().toISOString();
-  const versionId = `${versionTimestampId()}-${Math.random().toString(36).slice(2, 8)}`;
-  const dir = ruleVersionDir(input.vaultRoot, input.ruleId);
-  await mkdir(dir, { recursive: true });
-
-  const snapshotPath = join(dir, `${versionId}.md`);
-  const metadataPath = join(dir, `${versionId}.json`);
-  const raw = await readFile(input.rulePath, "utf8");
-  await writeFile(snapshotPath, raw, "utf8");
-
-  const metadata: RuleVersionMeta = {
-    versionId,
-    ruleId: input.ruleId,
-    action: input.action,
-    reason: input.reason || "",
-    createdAt,
-    snapshotPath,
-    metadataPath,
-  };
-  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
-  return metadata;
-}
-
-async function listRuleVersions(vaultRoot: string, ruleId: string): Promise<RuleVersionMeta[]> {
-  const dir = ruleVersionDir(vaultRoot, ruleId);
-  let entries: string[] = [];
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return [];
-  }
-
-  const metas: RuleVersionMeta[] = [];
-  for (const entry of entries.filter((item) => item.endsWith(".json"))) {
-    try {
-      const raw = await readFile(join(dir, entry), "utf8");
-      const parsed = JSON.parse(raw) as Partial<RuleVersionMeta>;
-      if (!parsed.versionId || !parsed.ruleId || !parsed.snapshotPath || !parsed.metadataPath) {
-        continue;
-      }
-      metas.push({
-        versionId: parsed.versionId,
-        ruleId: parsed.ruleId,
-        action: (parsed.action as RuleVersionAction) || "update_scope",
-        reason: parsed.reason || "",
-        createdAt: parsed.createdAt || "",
-        snapshotPath: parsed.snapshotPath,
-        metadataPath: parsed.metadataPath,
-      });
-    } catch {
-      // ignore broken metadata entry
-    }
-  }
-
-  return metas.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-async function syncAfterRuleMutation(input: {
-  vaultRoot: string;
-  updatedRuleId: string;
-  updatedRuleStatus: string;
-}) {
-  const repo = new VaultRepository(input.vaultRoot);
-  const clients = createAllAvailableLlmClients(input.vaultRoot);
-  const [rules, profiles, tasks, materials, feedbackEntries] = await Promise.all([
-    repo.loadRules(),
-    repo.loadProfiles(),
-    repo.loadTasks(),
-    repo.loadMaterials(),
-    repo.loadFeedbackEntries(),
-  ]);
-
-  const updatedTasks = await syncRuleInTasks({
-    tasks,
-    ruleId: input.updatedRuleId,
-    enabled: input.updatedRuleStatus === "confirmed",
-  });
-
-  const profilePath = await refreshDefaultProfile({
-    vaultRoot: input.vaultRoot,
-    profiles,
-    rules,
-    materials,
-    feedbackEntries,
-    client: clients,
-  });
-
-  return { updatedTasks, profilePath };
-}
-
-function normalizeTextForCompare(value: string): string {
-  return value.replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function hasOverlap(a: string[], b: string[]): boolean {
-  if (!a.length || !b.length) {
-    return true;
-  }
-  const set = new Set(a.map((item) => item.trim()).filter(Boolean));
-  return b.some((item) => set.has(item.trim()));
-}
-
-function detectRuleConflictHints(
-  rules: Array<{
-    id: string;
-    title: string;
-    status: "candidate" | "confirmed" | "disabled";
-    scope: string;
-    docTypes: string[];
-    audiences: string[];
-    content: string;
-  }>,
-): Map<string, string[]> {
-  const result = new Map<string, string[]>();
-  const orderKeywords = ["意义", "现状", "问题", "成绩", "措施", "建议", "结论", "背景"];
-
-  for (let i = 0; i < rules.length; i += 1) {
-    const current = rules[i];
-    const currentText = `${current.title} ${current.content}`;
-    const currentOrder = orderKeywords.find((item) => currentText.includes(`先写${item}`));
-    const currentConclusionFirst = /结论前置/.test(currentText);
-
-    for (let j = i + 1; j < rules.length; j += 1) {
-      const other = rules[j];
-      if (current.status !== other.status || current.status === "disabled") {
-        continue;
-      }
-      if (!hasOverlap(current.docTypes, other.docTypes) || !hasOverlap(current.audiences, other.audiences)) {
-        continue;
-      }
-      const currentScope = normalizeTextForCompare(current.scope || "");
-      const otherScope = normalizeTextForCompare(other.scope || "");
-      if (currentScope && otherScope && currentScope !== otherScope) {
-        continue;
-      }
-
-      const otherText = `${other.title} ${other.content}`;
-      const otherOrder = orderKeywords.find((item) => otherText.includes(`先写${item}`));
-      const otherConclusionFirst = /结论前置/.test(otherText);
-
-      let reason = "";
-      if (currentOrder && otherOrder && currentOrder !== otherOrder) {
-        reason = `与「${other.title}」都在规定开头顺序，但一个主张先写${currentOrder}，另一个主张先写${otherOrder}。`;
-      } else if (currentConclusionFirst !== otherConclusionFirst && (currentConclusionFirst || otherConclusionFirst)) {
-        reason = `与「${other.title}」在“是否结论前置”上可能冲突。`;
-      } else if (/不要/.test(currentText) && !/不要/.test(otherText) && hasOverlap(current.docTypes, other.docTypes)) {
-        reason = `与「${other.title}」适用范围高度重叠，建议人工确认两条规则是否会互相掣肘。`;
-      }
-
-      if (reason) {
-        result.set(current.id, [...(result.get(current.id) || []), reason]);
-        result.set(
-          other.id,
-          [
-            ...(result.get(other.id) || []),
-            reason.replace(`与「${other.title}」`, `与「${current.title}」`),
-          ],
-        );
-      }
-    }
-  }
-
-  return result;
-}
-
 function extractKeywords(text: string): string[] {
   const raw = text
     .toLowerCase()
@@ -822,6 +617,10 @@ function extractKeywords(text: string): string[] {
     .map((item) => item.trim())
     .filter((item) => item.length >= 2);
   return [...new Set(raw)].slice(0, 20);
+}
+
+function normalizeTextForCompare(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function tokenSet(text: string): Set<string> {
@@ -944,184 +743,6 @@ async function persistFeedbackEvaluation(input: {
   await writeMarkdownDocument(doc.path, nextFrontmatter, nextContent);
 }
 
-type ObservabilityEvent = {
-  id: string;
-  at: string;
-  taskId: string;
-  taskPath: string;
-  stage: string;
-  action: "diagnose" | "outline" | "draft";
-  usedModel: string;
-  triedModels: string[];
-  durationMs: number;
-  success: boolean;
-  errors: string[];
-  matchedRuleCount: number;
-  matchedMaterialCount: number;
-  evidenceCardCount: number;
-};
-
-function observabilityLogPath(vaultRoot: string): string {
-  return join(vaultRoot, "observability", "llm-events.jsonl");
-}
-
-async function appendObservabilityEvent(vaultRoot: string, event: ObservabilityEvent): Promise<void> {
-  const path = observabilityLogPath(vaultRoot);
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(event)}\n`, "utf8");
-}
-
-async function readRecentObservabilityEvents(vaultRoot: string, limit = 80): Promise<ObservabilityEvent[]> {
-  try {
-    const raw = await readFile(observabilityLogPath(vaultRoot), "utf8");
-    const lines = raw
-      .split(/\r?\n/)
-      .map((line: string) => line.trim())
-      .filter(Boolean);
-    const items: ObservabilityEvent[] = [];
-    for (const line of lines.slice(-limit)) {
-      try {
-        items.push(JSON.parse(line) as ObservabilityEvent);
-      } catch {
-        // ignore malformed lines
-      }
-    }
-    return items.sort((a, b) => b.at.localeCompare(a.at));
-  } catch {
-    return [];
-  }
-}
-
-async function applyRuleAction(input: {
-  action: RuleAction;
-  vaultRoot: string;
-  rulePath: string;
-  reason?: string;
-}) {
-  const repo = new VaultRepository(input.vaultRoot);
-  const rule = await repo.loadRule(input.rulePath);
-  const snapshot = await snapshotRuleVersion({
-    vaultRoot: input.vaultRoot,
-    ruleId: rule.id,
-    rulePath: rule.path,
-    action: input.action,
-    reason: input.reason,
-  });
-  const updatedRule =
-    input.action === "confirm"
-      ? await confirmRule(rule, input.reason)
-      : input.action === "disable"
-        ? await disableRule(rule, input.reason)
-        : await rejectRule(rule, input.reason);
-
-  const sync = await syncAfterRuleMutation({
-    vaultRoot: input.vaultRoot,
-    updatedRuleId: updatedRule.id,
-    updatedRuleStatus: updatedRule.status,
-  });
-
-  return {
-    rule: updatedRule,
-    updatedTasks: sync.updatedTasks,
-    profilePath: sync.profilePath,
-    snapshot,
-  };
-}
-
-async function applyRuleScopeUpdate(input: {
-  vaultRoot: string;
-  rulePath: string;
-  scope?: string;
-  docTypes?: string[];
-  audiences?: string[];
-  reason?: string;
-}) {
-  const repo = new VaultRepository(input.vaultRoot);
-  const rule = await repo.loadRule(input.rulePath);
-  const snapshot = await snapshotRuleVersion({
-    vaultRoot: input.vaultRoot,
-    ruleId: rule.id,
-    rulePath: rule.path,
-    action: "update_scope",
-    reason: input.reason,
-  });
-
-  const nextFrontmatter = {
-    ...rule.frontmatter,
-    scope: typeof input.scope === "string" ? input.scope : rule.scope,
-    doc_types: Array.isArray(input.docTypes) ? input.docTypes : rule.docTypes,
-    audiences: Array.isArray(input.audiences) ? input.audiences : rule.audiences,
-    updated_at: new Date().toISOString(),
-    scope_reason: input.reason || rule.frontmatter.scope_reason,
-  };
-  const nextScope = String(nextFrontmatter.scope || "");
-  const nextContent = replaceBulletLine(rule.content, "适用范围：", nextScope || "待补充");
-  await writeMarkdownDocument(rule.path, nextFrontmatter, nextContent);
-
-  const updatedRule = await repo.loadRule(rule.path);
-  const sync = await syncAfterRuleMutation({
-    vaultRoot: input.vaultRoot,
-    updatedRuleId: updatedRule.id,
-    updatedRuleStatus: updatedRule.status,
-  });
-
-  return {
-    rule: updatedRule,
-    updatedTasks: sync.updatedTasks,
-    profilePath: sync.profilePath,
-    snapshot,
-  };
-}
-
-async function rollbackRuleVersion(input: {
-  vaultRoot: string;
-  rulePath: string;
-  versionId: string;
-  reason?: string;
-}) {
-  const repo = new VaultRepository(input.vaultRoot);
-  const rule = await repo.loadRule(input.rulePath);
-  const versions = await listRuleVersions(input.vaultRoot, rule.id);
-  const target = versions.find((item) => item.versionId === input.versionId);
-  if (!target) {
-    throw new Error(`Rule version ${input.versionId} not found.`);
-  }
-
-  const snapshot = await snapshotRuleVersion({
-    vaultRoot: input.vaultRoot,
-    ruleId: rule.id,
-    rulePath: rule.path,
-    action: "pre_rollback",
-    reason: input.reason || `before rollback to ${input.versionId}`,
-  });
-
-  const rawSnapshot = await readFile(target.snapshotPath, "utf8");
-  await writeFile(rule.path, rawSnapshot, "utf8");
-
-  const updatedRule = await repo.loadRule(rule.path);
-  const sync = await syncAfterRuleMutation({
-    vaultRoot: input.vaultRoot,
-    updatedRuleId: updatedRule.id,
-    updatedRuleStatus: updatedRule.status,
-  });
-
-  const rollbackLog = await snapshotRuleVersion({
-    vaultRoot: input.vaultRoot,
-    ruleId: updatedRule.id,
-    rulePath: updatedRule.path,
-    action: "rollback",
-    reason: input.reason || `rollback to ${input.versionId}`,
-  });
-
-  return {
-    rule: updatedRule,
-    updatedTasks: sync.updatedTasks,
-    profilePath: sync.profilePath,
-    rollbackTo: target,
-    snapshot,
-    rollbackLog,
-  };
-}
 
 async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   const repo = new VaultRepository(vaultRoot);
@@ -2183,7 +1804,11 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           vaultRoot,
           body,
           res,
-          applyRuleAction,
+          applyRuleAction: (input) =>
+            applyRuleAction({
+              ...input,
+              createAllAvailableLlmClients,
+            }),
         });
         return;
       }
@@ -2205,7 +1830,11 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           body,
           res,
           normalizeTagList,
-          applyRuleScopeUpdate,
+          applyRuleScopeUpdate: (input) =>
+            applyRuleScopeUpdate({
+              ...input,
+              createAllAvailableLlmClients,
+            }),
         });
         return;
       }
@@ -2216,7 +1845,11 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
           vaultRoot,
           body,
           res,
-          rollbackRuleVersion,
+          rollbackRuleVersion: (input) =>
+            rollbackRuleVersion({
+              ...input,
+              createAllAvailableLlmClients,
+            }),
         });
         return;
       }
