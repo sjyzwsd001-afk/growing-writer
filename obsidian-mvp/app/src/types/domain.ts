@@ -98,6 +98,10 @@ export type TemplateRewriteStep = {
   intent: string;
   assigned_facts: string[];
   assigned_requirements: string[];
+  history_section_hints?: Array<{
+    material_title: string;
+    section: string;
+  }>;
   fill_strategy: string;
   source_hint: string;
   evidence_card_ids: string[];

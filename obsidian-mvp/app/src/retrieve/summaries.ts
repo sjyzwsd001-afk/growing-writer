@@ -272,7 +272,7 @@ export function summarizeMaterial(material: Material): MaterialSummary {
         )
       : [];
   const derivedLogic =
-    !logicChain.length && derivedSections.length >= 2
+    materialRole === "template" && !logicChain.length && derivedSections.length >= 2
       ? derivedSections.slice(0, -1).map((section, index) => {
           const nextSection = derivedSections[index + 1];
           return {
@@ -695,6 +695,10 @@ export function buildTemplateRewriteHint(input: {
       intent,
       assigned_facts: assignedFacts,
       assigned_requirements: assignedRequirements,
+      history_section_hints: matchedHistorySections.map((item) => ({
+        material_title: item.title,
+        section: item.section,
+      })),
       fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${
         assignedRequirements.length
           ? `；本段重点覆盖「${assignedRequirements.join("；")}」`
@@ -716,7 +720,7 @@ export function buildTemplateRewriteHint(input: {
   });
 
   const plan = rewriteSteps.map((step) => {
-    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；逻辑承接：from=${step.logic_after.from}；to=${step.logic_after.to}；reason=${step.logic_after.reason}` : ""}`;
+    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；逻辑承接对象=${JSON.stringify(step.logic_after)}` : ""}`;
   });
 
   if (!plan.length) {

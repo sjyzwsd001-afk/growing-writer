@@ -109,6 +109,10 @@ export function compactTemplateRewritePlan(
     intent: clip(step.intent, 90),
     assigned_facts: clipList(step.assigned_facts, 5, 140),
     assigned_requirements: clipList(step.assigned_requirements, 5, 100),
+    history_section_hints: (step.history_section_hints ?? []).slice(0, 3).map((item) => ({
+      material_title: clip(item.material_title, 70),
+      section: item.section,
+    })),
     fill_strategy: clip(step.fill_strategy, 120),
     source_hint: clip(step.source_hint, 90),
     evidence_card_ids: clipList(step.evidence_card_ids, 3, 20),
@@ -116,7 +120,7 @@ export function compactTemplateRewritePlan(
       ? {
           from: step.logic_after.from,
           to: step.logic_after.to,
-          reason: clip(step.logic_after.reason, 90),
+          reason: clip(step.logic_after.reason, 140),
         }
       : null,
   }));
