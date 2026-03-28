@@ -1612,6 +1612,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     stageLabel: "parse_task",
     runWithClient: (client) => parseTaskWithLlm(client, task),
     fallback: () => parseTask(task),
+    requireLlm: true,
   });
   const analysis = analysisResult.value;
   const ruleMatch = matchRulesWithPolicy({
@@ -1717,10 +1718,14 @@ async function executeWithModelRouting<T>(input: {
   stageLabel: string;
   runWithClient: (client: OpenAiCompatibleClient) => Promise<T>;
   fallback: () => T | Promise<T>;
+  requireLlm?: boolean;
 }) {
   const startedAt = Date.now();
   const baseClient = createLlmClient(input.vaultRoot);
   if (!baseClient.isEnabled()) {
+    if (input.requireLlm) {
+      throw new Error(`LLM_REQUIRED:${input.stageLabel}: 当前没有可用的大模型配置，无法继续执行。`);
+    }
     return {
       value: await input.fallback(),
       routeMeta: {
@@ -1811,13 +1816,26 @@ async function executeWithModelRouting<T>(input: {
     }
   }
 
+  const resolvedTriedModels = routing.enabled
+    ? uniqueProfileIds.map((id) => {
+        const item = profileById.get(id);
+        return item ? `${item.name || item.id} / ${item.model}` : id;
+      })
+    : uniqueModels;
+
+  if (input.requireLlm) {
+    throw new Error(
+      `LLM_REQUIRED:${input.stageLabel}: 所有模型卡均调用失败。tried=${resolvedTriedModels.join(" | ") || "-"} errors=${errors.join(" | ") || "-"}`,
+    );
+  }
+
   const fallbackValue = await input.fallback();
   return {
     value: fallbackValue,
     routeMeta: {
       stage: input.stageLabel,
       usedModel: "heuristic-fallback",
-      triedModels: uniqueModels,
+      triedModels: resolvedTriedModels,
       errors,
       durationMs: Date.now() - startedAt,
       success: false,
@@ -1860,6 +1878,7 @@ async function runTaskAction(input: {
     stageLabel: "diagnose",
     runWithClient: (client) => diagnoseTaskWithLlm(client, diagnosisInput),
     fallback: () => diagnoseTask(diagnosisInput),
+    requireLlm: true,
   });
   const diagnosis = diagnosisResult.value;
   routeMetas.push(diagnosisResult.routeMeta);
@@ -1923,6 +1942,7 @@ async function runTaskAction(input: {
     stageLabel: "outline",
     runWithClient: (client) => buildOutlineWithLlm(client, outlineInput),
     fallback: () => buildOutline(outlineInput),
+    requireLlm: true,
   });
   const outline = outlineResult.value;
   routeMetas.push(outlineResult.routeMeta);
@@ -1994,6 +2014,7 @@ async function runTaskAction(input: {
         outline,
         evidenceCards,
       }),
+    requireLlm: true,
   });
   const draft = draftResult.value;
   routeMetas.push(draftResult.routeMeta);
