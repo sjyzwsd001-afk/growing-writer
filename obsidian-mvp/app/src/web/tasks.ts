@@ -2,21 +2,16 @@ import { resolve } from "node:path";
 
 import { VaultRepository } from "../vault/repository.js";
 import { sendJson } from "./http.js";
-
-type TaskCreateRequestLike = {
-  title: string;
-  docType: string;
-  [key: string]: unknown;
-};
+import type { TaskCreateRequest } from "./task-engine.js";
 
 export async function handleCreateTaskRoute(input: {
   vaultRoot: string;
   body: Record<string, unknown>;
   res: Parameters<typeof sendJson>[0];
-  toTaskCreateRequest: (body: Record<string, unknown>) => TaskCreateRequestLike;
+  toTaskCreateRequest: (body: Record<string, unknown>) => TaskCreateRequest;
   createTaskFromRequest: (input: {
     vaultRoot: string;
-    request: any;
+    request: TaskCreateRequest;
   }) => Promise<{ created: unknown }>;
 }) {
   const request = input.toTaskCreateRequest(input.body);
@@ -42,7 +37,7 @@ export async function handleRunTaskRoute(input: {
     vaultRoot: string;
     taskPath: string;
     action: "diagnose" | "outline" | "draft";
-  }) => Promise<any>;
+  }) => Promise<unknown>;
 }) {
   if (!input.body.path || !input.body.action) {
     sendJson(input.res, 400, { error: "Missing task path or action." });

@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 
+import type { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import type { Feedback, Rule, Task } from "../types/domain.js";
 import type { FeedbackAnalysis, TaskAnalysis } from "../types/schemas.js";
 import { VaultRepository } from "../vault/repository.js";
@@ -9,12 +10,13 @@ export async function handleLearnFeedbackRoute(input: {
   vaultRoot: string;
   body: Record<string, string | undefined>;
   res: Parameters<typeof sendJson>[0];
-  createLlmClient: (vaultRoot: string) => {
-    isEnabled(): boolean;
-  };
-  parseTaskWithLlm: (client: any, task: Task) => Promise<TaskAnalysis>;
+  createLlmClient: (vaultRoot: string) => OpenAiCompatibleClient;
+  parseTaskWithLlm: (client: OpenAiCompatibleClient, task: Task) => Promise<TaskAnalysis>;
   parseTask: (task: Task) => TaskAnalysis;
-  learnFeedbackWithLlm: (client: any, input: { feedback: Feedback; task: Task | null; taskAnalysis: TaskAnalysis | null }) => Promise<FeedbackAnalysis>;
+  learnFeedbackWithLlm: (
+    client: OpenAiCompatibleClient,
+    input: { feedback: Feedback; task: Task | null; taskAnalysis: TaskAnalysis | null },
+  ) => Promise<FeedbackAnalysis>;
   learnFeedback: (feedback: Feedback) => FeedbackAnalysis;
   writeCandidateRule: (input: { vaultRoot: string; feedback: Feedback; analysis: FeedbackAnalysis }) => Promise<{ path: string; ruleId: string } | null>;
   writeFeedbackResult: (input: { feedback: Feedback; analysis: FeedbackAnalysis; ruleId: string | null }) => Promise<unknown>;
