@@ -143,6 +143,49 @@ export function analyzeMaterialHeuristically(text: string, docType: string): Mat
     logic_order: "通常可按背景/现状 -> 重点事项 -> 结论或安排的顺序组织",
     taboo: "避免口语化、空泛表述，避免只有结论没有事实支撑",
     candidate_rules: ["待人工确认"],
+    logic_chain: [
+      {
+        from: "背景/现状",
+        to: "重点事项",
+        reason: "先给读者建立上下文，再展开主体内容。",
+      },
+      {
+        from: "重点事项",
+        to: "结论/安排",
+        reason: "主体事实说清后，再落到判断或下一步动作。",
+      },
+    ],
+    template_slots: [
+      {
+        section: "开头",
+        slot_name: "背景与对象",
+        fill_rule: "结合本次项目背景、对象和场景替换开头中的固定表述。",
+        source_hint: "优先取本次背景材料与任务表单中的核心信息。",
+      },
+      {
+        section: "主体",
+        slot_name: "事实与数据",
+        fill_rule: "将项目进展、风险、措施或数据替换进对应段落，不保留空泛占位句。",
+        source_hint: "优先使用本次背景材料中的事实、数据和动作信息。",
+      },
+    ],
+    section_intents: [
+      {
+        section: "开头",
+        intent: "交代背景并建立阅读上下文",
+        trigger: "当任务需要先说明来龙去脉时优先使用",
+      },
+      {
+        section: "主体",
+        intent: "展开关键事实、风险、措施或进展",
+        trigger: "当需要说明事情为何如此以及下一步怎么做时使用",
+      },
+      {
+        section: "结尾",
+        intent: "收束结论并给出后续安排",
+        trigger: "当材料需要明确态度、建议或下一步动作时使用",
+      },
+    ],
   };
 }
 
@@ -197,6 +240,36 @@ ${input.rawBody || "在这里粘贴或整理历史材料正文。"}
 - 候选规则 1：${input.analysis.candidate_rules[0] ?? "待人工确认"}
 - 候选规则 2：${input.analysis.candidate_rules[1] ?? "待人工确认"}
 - 候选规则 3：${input.analysis.candidate_rules[2] ?? "待人工确认"}
+
+# 逻辑关系
+
+${input.analysis.logic_chain.length
+  ? input.analysis.logic_chain
+      .map((item, index) => `- 逻辑${index + 1}：先写「${item.from}」再写「${item.to}」；原因：${item.reason}`)
+      .join("\n")
+  : "- 待补充"}
+
+# 模板槽位
+
+${input.analysis.template_slots.length
+  ? input.analysis.template_slots
+      .map(
+        (item, index) =>
+          `- 槽位${index + 1}：${item.section} / ${item.slot_name}；替换规则：${item.fill_rule}；取材依据：${item.source_hint}`,
+      )
+      .join("\n")
+  : "- 暂未识别出明确的模板槽位"}
+
+# 段落意图
+
+${input.analysis.section_intents.length
+  ? input.analysis.section_intents
+      .map(
+        (item, index) =>
+          `- 意图${index + 1}：${item.section}；写作意图：${item.intent}；触发条件：${item.trigger}`,
+      )
+      .join("\n")
+  : "- 待补充"}
 
 # 备注
 

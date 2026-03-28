@@ -14,6 +14,7 @@ export function buildDiagnoseTaskPrompt(input: {
   materialSummaries: MaterialSummary[];
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
+  templateRewritePlan?: string[];
 }): string {
   return `请根据任务分析、已命中规则、相似材料摘要和写作画像，输出写前诊断。
 
@@ -23,6 +24,7 @@ export function buildDiagnoseTaskPrompt(input: {
 3. 给出建议结构，每一部分都写清目的和必须覆盖的内容
 4. 标出本次真正应启用的规则
 5. 标出如果直接生成，最可能出现的问题
+6. 如果相似材料中存在模板槽位或逻辑关系，明确指出本次应沿用哪些槽位、哪些逻辑顺序
 
 输出要求：
 - 只输出 JSON
@@ -43,5 +45,8 @@ ${JSON.stringify(compactMaterialSummaries(input.materialSummaries), null, 2)}
 ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 
 写作画像:
-${JSON.stringify(compactProfiles(input.profiles), null, 2)}`;
+${JSON.stringify(compactProfiles(input.profiles), null, 2)}
+
+模板改写计划:
+${JSON.stringify(input.templateRewritePlan ?? [], null, 2)}`;
 }

@@ -162,6 +162,7 @@ export async function diagnoseTaskWithLlm(
     matchedMaterials: Material[];
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
+    templateRewritePlan?: string[];
   },
 ): Promise<DiagnosisResult> {
   return client.generateJson({
@@ -172,6 +173,7 @@ export async function diagnoseTaskWithLlm(
       materialSummaries: input.matchedMaterials.map(summarizeMaterial),
       evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
+      templateRewritePlan: input.templateRewritePlan ?? [],
     }),
     schema: diagnosisResultSchema,
     schemaHint: DIAGNOSIS_SCHEMA_HINT,
@@ -215,6 +217,7 @@ export async function buildOutlineWithLlm(
     matchedMaterials: Material[];
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
+    templateRewritePlan?: string[];
   },
 ): Promise<OutlineResult> {
   return client.generateJson({
@@ -226,6 +229,7 @@ export async function buildOutlineWithLlm(
       materialSummaries: input.matchedMaterials.map(summarizeMaterial),
       evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
+      templateRewritePlan: input.templateRewritePlan ?? [],
     }),
     schema: outlineResultSchema,
     schemaHint: OUTLINE_SCHEMA_HINT,
@@ -271,6 +275,7 @@ export async function generateDraftWithLlm(
     matchedMaterials: Material[];
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
+    templateRewritePlan?: string[];
   },
 ): Promise<DraftResult> {
   return client.generateJson({
@@ -283,6 +288,7 @@ export async function generateDraftWithLlm(
       materialSummaries: input.matchedMaterials.map(summarizeMaterial),
       evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
+      templateRewritePlan: input.templateRewritePlan ?? [],
     }),
     schema: draftResultSchema,
     schemaHint: DRAFT_SCHEMA_HINT,

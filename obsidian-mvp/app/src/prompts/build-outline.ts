@@ -16,6 +16,7 @@ export function buildOutlinePrompt(input: {
   materialSummaries: MaterialSummary[];
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
+  templateRewritePlan?: string[];
 }): string {
   return `请生成一份可直接用于写作的提纲。
 
@@ -25,6 +26,8 @@ export function buildOutlinePrompt(input: {
 3. 每一节列出要写的关键点
 4. source_basis 字段中写明该节主要参考了哪些规则或材料
 5. 不要写成正文
+6. 如果材料中有模板槽位，优先把提纲写成“固定结构 + 本次需要替换的内容”
+7. 如果历史材料里存在明确逻辑链，提纲顺序优先遵循该逻辑链，而不是自由重排
 
 输出要求：
 - 只输出 JSON
@@ -47,5 +50,8 @@ ${JSON.stringify(compactMaterialSummaries(input.materialSummaries), null, 2)}
 ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 
 写作画像:
-${JSON.stringify(compactProfiles(input.profiles), null, 2)}`;
+${JSON.stringify(compactProfiles(input.profiles), null, 2)}
+
+模板改写计划:
+${JSON.stringify(input.templateRewritePlan ?? [], null, 2)}`;
 }

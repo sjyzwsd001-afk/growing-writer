@@ -18,6 +18,7 @@ export function buildGenerateDraftPrompt(input: {
   materialSummaries: MaterialSummary[];
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
+  templateRewritePlan?: string[];
 }): string {
   return `请基于提纲、任务事实、规则和风格摘要，生成正式材料初稿。
 
@@ -31,6 +32,8 @@ export function buildGenerateDraftPrompt(input: {
 7. 如果任务没有明确要求长文，draft_markdown 默认控制在 300 到 600 字
 8. self_review 四个数组都尽量精简，每个数组最多 2 条
 9. revision_suggestions 最多 3 条，短句即可
+10. 如果命中模板槽位，必须结合本次背景材料替换对应部分，不要照抄模板中的旧事实
+11. 如果历史材料中给出了明确逻辑链，正文段落顺序应优先沿用该逻辑链
 
 然后做一轮自检：
 - 哪些地方写得比较稳
@@ -61,5 +64,8 @@ ${JSON.stringify(compactMaterialSummaries(input.materialSummaries), null, 2)}
 ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 
 写作画像:
-${JSON.stringify(compactProfiles(input.profiles), null, 2)}`;
+${JSON.stringify(compactProfiles(input.profiles), null, 2)}
+
+模板改写计划:
+${JSON.stringify(input.templateRewritePlan ?? [], null, 2)}`;
 }

@@ -90,6 +90,28 @@ export const materialAnalysisSchema = z.object({
   logic_order: z.string(),
   taboo: z.string(),
   candidate_rules: z.array(z.string()).max(3),
+  logic_chain: z.array(
+    z.object({
+      from: z.string(),
+      to: z.string(),
+      reason: z.string(),
+    }),
+  ).max(6),
+  template_slots: z.array(
+    z.object({
+      section: z.string(),
+      slot_name: z.string(),
+      fill_rule: z.string(),
+      source_hint: z.string(),
+    }),
+  ).max(8),
+  section_intents: z.array(
+    z.object({
+      section: z.string(),
+      intent: z.string(),
+      trigger: z.string(),
+    }),
+  ).max(8),
 });
 
 export const profileSummarySchema = z.object({

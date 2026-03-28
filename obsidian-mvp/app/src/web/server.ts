@@ -37,7 +37,7 @@ import {
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRules, matchRulesWithPolicy } from "../retrieve/matchers.js";
-import { buildEvidenceCards, summarizeMaterial } from "../retrieve/summaries.js";
+import { buildEvidenceCards, buildTemplateRewriteHint, summarizeMaterial } from "../retrieve/summaries.js";
 import { VaultRepository } from "../vault/repository.js";
 import {
   buildOutline,
@@ -1676,11 +1676,25 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   const matchedMaterials = selectedTemplate
     ? [selectedTemplate, ...baseMatchedMaterials.filter((item) => item.id !== selectedTemplate.id)]
     : baseMatchedMaterials;
+  const evidenceCards = buildEvidenceCards({
+    task,
+    materials: matchedMaterials,
+    maxCards: 8,
+  });
+  const templateRewriteHint = buildTemplateRewriteHint({
+    selectedTemplate,
+    task,
+    taskAnalysis: analysis,
+    evidenceCards,
+  });
   const ruleDecisionLog = [
     ...ruleMatch.decisionLog,
     selectedTemplate
       ? `模板继承：启用 ${selectedTemplate.title}（mode=${templateMode}，overrides=${Object.keys(templateOverrides).length}）`
       : "模板继承：未指定模板，使用常规规则匹配。",
+    templateRewriteHint
+      ? `模板改写计划：${templateRewriteHint.rewrite_plan.length} 条`
+      : "模板改写计划：当前未生成。",
   ];
 
   return {
@@ -1691,6 +1705,8 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     analysis,
     matchedRules,
     matchedMaterials,
+    templateRewriteHint,
+    evidenceCards,
     ruleDecisionLog,
   };
 }
@@ -1814,16 +1830,11 @@ async function runTaskAction(input: {
   taskPath: string;
   action: "diagnose" | "outline" | "draft";
 }) {
-  const { task, profiles, analysis, matchedRules, matchedMaterials, ruleDecisionLog } =
+  const { task, profiles, analysis, matchedRules, matchedMaterials, templateRewriteHint, evidenceCards, ruleDecisionLog } =
     await buildTaskSnapshot(
     input.vaultRoot,
     input.taskPath,
     );
-  const evidenceCards = buildEvidenceCards({
-    task,
-    materials: matchedMaterials,
-    maxCards: 8,
-  });
 
   const diagnosisInput = {
     task,
@@ -1832,6 +1843,7 @@ async function runTaskAction(input: {
     matchedMaterials,
     evidenceCards,
     profiles,
+    templateRewritePlan: templateRewriteHint?.rewrite_plan ?? [],
   };
 
   const routeMetas: Array<{
@@ -1900,6 +1912,7 @@ async function runTaskAction(input: {
     matchedMaterials,
     evidenceCards,
     profiles,
+    templateRewritePlan: templateRewriteHint?.rewrite_plan ?? [],
   };
 
   const outlineResult = await executeWithModelRouting({
@@ -1967,6 +1980,7 @@ async function runTaskAction(input: {
         matchedMaterials,
         evidenceCards,
         profiles,
+        templateRewritePlan: templateRewriteHint?.rewrite_plan ?? [],
       }),
     fallback: () =>
       generateDraft({

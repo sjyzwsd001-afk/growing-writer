@@ -64,9 +64,18 @@ export type MaterialSummary = {
   material_id: string;
   title: string;
   doc_type: string;
+  material_role?: "template" | "history" | "unknown";
   structure_summary: string[];
   style_summary: string[];
   useful_phrases: string[];
+  logic_chain: string[];
+  template_slots: string[];
+  section_intents: string[];
+};
+
+export type TemplateRewriteHint = {
+  template_title: string;
+  rewrite_plan: string[];
 };
 
 export type EvidenceCard = {

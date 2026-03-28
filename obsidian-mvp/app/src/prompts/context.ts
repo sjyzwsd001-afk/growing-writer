@@ -57,9 +57,13 @@ export function compactMaterialSummaries(
   return materialSummaries.slice(0, 4).map((material) => ({
     title: clip(material.title, 80),
     doc_type: clip(material.doc_type, 50),
+    material_role: material.material_role ?? "unknown",
     structure_summary: clipList(material.structure_summary, 2, 100),
     style_summary: clipList(material.style_summary, 3, 80),
     useful_phrases: clipList(material.useful_phrases, 1, 100),
+    logic_chain: clipList(material.logic_chain, 3, 120),
+    template_slots: clipList(material.template_slots, 4, 120),
+    section_intents: clipList(material.section_intents, 4, 100),
   }));
 }
 
