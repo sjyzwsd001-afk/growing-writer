@@ -69,6 +69,50 @@ function applyTemplateRewritePlanToOutline(
   };
 }
 
+function splitMarkdownSections(markdown: string): Array<{ heading: string; body: string }> {
+  const normalized = String(markdown || "").trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const matches = [...normalized.matchAll(/^###?\s+(.+)$/gm)];
+  if (!matches.length) {
+    return [{ heading: "", body: normalized }];
+  }
+
+  return matches.map((match, index) => {
+    const heading = String(match[1] || "").trim();
+    const start = match.index ?? 0;
+    const bodyStart = start + match[0].length;
+    const end = index + 1 < matches.length ? (matches[index + 1].index ?? normalized.length) : normalized.length;
+    const body = normalized.slice(bodyStart, end).trim();
+    return { heading, body };
+  });
+}
+
+function alignDraftToOutline(draft: DraftResult, outline: OutlineResult): DraftResult {
+  if (!draft.draft_markdown.trim() || !outline.sections.length) {
+    return draft;
+  }
+
+  const draftSections = splitMarkdownSections(draft.draft_markdown);
+  const alignedMarkdown = outline.sections
+    .map((section, index) => {
+      const matched =
+        draftSections.find((item) => item.heading === section.heading) ||
+        draftSections[index] ||
+        null;
+      const body = matched?.body?.trim() || section.purpose;
+      return `### ${section.heading}\n\n${body}`;
+    })
+    .join("\n\n");
+
+  return {
+    ...draft,
+    draft_markdown: alignedMarkdown,
+  };
+}
+
 const TASK_ANALYSIS_SCHEMA_HINT = `{
   "task_type": "string",
   "audience": "string",
@@ -314,7 +358,7 @@ export function generateDraft(input: {
     },
   );
 
-  return {
+  return alignDraftToOutline({
     draft_markdown: paragraphs.join("\n\n"),
     self_review: {
       strengths: ["已经按照提纲生成占位草稿"],
@@ -323,7 +367,7 @@ export function generateDraft(input: {
       rule_violations: [],
     },
     revision_suggestions: ["接入 LLM 后替换占位正文", "补充事实输入来源"],
-  };
+  }, input.outline);
 }
 
 export async function generateDraftWithLlm(
@@ -340,7 +384,7 @@ export async function generateDraftWithLlm(
     templateRewritePlan?: TemplateRewriteStep[];
   },
 ): Promise<DraftResult> {
-  return client.generateJson({
+  const draft = await client.generateJson({
     system: BASE_SYSTEM_PROMPT,
     user: buildGenerateDraftPrompt({
       taskAnalysis: input.analysis,
@@ -357,6 +401,7 @@ export async function generateDraftWithLlm(
     maxTokens: 1600,
     timeoutMs: 60_000,
   });
+  return alignDraftToOutline(draft, input.outline);
 }
 
 export function learnFeedback(feedback: Feedback): FeedbackAnalysis {
