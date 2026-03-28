@@ -28,6 +28,7 @@ const state = {
 const MAX_WIZARD_STEP = 7;
 const DEFAULT_API_TIMEOUT_MS = 30000;
 const MATERIAL_IMPORT_API_TIMEOUT_MS = 180000;
+const MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS = 120000;
 const WORKFLOW_START_TIMEOUT_MS = 90000;
 const trustedOrigins = new Set([
   window.location.origin,
@@ -1964,10 +1965,18 @@ async function bulkAnalyzeMaterials() {
   if (!paths.length) {
     throw new Error("请先勾选至少一份材料。");
   }
-  const result = await api("/api/materials/analyze/batch", {
-    method: "POST",
-    body: JSON.stringify({ paths }),
-  });
+  const timeoutMs = Math.max(
+    MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS,
+    paths.length * 20000,
+  );
+  const result = await api(
+    "/api/materials/analyze/batch",
+    {
+      method: "POST",
+      body: JSON.stringify({ paths }),
+    },
+    timeoutMs,
+  );
   setSettingsResult("材料批量重分析完成", result);
   setInfo(`已批量重分析 ${Array.isArray(result.updated) ? result.updated.length : 0} 份材料。`);
   await loadDashboard();
@@ -3227,6 +3236,10 @@ function buildGenerationContextFromPayload(payload) {
   const matchedMaterials = Array.isArray(payload.matchedMaterials) ? payload.matchedMaterials : [];
   const ruleDecisionLog = Array.isArray(payload.ruleDecisionLog) ? payload.ruleDecisionLog : [];
   const modelRouting = Array.isArray(payload.modelRouting) ? payload.modelRouting : [];
+  const templateRewriteHint =
+    payload.templateRewriteHint && typeof payload.templateRewriteHint === "object"
+      ? payload.templateRewriteHint
+      : null;
   const templateRule = matchedRules.find((item) => String(item?.source || "") === "template") || null;
   const templateMaterial =
     matchedMaterials.find(
@@ -3242,6 +3255,7 @@ function buildGenerationContextFromPayload(payload) {
     modelRouting,
     templateRule,
     templateMaterial,
+    templateRewriteHint,
   };
 }
 
@@ -3292,6 +3306,17 @@ function renderTaskContextSummary() {
     ? context.modelRouting.map((item) => `${item.stage}: ${item.usedModel || "-"}`)
     : ["本次未记录模型路由"];
   const decisionTail = context.ruleDecisionLog.slice(-3);
+  const rewriteSteps = Array.isArray(context.templateRewriteHint?.rewrite_steps)
+    ? context.templateRewriteHint.rewrite_steps.slice(0, 4)
+    : [];
+  const rewriteSummary = rewriteSteps.length
+    ? rewriteSteps.map(
+        (step) =>
+          `${step.section || "未命名段落"}：${step.fill_strategy || step.slot_name || "按本次背景替换"}`,
+      )
+    : Array.isArray(context.templateRewriteHint?.rewrite_plan)
+      ? context.templateRewriteHint.rewrite_plan.slice(0, 3)
+      : [];
 
   container.innerHTML = `<div class="context-summary">
     <div class="context-summary-grid">
@@ -3348,6 +3373,14 @@ function renderTaskContextSummary() {
       <div class="context-card">
         <strong>模型路由</strong>
         <ul>${routeSummary.map((item) => `<li><code>${escapeHtml(item)}</code></li>`).join("")}</ul>
+      </div>
+      <div class="context-card context-card-emphasis">
+        <strong>模板改写清单</strong>
+        ${
+          rewriteSummary.length
+            ? `<ul>${rewriteSummary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+            : `<div class="mini">本次还没有形成清晰的模板改写清单，说明当前更像普通参考生成。</div>`
+        }
       </div>
     </div>
     <div class="context-log">
@@ -6015,6 +6048,7 @@ function bindSettingsActions() {
     button.disabled = true;
     button.textContent = "处理中...";
     try {
+      setInfo(`正在批量重分析 ${state.selectedMaterialPaths.filter(Boolean).length} 份材料，请稍等...`);
       await bulkAnalyzeMaterials();
     } catch (error) {
       setSettingsResult("批量重分析失败", { error: error.message });

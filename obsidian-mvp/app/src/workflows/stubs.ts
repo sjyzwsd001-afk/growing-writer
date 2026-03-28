@@ -5,7 +5,15 @@ import type {
   OutlineResult,
   TaskAnalysis,
 } from "../types/schemas.js";
-import type { EvidenceCard, Feedback, Material, MatchedRule, Profile, Task } from "../types/domain.js";
+import type {
+  EvidenceCard,
+  Feedback,
+  Material,
+  MatchedRule,
+  Profile,
+  Task,
+  TemplateRewriteStep,
+} from "../types/domain.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { buildOutlinePrompt } from "../prompts/build-outline.js";
 import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
@@ -162,7 +170,7 @@ export async function diagnoseTaskWithLlm(
     matchedMaterials: Material[];
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
-    templateRewritePlan?: string[];
+    templateRewritePlan?: TemplateRewriteStep[];
   },
 ): Promise<DiagnosisResult> {
   return client.generateJson({
@@ -217,7 +225,7 @@ export async function buildOutlineWithLlm(
     matchedMaterials: Material[];
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
-    templateRewritePlan?: string[];
+    templateRewritePlan?: TemplateRewriteStep[];
   },
 ): Promise<OutlineResult> {
   return client.generateJson({
@@ -275,7 +283,7 @@ export async function generateDraftWithLlm(
     matchedMaterials: Material[];
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
-    templateRewritePlan?: string[];
+    templateRewritePlan?: TemplateRewriteStep[];
   },
 ): Promise<DraftResult> {
   return client.generateJson({

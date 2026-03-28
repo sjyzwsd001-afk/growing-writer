@@ -1,4 +1,11 @@
-import type { EvidenceCard, Material, MaterialSummary, Task, TemplateRewriteHint } from "../types/domain.js";
+import type {
+  EvidenceCard,
+  Material,
+  MaterialSummary,
+  Task,
+  TemplateRewriteHint,
+  TemplateRewriteStep,
+} from "../types/domain.js";
 import type { TaskAnalysis } from "../types/schemas.js";
 
 function normalizeSummarySource(content: string): string {
@@ -55,12 +62,62 @@ function detectMaterialRole(material: Material): "template" | "history" | "unkno
   return "unknown";
 }
 
+function deriveTemplateSections(content: string, count: number): string[] {
+  const candidates = normalizeSummarySource(content)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => /^(?:[一二三四五六七八九十]+、|（[一二三四五六七八九十]+）|\d+\.)/.test(line))
+    .filter((line) => line.length <= 40);
+  return [...new Set(candidates)].slice(0, count);
+}
+
+function inferSectionIntent(section: string): string {
+  if (/概况|背景|总体|情况/.test(section)) {
+    return "先交代背景、范围和总体情况";
+  }
+  if (/采购组|组织|分工|成员/.test(section)) {
+    return "交代参与主体、组织方式和责任安排";
+  }
+  if (/方案建议|建议|措施|安排|计划/.test(section)) {
+    return "承接前文事实后，落到方案、建议或下一步动作";
+  }
+  if (/风险|问题/.test(section)) {
+    return "展开风险、问题及影响，为后续措施做铺垫";
+  }
+  return "作为固定结构段落，需结合本次背景替换旧事实和旧结论";
+}
+
 export function summarizeMaterial(material: Material): MaterialSummary {
+  const materialRole = detectMaterialRole(material);
+  const logicChain = parseSectionBullets(material.content, "逻辑关系", 4);
+  const templateSlots = parseSectionBullets(material.content, "模板槽位", 6);
+  const sectionIntents = parseSectionBullets(material.content, "段落意图", 6);
+  const derivedSections = materialRole === "template" ? deriveTemplateSections(material.content, 6) : [];
+  const derivedTemplateSlots =
+    materialRole === "template" && !templateSlots.length
+      ? derivedSections.map(
+          (section) =>
+            `${section}；替换规则：保留该段结构与标题，但把旧项目背景、旧数据和旧结论替换为本次任务事实；取材依据：优先使用本次背景材料和任务事实`,
+        )
+      : [];
+  const derivedIntents =
+    materialRole === "template" && !sectionIntents.length
+      ? derivedSections.map((section) => `${section}；段落意图：${inferSectionIntent(section)}`)
+      : [];
+  const derivedLogic =
+    materialRole === "template" && !logicChain.length && derivedSections.length >= 2
+      ? derivedSections.slice(0, -1).map((section, index) => {
+          const nextSection = derivedSections[index + 1];
+          return `先写「${section}」再写「${nextSection}」；原因：先按模板固定结构铺开，再承接到后续章节`;
+        })
+      : [];
+
   return {
     material_id: material.id,
     title: material.title,
     doc_type: material.docType,
-    material_role: detectMaterialRole(material),
+    material_role: materialRole,
     structure_summary: takeLines(material.content, 3),
     style_summary: [
       material.quality ? `质量标记：${material.quality}` : "",
@@ -68,9 +125,9 @@ export function summarizeMaterial(material: Material): MaterialSummary {
       material.scenario ? `场景：${material.scenario}` : "",
     ].filter(Boolean),
     useful_phrases: takeLines(material.content, 2),
-    logic_chain: parseSectionBullets(material.content, "逻辑关系", 4),
-    template_slots: parseSectionBullets(material.content, "模板槽位", 6),
-    section_intents: parseSectionBullets(material.content, "段落意图", 6),
+    logic_chain: logicChain.length ? logicChain : derivedLogic,
+    template_slots: templateSlots.length ? templateSlots : derivedTemplateSlots,
+    section_intents: sectionIntents.length ? sectionIntents : derivedIntents,
   };
 }
 
@@ -156,18 +213,44 @@ export function buildTemplateRewriteHint(input: {
   }
 
   const summary = summarizeMaterial(input.selectedTemplate);
-  const evidence = input.evidenceCards
-    .slice(0, 3)
-    .map((card) => `${card.material_title}#${card.card_id}`)
-    .join("、");
   const facts = input.taskAnalysis.raw_facts.slice(0, 3).join("；") || "优先从本次背景材料中提取";
   const mustInclude = input.taskAnalysis.must_include.slice(0, 4).join("；");
-  const plan = summary.template_slots.slice(0, 6).map((slot) => {
-    const intent = summary.section_intents.find((item) => item.includes(slot.split("；")[0] || ""));
-    return `按槽位改写：${slot}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${intent ? `；段落意图参考「${intent}」` : ""}${evidence ? `；证据优先来自 ${evidence}` : ""}`;
+  const evidenceCards = input.evidenceCards.slice(0, 3);
+  const evidenceIds = evidenceCards.map((card) => card.card_id);
+  const evidence = evidenceCards.map((card) => `${card.material_title}#${card.card_id}`).join("、");
+  const logicChain = summary.logic_chain.slice(0, 8);
+  const rewriteSteps: TemplateRewriteStep[] = summary.template_slots.slice(0, 6).map((slot, index) => {
+    const section = slot.split("；")[0]?.trim() || `段落${index + 1}`;
+    const intent =
+      summary.section_intents.find((item) => item.includes(section)) ||
+      summary.section_intents[index] ||
+      "沿用模板段落功能，但改写为本次任务语境";
+    const logicAfter = index > 0 ? logicChain[index - 1] || logicChain[0] || null : null;
+    return {
+      section,
+      slot_name: slot,
+      intent,
+      fill_strategy: `优先填入本次背景事实「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}`,
+      source_hint: evidence || "优先使用本次背景材料与任务事实",
+      evidence_card_ids: evidenceIds,
+      logic_after: logicAfter,
+    };
+  });
+
+  const plan = rewriteSteps.map((step) => {
+    return `按槽位改写：${step.slot_name}；本次优先填入「${facts}」${mustInclude ? `；并确保覆盖「${mustInclude}」` : ""}${step.intent ? `；段落意图参考「${step.intent}」` : ""}${step.source_hint ? `；证据优先来自 ${step.source_hint}` : ""}${step.logic_after ? `；并放在「${step.logic_after}」之后` : ""}`;
   });
 
   if (!plan.length) {
+    rewriteSteps.push({
+      section: "整体结构",
+      slot_name: "沿用模板整体结构",
+      intent: "保持模板的整体段落顺序和表达功能",
+      fill_strategy: `将旧背景、旧事实和旧结论替换为本次任务事实：${facts || "待从背景材料中抽取"}`,
+      source_hint: evidence || "优先使用本次背景材料与任务事实",
+      evidence_card_ids: evidenceIds,
+      logic_after: logicChain[0] || null,
+    });
     plan.push(
       `优先沿用模板《${input.selectedTemplate.title}》的整体结构，但将其中旧背景、旧事实和旧结论替换为本次任务事实：${facts || "待从背景材料中抽取"}`,
     );
@@ -179,6 +262,7 @@ export function buildTemplateRewriteHint(input: {
 
   return {
     template_title: input.selectedTemplate.title,
+    rewrite_steps: rewriteSteps.slice(0, 8),
     rewrite_plan: plan.slice(0, 8),
   };
 }

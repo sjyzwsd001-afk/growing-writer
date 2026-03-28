@@ -1,4 +1,4 @@
-import type { EvidenceCard, MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
+import type { EvidenceCard, MaterialSummary, MatchedRule, Profile, TemplateRewriteStep } from "../types/domain.js";
 import type { DiagnosisResult, TaskAnalysis } from "../types/schemas.js";
 import {
   compactDiagnosis,
@@ -7,6 +7,7 @@ import {
   compactMaterialSummaries,
   compactProfiles,
   compactTaskAnalysis,
+  compactTemplateRewritePlan,
 } from "./context.js";
 
 export function buildOutlinePrompt(input: {
@@ -16,7 +17,7 @@ export function buildOutlinePrompt(input: {
   materialSummaries: MaterialSummary[];
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
-  templateRewritePlan?: string[];
+  templateRewritePlan?: TemplateRewriteStep[];
 }): string {
   return `请生成一份可直接用于写作的提纲。
 
@@ -53,5 +54,5 @@ ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 ${JSON.stringify(compactProfiles(input.profiles), null, 2)}
 
 模板改写计划:
-${JSON.stringify(input.templateRewritePlan ?? [], null, 2)}`;
+${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}`;
 }

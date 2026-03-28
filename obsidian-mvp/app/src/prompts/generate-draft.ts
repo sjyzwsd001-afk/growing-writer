@@ -1,4 +1,4 @@
-import type { EvidenceCard, MaterialSummary, MatchedRule, Profile } from "../types/domain.js";
+import type { EvidenceCard, MaterialSummary, MatchedRule, Profile, TemplateRewriteStep } from "../types/domain.js";
 import type { DiagnosisResult, OutlineResult, TaskAnalysis } from "../types/schemas.js";
 import {
   compactDiagnosis,
@@ -8,6 +8,7 @@ import {
   compactOutline,
   compactProfiles,
   compactTaskAnalysis,
+  compactTemplateRewritePlan,
 } from "./context.js";
 
 export function buildGenerateDraftPrompt(input: {
@@ -18,7 +19,7 @@ export function buildGenerateDraftPrompt(input: {
   materialSummaries: MaterialSummary[];
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
-  templateRewritePlan?: string[];
+  templateRewritePlan?: TemplateRewriteStep[];
 }): string {
   return `请基于提纲、任务事实、规则和风格摘要，生成正式材料初稿。
 
@@ -67,5 +68,5 @@ ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 ${JSON.stringify(compactProfiles(input.profiles), null, 2)}
 
 模板改写计划:
-${JSON.stringify(input.templateRewritePlan ?? [], null, 2)}`;
+${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}`;
 }

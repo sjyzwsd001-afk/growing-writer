@@ -1843,7 +1843,7 @@ async function runTaskAction(input: {
     matchedMaterials,
     evidenceCards,
     profiles,
-    templateRewritePlan: templateRewriteHint?.rewrite_plan ?? [],
+    templateRewritePlan: templateRewriteHint?.rewrite_steps ?? [],
   };
 
   const routeMetas: Array<{
@@ -1892,6 +1892,7 @@ async function runTaskAction(input: {
       matchedMaterials,
       evidenceCards,
       decisionLog: withRoutingDecisionLog,
+      templateRewriteHint,
     });
     return {
       analysis,
@@ -1901,6 +1902,7 @@ async function runTaskAction(input: {
       ruleDecisionLog: withRoutingDecisionLog,
       matchedRules,
       matchedMaterials,
+      templateRewriteHint,
     };
   }
 
@@ -1912,7 +1914,7 @@ async function runTaskAction(input: {
     matchedMaterials,
     evidenceCards,
     profiles,
-    templateRewritePlan: templateRewriteHint?.rewrite_plan ?? [],
+    templateRewritePlan: templateRewriteHint?.rewrite_steps ?? [],
   };
 
   const outlineResult = await executeWithModelRouting({
@@ -1953,6 +1955,7 @@ async function runTaskAction(input: {
       matchedMaterials,
       evidenceCards,
       decisionLog: withRoutingDecisionLog,
+      templateRewriteHint,
     });
     return {
       analysis,
@@ -1963,6 +1966,7 @@ async function runTaskAction(input: {
       ruleDecisionLog: withRoutingDecisionLog,
       matchedRules,
       matchedMaterials,
+      templateRewriteHint,
     };
   }
 
@@ -1980,7 +1984,7 @@ async function runTaskAction(input: {
         matchedMaterials,
         evidenceCards,
         profiles,
-        templateRewritePlan: templateRewriteHint?.rewrite_plan ?? [],
+        templateRewritePlan: templateRewriteHint?.rewrite_steps ?? [],
       }),
     fallback: () =>
       generateDraft({
@@ -2022,6 +2026,7 @@ async function runTaskAction(input: {
     matchedMaterials,
     evidenceCards,
     decisionLog: withRoutingDecisionLog,
+    templateRewriteHint,
   });
 
   return {
@@ -2034,6 +2039,7 @@ async function runTaskAction(input: {
     ruleDecisionLog: withRoutingDecisionLog,
     matchedRules,
     matchedMaterials,
+    templateRewriteHint,
   };
 }
 

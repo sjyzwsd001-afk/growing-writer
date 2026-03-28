@@ -1,6 +1,6 @@
 import { replaceSection, writeMarkdownDocument } from "../vault/markdown.js";
 import type { DiagnosisResult, DraftResult, OutlineResult } from "../types/schemas.js";
-import type { EvidenceCard, Material, MatchedRule, Task } from "../types/domain.js";
+import type { EvidenceCard, Material, MatchedRule, Task, TemplateRewriteHint } from "../types/domain.js";
 
 function renderDiagnosis(result: DiagnosisResult): string {
   const structure = result.recommended_structure
@@ -40,6 +40,7 @@ function renderReferences(input: {
   matchedMaterials: Material[];
   evidenceCards: EvidenceCard[];
   decisionLog: string[];
+  templateRewriteHint?: TemplateRewriteHint | null;
 }): string {
   const materialLines =
     input.matchedMaterials.map((material) => `- ${material.title || material.id}`).join("\n") || "- 无";
@@ -62,6 +63,23 @@ function renderReferences(input: {
           `- [${card.card_id}] ${card.material_title}：${card.excerpt}（${card.relevance}）`,
       )
       .join("\n") || "- 无";
+  const rewriteLines =
+    input.templateRewriteHint?.rewrite_steps?.length
+      ? input.templateRewriteHint.rewrite_steps
+          .map(
+            (step, index) =>
+              `${index + 1}. ${step.section}\n` +
+              `- 槽位：${step.slot_name}\n` +
+              `- 段落意图：${step.intent}\n` +
+              `- 填充策略：${step.fill_strategy}\n` +
+              `- 证据来源：${step.source_hint}\n` +
+              `- 证据卡：${step.evidence_card_ids.join("、") || "无"}\n` +
+              `- 逻辑位置：${step.logic_after ? `承接「${step.logic_after}」之后` : "作为当前结构起点或独立段落"}`,
+          )
+          .join("\n\n")
+      : input.templateRewriteHint?.rewrite_plan?.length
+        ? input.templateRewriteHint.rewrite_plan.map((line) => `- ${line}`).join("\n")
+        : "- 当前未生成模板改写计划";
 
   return `## 相似历史材料
 
@@ -74,6 +92,10 @@ ${ruleLines}
 ## 证据卡片
 
 ${evidenceLines}
+
+## 模板改写计划
+
+${rewriteLines}
 
 ## 策略裁决
 
@@ -93,6 +115,7 @@ export async function writeTaskSections(input: {
   matchedMaterials?: Material[];
   evidenceCards?: EvidenceCard[];
   decisionLog?: string[];
+  templateRewriteHint?: TemplateRewriteHint | null;
 }): Promise<void> {
   let nextContent = input.task.content;
 
@@ -114,6 +137,7 @@ export async function writeTaskSections(input: {
         matchedMaterials: input.matchedMaterials ?? [],
         evidenceCards: input.evidenceCards ?? [],
         decisionLog: input.decisionLog ?? [],
+        templateRewriteHint: input.templateRewriteHint ?? null,
       }),
     );
   }

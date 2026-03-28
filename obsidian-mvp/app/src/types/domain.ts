@@ -73,8 +73,19 @@ export type MaterialSummary = {
   section_intents: string[];
 };
 
+export type TemplateRewriteStep = {
+  section: string;
+  slot_name: string;
+  intent: string;
+  fill_strategy: string;
+  source_hint: string;
+  evidence_card_ids: string[];
+  logic_after?: string | null;
+};
+
 export type TemplateRewriteHint = {
   template_title: string;
+  rewrite_steps: TemplateRewriteStep[];
   rewrite_plan: string[];
 };
 

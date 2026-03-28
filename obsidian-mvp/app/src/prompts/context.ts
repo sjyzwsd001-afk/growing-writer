@@ -3,6 +3,7 @@ import type {
   MaterialSummary,
   MatchedRule,
   Profile,
+  TemplateRewriteStep,
 } from "../types/domain.js";
 import type {
   DiagnosisResult,
@@ -83,6 +84,20 @@ export function compactProfiles(profiles: Profile[]): Array<Record<string, unkno
     id: profile.id,
     name: clip(profile.name, 60),
     content: clip(profile.content, 420),
+  }));
+}
+
+export function compactTemplateRewritePlan(
+  rewriteSteps: TemplateRewriteStep[],
+): Array<Record<string, unknown>> {
+  return rewriteSteps.slice(0, 6).map((step) => ({
+    section: clip(step.section, 40),
+    slot_name: clip(step.slot_name, 90),
+    intent: clip(step.intent, 90),
+    fill_strategy: clip(step.fill_strategy, 120),
+    source_hint: clip(step.source_hint, 90),
+    evidence_card_ids: clipList(step.evidence_card_ids, 3, 20),
+    logic_after: step.logic_after ? clip(step.logic_after, 90) : null,
   }));
 }
 
