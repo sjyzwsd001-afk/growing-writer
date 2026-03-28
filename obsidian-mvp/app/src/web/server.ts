@@ -110,6 +110,15 @@ type PendingOauthRequest = {
   createdAt: number;
 };
 
+class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number,
+  ) {
+    super(message);
+  }
+}
+
 type OauthCallbackServerState = {
   port: number;
   close: () => Promise<void>;
@@ -132,6 +141,69 @@ const __dirname = dirname(__filename);
 const publicDir = join(__dirname, "public");
 const pendingOauthRequests = new Map<string, PendingOauthRequest>();
 let oauthCallbackServerState: OauthCallbackServerState | null = null;
+const MAX_REQUEST_BODY_BYTES = Number(process.env.GROWING_WRITER_MAX_BODY_BYTES || 5 * 1024 * 1024);
+
+function oauthPendingStatePath(vaultRoot: string): string {
+  return join(vaultRoot, ".writer-oauth-pending.json");
+}
+
+async function persistPendingOauthRequests(vaultRoot: string): Promise<void> {
+  const payload = JSON.stringify([...pendingOauthRequests.entries()], null, 2);
+  await writeFile(oauthPendingStatePath(vaultRoot), payload, "utf8");
+}
+
+async function loadPendingOauthRequests(vaultRoot: string): Promise<void> {
+  if (pendingOauthRequests.size > 0) {
+    return;
+  }
+  try {
+    const raw = await readFile(oauthPendingStatePath(vaultRoot), "utf8");
+    const parsed = JSON.parse(raw) as Array<[string, PendingOauthRequest]>;
+    parsed.forEach(([state, request]) => {
+      if (state && request?.state) {
+        pendingOauthRequests.set(state, request);
+      }
+    });
+  } catch {
+    // Ignore missing or malformed persisted OAuth pending state.
+  }
+}
+
+async function setPendingOauthRequest(vaultRoot: string, value: PendingOauthRequest): Promise<void> {
+  pendingOauthRequests.set(value.state, value);
+  await persistPendingOauthRequests(vaultRoot);
+}
+
+async function consumePendingOauthRequest(
+  vaultRoot: string,
+  state: string,
+): Promise<PendingOauthRequest | null> {
+  await loadPendingOauthRequests(vaultRoot);
+  const pending = pendingOauthRequests.get(state) ?? null;
+  if (pending) {
+    pendingOauthRequests.delete(state);
+    await persistPendingOauthRequests(vaultRoot);
+  }
+  return pending;
+}
+
+function isLoopbackRequest(req: IncomingMessage): boolean {
+  const remote = req.socket.remoteAddress || "";
+  return (
+    remote === "127.0.0.1" ||
+    remote === "::1" ||
+    remote === "::ffff:127.0.0.1"
+  );
+}
+
+function ensureLocalApiRequest(req: IncomingMessage): void {
+  if (process.env.GROWING_WRITER_ALLOW_REMOTE_API === "1") {
+    return;
+  }
+  if (!isLoopbackRequest(req)) {
+    throw new HttpError("This API only accepts localhost requests.", 403);
+  }
+}
 
 function normalizeCodexModel(model: unknown): string {
   if (typeof model !== "string" || !model.trim()) {
@@ -1044,7 +1116,10 @@ async function describeListeningProcess(port: number): Promise<string | null> {
   }
 }
 
-async function closeOauthCallbackServerIfIdle() {
+async function closeOauthCallbackServerIfIdle(vaultRoot?: string) {
+  if (vaultRoot) {
+    await loadPendingOauthRequests(vaultRoot);
+  }
   if (!oauthCallbackServerState || pendingOauthRequests.size > 0) {
     return;
   }
@@ -1060,8 +1135,14 @@ async function closeOauthCallbackServerIfIdle() {
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
+  let totalBytes = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (totalBytes > MAX_REQUEST_BODY_BYTES) {
+      throw new HttpError(`Request body exceeds ${MAX_REQUEST_BODY_BYTES} bytes.`, 413);
+    }
+    chunks.push(buffer);
   }
 
   if (!chunks.length) {
@@ -2650,7 +2731,7 @@ async function handleOauthCallbackRequest(input: {
 
   if (oauthError) {
     if (state) {
-      pendingOauthRequests.delete(state);
+      await consumePendingOauthRequest(input.vaultRoot, state);
     }
     input.res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
     input.res.end(
@@ -2660,22 +2741,21 @@ async function handleOauthCallbackRequest(input: {
         details: oauthErrorDescription || "No error_description returned from OAuth callback.",
       }),
     );
-    void closeOauthCallbackServerIfIdle();
+    void closeOauthCallbackServerIfIdle(input.vaultRoot);
     return;
   }
   if (!code || !state) {
     sendText(input.res, 400, "Missing code or state.");
-    void closeOauthCallbackServerIfIdle();
+    void closeOauthCallbackServerIfIdle(input.vaultRoot);
     return;
   }
 
-  const pending = pendingOauthRequests.get(state);
+  const pending = await consumePendingOauthRequest(input.vaultRoot, state);
   if (!pending) {
     sendText(input.res, 400, "OAuth state is invalid or expired.");
-    void closeOauthCallbackServerIfIdle();
+    void closeOauthCallbackServerIfIdle(input.vaultRoot);
     return;
   }
-  pendingOauthRequests.delete(state);
 
   try {
     const tokens = await exchangeCodexAuthorizationCode({
@@ -2698,7 +2778,7 @@ async function handleOauthCallbackRequest(input: {
           frontendOrigin: pending.frontendOrigin,
         }),
       );
-      void closeOauthCallbackServerIfIdle();
+      void closeOauthCallbackServerIfIdle(input.vaultRoot);
       return;
     }
 
@@ -2728,13 +2808,13 @@ async function handleOauthCallbackRequest(input: {
         frontendOrigin: pending.frontendOrigin,
       }),
     );
-    void closeOauthCallbackServerIfIdle();
+    void closeOauthCallbackServerIfIdle(input.vaultRoot);
     return;
   }
 
   input.res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
   input.res.end(buildOauthSuccessPage(pending.frontendOrigin));
-  void closeOauthCallbackServerIfIdle();
+  void closeOauthCallbackServerIfIdle(input.vaultRoot);
 }
 
 async function ensureOauthCallbackServer(vaultRoot: string) {
@@ -2757,6 +2837,10 @@ async function ensureOauthCallbackServer(vaultRoot: string) {
 
       sendJson(res, 404, { error: `Unsupported route: ${toSafeId(url.pathname) || url.pathname}` });
     } catch (error) {
+      if (error instanceof HttpError) {
+        sendJson(res, error.statusCode, { error: error.message });
+        return;
+      }
       sendJson(res, 500, {
         error: error instanceof Error ? error.message : "Unknown callback server error",
       });
@@ -2818,6 +2902,9 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       const url = new URL(req.url, `http://127.0.0.1:${port}`);
+      if (url.pathname.startsWith("/api/")) {
+        ensureLocalApiRequest(req);
+      }
 
       if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/assets/"))) {
         const staticPath = url.pathname === "/" ? "/index.html" : url.pathname.replace(/^\/assets/, "");
@@ -3198,7 +3285,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
         const { verifier, challenge } = createPkcePair();
         const state = toBase64Url(randomBytes(18));
         const redirectUri = `http://localhost:${OPENAI_CODEX_CALLBACK_PORT}/auth/callback`;
-        pendingOauthRequests.set(state, {
+        await setPendingOauthRequest(vaultRoot, {
           state,
           profileId: settings.id,
           codeVerifier: verifier,
@@ -3977,6 +4064,10 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       sendJson(res, 404, { error: `Unsupported route: ${toSafeId(url.pathname) || url.pathname}` });
     } catch (error) {
+      if (error instanceof HttpError) {
+        sendJson(res, error.statusCode, { error: error.message });
+        return;
+      }
       const message = error instanceof Error ? error.message : "Unknown error";
       sendJson(res, 500, { error: message });
     }
