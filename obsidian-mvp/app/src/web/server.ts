@@ -100,6 +100,12 @@ import {
 import { attachApiSessionCookie, ensureApiSession } from "./session.js";
 import { serveStatic } from "./static.js";
 import {
+  handleDashboardRoute,
+  handleDocumentRoute,
+  handleRefreshProfileRoute,
+  handleRefreshTasksRoute,
+} from "./read-models.js";
+import {
   handleCreateTaskRoute,
   handleRunTaskRoute,
   handleUpdateTaskDraftRoute,
@@ -970,7 +976,7 @@ async function readRecentObservabilityEvents(vaultRoot: string, limit = 80): Pro
     const raw = await readFile(observabilityLogPath(vaultRoot), "utf8");
     const lines = raw
       .split(/\r?\n/)
-      .map((line) => line.trim())
+      .map((line: string) => line.trim())
       .filter(Boolean);
     const items: ObservabilityEvent[] = [];
     for (const line of lines.slice(-limit)) {
@@ -1873,291 +1879,6 @@ async function advanceWorkflowRunForAction(input: {
   return { run, profilePath, workflowDefinition };
 }
 
-async function buildDashboard(vaultRoot: string) {
-  const repo = new VaultRepository(vaultRoot);
-  const [materials, tasks, rules, feedbackEntries, profiles, workflowRuns, workflowDefinition, observabilityEvents] =
-    await Promise.all([
-    repo.loadMaterials(),
-    repo.loadTasks(),
-    repo.loadRules(),
-    repo.loadFeedbackEntries(),
-    repo.loadProfiles(),
-    listWorkflowRuns(vaultRoot),
-    loadWorkflowDefinition(vaultRoot),
-    readRecentObservabilityEvents(vaultRoot, 80),
-    ]);
-
-  const llmConfig = getLlmConfig(vaultRoot);
-  const stored = getStoredLlmSettings(vaultRoot);
-  const llmProfiles = listStoredLlmProfiles(vaultRoot);
-  const activeValidation = stored ? validateStoredLlmProfile(stored) : { ok: true, errors: [], warnings: [] };
-  const provider =
-    stored?.provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER : OPENAI_CODEX_PROVIDER;
-  const providerLabel =
-    provider === OPENAI_KEY_PROVIDER ? OPENAI_KEY_PROVIDER_LABEL : OPENAI_CODEX_PROVIDER_LABEL;
-  const materialItems = materials
-    .map((item) => {
-      const summary = summarizeMaterial(item);
-      const candidateRuleCount = (item.content.match(/候选规则\s*\d+：/g) || []).length;
-      const structureBlockCount = (item.content.match(/^##\s+/gm) || []).length;
-      const source = typeof item.frontmatter.source === "string" ? item.frontmatter.source : "";
-      const isTemplate = isTemplateMaterial({
-        tags: item.tags,
-        source,
-        docType: item.docType,
-      });
-      const role = classifyMaterialRole({
-        isTemplate,
-        source,
-        quality: item.quality,
-        docType: item.docType,
-        scenario: item.scenario,
-      });
-      const recommendTemplatePromotion =
-        !isTemplate &&
-        String(item.quality || "") === "high" &&
-        candidateRuleCount >= 2 &&
-        structureBlockCount >= 3;
-      const folderRelative = relative(join(vaultRoot, "materials"), dirname(item.path));
-      return {
-        id: item.id,
-        title: item.title,
-        docType: item.docType,
-        audience: item.audience,
-        scenario: item.scenario,
-        quality: item.quality,
-        source,
-        tags: item.tags,
-        isTemplate,
-        roleLabel: role.roleLabel,
-        roleReason: role.roleReason,
-        structureSummary: summary.structure_summary,
-        styleSummary: summary.style_summary,
-        usefulPhrases: summary.useful_phrases,
-        candidateRuleCount,
-        structureBlockCount,
-        recommendTemplatePromotion,
-        folderPath: folderRelative && folderRelative !== "." ? folderRelative : "",
-        folderLabel: folderRelative && folderRelative !== "." ? folderRelative : "根目录",
-        path: item.path,
-      };
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
-  const materialTitleById = new Map(materialItems.map((item) => [item.id, item.title]));
-  const taskTitleById = new Map(tasks.map((item) => [item.id, item.title]));
-  const ruleConflictHints = detectRuleConflictHints(
-    rules.map((item) => ({
-      id: item.id,
-      title: item.title,
-      status: item.status,
-      scope: item.scope,
-      docTypes: item.docTypes,
-      audiences: item.audiences,
-      content: item.content,
-    })),
-  );
-
-  const ruleItems = await Promise.all(
-    rules.map(async (item) => {
-      const versions = await listRuleVersions(vaultRoot, item.id);
-      const linkedTasks = tasks.filter((task) => Array.isArray(task.matchedRules) && task.matchedRules.includes(item.id));
-      const linkedTaskCount = linkedTasks.length;
-      const linkedFeedbacks = feedbackEntries.filter((feedback) =>
-        Array.isArray(feedback.relatedRuleIds) && feedback.relatedRuleIds.includes(item.id),
-      );
-      const linkedFeedbackCount = linkedFeedbacks.length;
-      return {
-        id: item.id,
-        title: item.title,
-        status: item.status,
-        scope: item.scope,
-        docTypes: item.docTypes,
-        audiences: item.audiences,
-        sourceMaterials: item.sourceMaterials,
-        sourceMaterialTitles: item.sourceMaterials
-          .map((materialId) => materialTitleById.get(materialId) || materialId)
-          .filter(Boolean),
-        confidence: item.confidence,
-        versionCount: versions.length,
-        latestVersionAt: versions[0]?.createdAt || "",
-        linkedTaskCount,
-        linkedTaskTitles: linkedTasks.slice(0, 3).map((task) => task.title),
-        linkedFeedbackCount,
-        linkedFeedbackIds: linkedFeedbacks.slice(0, 3).map((feedback) => feedback.id),
-        conflictHints: ruleConflictHints.get(item.id) || [],
-        path: item.path,
-      };
-    }),
-  );
-  const ruleTitleById = new Map(ruleItems.map((item) => [item.id, item.title]));
-
-  return {
-    vaultRoot,
-    llm: {
-      activeProfileId: llmProfiles.activeProfileId,
-      activeProfileName: stored?.name || "",
-      provider,
-      providerLabel,
-      enabled: llmConfig.enabled,
-      source: llmConfig.source,
-      baseUrl: llmConfig.baseUrl,
-      model: llmConfig.model,
-      apiType: llmConfig.apiType,
-      hasSavedSettings: Boolean(stored),
-      updatedAt: stored?.updatedAt ?? null,
-      oauthReady: Boolean(stored?.oauthAccessToken && stored?.oauthIdToken),
-      validation: activeValidation,
-      routingEnabled: Boolean(stored?.routingEnabled),
-      fastProfileId: stored?.fastProfileId || "",
-      strongProfileId: stored?.strongProfileId || "",
-      fallbackProfileIds: Array.isArray(stored?.fallbackProfileIds) ? stored.fallbackProfileIds : [],
-      fastModel: stored?.fastModel || llmConfig.model,
-      strongModel: stored?.strongModel || llmConfig.model,
-      fallbackModels: Array.isArray(stored?.fallbackModels) ? stored.fallbackModels : [],
-      calibration: stored?.calibration ?? null,
-      cards: llmProfiles.profiles.map((profile) => ({
-        id: profile.id,
-        name: profile.name,
-        provider: profile.provider,
-        providerLabel:
-          profile.provider === OPENAI_KEY_PROVIDER
-            ? OPENAI_KEY_PROVIDER_LABEL
-            : OPENAI_CODEX_PROVIDER_LABEL,
-        model: profile.model,
-        apiType: profile.apiType || "openai-completions",
-        baseUrl: profile.baseUrl,
-        authUrl: profile.authUrl,
-        routingEnabled: Boolean(profile.routingEnabled),
-        fastProfileId: profile.fastProfileId || "",
-        strongProfileId: profile.strongProfileId || "",
-        fallbackProfileIds: Array.isArray(profile.fallbackProfileIds) ? profile.fallbackProfileIds : [],
-        fastModel: profile.fastModel || profile.model,
-        strongModel: profile.strongModel || profile.model,
-        fallbackModels: Array.isArray(profile.fallbackModels) ? profile.fallbackModels : [],
-        enabled: Boolean(profile.bearerToken?.trim()),
-        hasBearerToken: Boolean(profile.bearerToken?.trim()),
-        oauthReady: Boolean(profile.oauthAccessToken && profile.oauthIdToken),
-        validation: validateStoredLlmProfile(profile),
-        calibration: profile.calibration ?? null,
-        updatedAt: profile.updatedAt ?? null,
-        createdAt: profile.createdAt ?? null,
-        isActive: profile.id === llmProfiles.activeProfileId,
-      })),
-    },
-    materials: materialItems.filter((item) => !item.isTemplate),
-    templates: materialItems.filter((item) => item.isTemplate),
-    templateCandidates: materialItems.filter(
-      (item) => item.isTemplate || item.recommendTemplatePromotion || item.quality === "high",
-    ),
-    tasks: tasks
-      .map((item) => ({
-        id: item.id,
-        title: item.title,
-        status: item.status,
-        docType: item.docType,
-        audience: item.audience,
-        scenario: item.scenario,
-        matchedRules: item.matchedRules,
-        path: item.path,
-      }))
-      .sort((a, b) => a.title.localeCompare(b.title, "zh-CN")),
-    rules: ruleItems
-      .sort((a, b) => a.title.localeCompare(b.title, "zh-CN")),
-    feedback: feedbackEntries
-      .map((item) => ({
-        id: item.id,
-        taskId: item.taskId,
-        taskTitle: taskTitleById.get(item.taskId) || item.taskId,
-        feedbackType: item.feedbackType,
-        relatedRuleIds: item.relatedRuleIds,
-        relatedRuleTitles: item.relatedRuleIds
-          .map((ruleId) => ruleTitleById.get(ruleId) || ruleId)
-          .filter(Boolean),
-        relatedRules: item.relatedRuleIds
-          .map((ruleId) => {
-            const hit = ruleItems.find((rule) => rule.id === ruleId);
-            if (!hit) {
-              return null;
-            }
-            return {
-              id: hit.id,
-              title: hit.title,
-              status: hit.status,
-              path: hit.path,
-            };
-          })
-          .filter(Boolean),
-        reusableSuggestion:
-          typeof item.frontmatter.is_reusable_rule === "boolean"
-            ? item.frontmatter.is_reusable_rule
-            : typeof item.frontmatter.reusable_suggestion === "boolean"
-              ? item.frontmatter.reusable_suggestion
-              : null,
-        candidateRuleTitle:
-          typeof item.frontmatter.candidate_rule_title === "string" ? item.frontmatter.candidate_rule_title : "",
-        candidateRuleScope:
-          typeof item.frontmatter.candidate_rule_scope === "string" ? item.frontmatter.candidate_rule_scope : "",
-        affectedParagraph:
-          typeof item.frontmatter.affected_paragraph === "string" ? item.frontmatter.affected_paragraph : "",
-        createdAt: item.createdAt,
-        path: item.path,
-      }))
-      .sort((a, b) => a.id.localeCompare(b.id, "zh-CN")),
-    profiles: profiles.map((item) => ({
-      id: item.id,
-      name: item.name,
-      version: item.version,
-      generatedBy:
-        typeof item.frontmatter.generated_by === "string" ? item.frontmatter.generated_by : "unknown",
-      updatedAt:
-        typeof item.frontmatter.updated_at === "string" ? item.frontmatter.updated_at : "",
-      sourceStats:
-        item.frontmatter.source_stats && typeof item.frontmatter.source_stats === "object"
-          ? item.frontmatter.source_stats
-          : null,
-      overview: {
-        tone: extractProfileField(item.content, "语气特点："),
-        sentenceStyle: extractProfileField(item.content, "句式特点："),
-        opening: extractProfileField(item.content, "开头通常怎么写："),
-        body: extractProfileField(item.content, "主体通常怎么展开："),
-        ending: extractProfileField(item.content, "结尾通常怎么收："),
-      },
-      highPriorityPreferences: extractProfileBulletSection(item.content, "高优先级偏好").slice(0, 4),
-      commonTaboos: extractProfileBulletSection(item.content, "常见禁忌").slice(0, 4),
-      stableRuleSummary: extractProfileBulletSection(item.content, "当前稳定规则摘要").slice(0, 4),
-      pendingObservations: extractProfileBulletSection(item.content, "待确认观察").slice(0, 4),
-      scenarioGuidance: {
-        leadershipReport: extractProfileScenarioBullets(item.content, "领导汇报").slice(0, 3),
-        proposalDoc: extractProfileScenarioBullets(item.content, "方案材料").slice(0, 3),
-        reviewDoc: extractProfileScenarioBullets(item.content, "总结复盘").slice(0, 3),
-      },
-      path: item.path,
-    })),
-    workflowRuns: workflowRuns.slice(0, 30).map((item) => ({
-      runId: item.runId,
-      taskId: item.taskId,
-      title: item.title,
-      status: item.status,
-      currentStage: item.currentStage,
-      updatedAt: item.updatedAt,
-    })),
-    workflowDefinition: {
-      id: workflowDefinition.definition.id,
-      version: workflowDefinition.definition.version,
-      source: workflowDefinition.source,
-      path: workflowDefinition.path,
-      initialStage: workflowDefinition.definition.initialStage,
-      stageCount: workflowDefinition.definition.stages.length,
-    },
-    observability: observabilityEvents.slice(0, 60),
-  };
-}
-
-async function readDocumentByPath(path: string) {
-  const raw = await readFile(path, "utf8");
-  return { path, raw };
-}
-
 export async function startWebServer(options?: Partial<ServerOptions>) {
   const vaultRoot = resolve(options?.vaultRoot ?? DEFAULT_VAULT_ROOT);
   const port = options?.port ?? 4318;
@@ -2190,7 +1911,13 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "GET" && url.pathname === "/api/dashboard") {
-        sendJson(res, 200, await buildDashboard(vaultRoot));
+        await handleDashboardRoute({
+          vaultRoot,
+          res,
+          detectRuleConflictHints,
+          listRuleVersions,
+          readRecentObservabilityEvents,
+        });
         return;
       }
 
@@ -2244,12 +1971,10 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "GET" && url.pathname === "/api/document") {
-        const targetPath = url.searchParams.get("path");
-        if (!targetPath) {
-          sendJson(res, 400, { error: "Missing path parameter." });
-          return;
-        }
-        sendJson(res, 200, await readDocumentByPath(targetPath));
+        await handleDocumentRoute({
+          targetPath: url.searchParams.get("path"),
+          res,
+        });
         return;
       }
 
@@ -2497,63 +2222,22 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/refresh/tasks") {
-        const repo = new VaultRepository(vaultRoot);
-        const [tasks, materials, rules, profiles, feedbackEntries] = await Promise.all([
-          repo.loadTasks(),
-          repo.loadMaterials(),
-          repo.loadRules(),
-          repo.loadProfiles(),
-          repo.loadFeedbackEntries(),
-        ]);
-
-        const results = [];
-        for (const task of tasks) {
-          const ruleMatch = matchRulesWithPolicy({
-            task,
-            rules,
-            materials,
-            profiles,
-            feedbackEntries,
-          });
-          const matchedRules = ruleMatch.matchedRules;
-          const matchedMaterials = matchMaterials(task, materials);
-          await refreshTaskReferences({
-            task,
-            matchedRules,
-            matchedMaterials,
-          });
-          results.push({
-            taskId: task.id,
-            matchedRules: matchedRules.map((rule) => rule.rule_id),
-            matchedMaterials: matchedMaterials.map((material) => material.id),
-            decisionLog: ruleMatch.decisionLog,
-          });
-        }
-
-        sendJson(res, 200, results);
+        await handleRefreshTasksRoute({
+          vaultRoot,
+          res,
+          matchRulesWithPolicy,
+          matchMaterials,
+          refreshTaskReferences,
+        });
         return;
       }
 
       if (req.method === "POST" && url.pathname === "/api/refresh/profile") {
-        const repo = new VaultRepository(vaultRoot);
-        const client = createLlmClient(vaultRoot);
-        const [profiles, rules, materials, feedbackEntries] = await Promise.all([
-          repo.loadProfiles(),
-          repo.loadRules(),
-          repo.loadMaterials(),
-          repo.loadFeedbackEntries(),
-        ]);
-        const profilePath = await refreshDefaultProfile({
+        await handleRefreshProfileRoute({
           vaultRoot,
-          profiles,
-          rules,
-          materials,
-          feedbackEntries,
-          client,
-        });
-        sendJson(res, 200, {
-          profilePath,
-          confirmedRules: rules.filter((rule) => rule.status === "confirmed").length,
+          res,
+          createLlmClient,
+          refreshDefaultProfile,
         });
         return;
       }

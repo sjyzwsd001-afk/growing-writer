@@ -1,13 +1,15 @@
 import type { Feedback, Material, Rule } from "../types/domain.js";
+import { normalizeFeedback, normalizeRule } from "../types/normalize.js";
 
 function trimRule(rule: Rule) {
+  const normalized = normalizeRule(rule);
   return {
-    id: rule.id,
-    title: rule.title,
-    scope: rule.scope,
-    doc_types: rule.docTypes,
-    audiences: rule.audiences,
-    confidence: rule.confidence,
+    id: normalized.id,
+    title: normalized.title,
+    scope: normalized.scope,
+    doc_types: normalized.docTypes,
+    audiences: normalized.audiences,
+    confidence: normalized.confidence,
     content: rule.content.slice(0, 1000),
   };
 }
@@ -26,11 +28,12 @@ function trimMaterial(material: Material) {
 }
 
 function trimFeedback(feedback: Feedback) {
+  const normalized = normalizeFeedback(feedback);
   return {
-    id: feedback.id,
-    task_id: feedback.taskId,
-    feedback_type: feedback.feedbackType,
-    related_rule_ids: feedback.relatedRuleIds,
+    id: normalized.id,
+    task_id: normalized.taskId,
+    feedback_type: normalized.feedbackType,
+    related_rule_ids: normalized.relatedRuleIds,
     snippet: feedback.content.slice(0, 600),
   };
 }

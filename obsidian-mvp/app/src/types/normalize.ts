@@ -1,4 +1,4 @@
-import type { MaterialSummary } from "./domain.js";
+import type { Feedback, MaterialSummary, Rule } from "./domain.js";
 import type { TaskAnalysis } from "./schemas.js";
 
 export type NormalizedTaskAnalysis = {
@@ -34,6 +34,33 @@ export type NormalizedMaterialSummary = {
     intent: string;
     trigger: string;
   }>;
+};
+
+export type NormalizedRule = {
+  id: string;
+  title: string;
+  status: Rule["status"];
+  scope: string;
+  docTypes: string[];
+  audiences: string[];
+  sourceMaterials: string[];
+  confidence: number;
+};
+
+export type NormalizedFeedback = {
+  id: string;
+  taskId: string;
+  relatedRuleIds: string[];
+  feedbackType: string;
+  severity: string;
+  action: string;
+  affectedParagraph: string;
+  affectedSection: string;
+  affectsStructure: string;
+  selectedText: string;
+  selectionStart: number | null;
+  selectionEnd: number | null;
+  createdAt: string;
 };
 
 export function normalizeTaskAnalysis(taskAnalysis: TaskAnalysis): NormalizedTaskAnalysis {
@@ -72,5 +99,36 @@ export function normalizeMaterialSummary(material: MaterialSummary): NormalizedM
       intent: item.intent,
       trigger: item.trigger,
     })),
+  };
+}
+
+export function normalizeRule(rule: Rule): NormalizedRule {
+  return {
+    id: rule.id,
+    title: rule.title,
+    status: rule.status,
+    scope: rule.scope,
+    docTypes: rule.docTypes,
+    audiences: rule.audiences,
+    sourceMaterials: rule.sourceMaterials,
+    confidence: rule.confidence,
+  };
+}
+
+export function normalizeFeedback(feedback: Feedback): NormalizedFeedback {
+  return {
+    id: feedback.id,
+    taskId: feedback.taskId,
+    relatedRuleIds: feedback.relatedRuleIds,
+    feedbackType: feedback.feedbackType,
+    severity: feedback.severity,
+    action: feedback.action,
+    affectedParagraph: feedback.affectedParagraph,
+    affectedSection: feedback.affectedSection,
+    affectsStructure: feedback.affectsStructure,
+    selectedText: feedback.selectedText ?? "",
+    selectionStart: feedback.selectionStart ?? null,
+    selectionEnd: feedback.selectionEnd ?? null,
+    createdAt: feedback.createdAt,
   };
 }

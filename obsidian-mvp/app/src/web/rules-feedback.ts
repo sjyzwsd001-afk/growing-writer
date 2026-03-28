@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 
+import type { Feedback, Rule, Task } from "../types/domain.js";
+import type { FeedbackAnalysis, TaskAnalysis } from "../types/schemas.js";
 import { VaultRepository } from "../vault/repository.js";
 import { sendJson } from "./http.js";
 
@@ -10,13 +12,13 @@ export async function handleLearnFeedbackRoute(input: {
   createLlmClient: (vaultRoot: string) => {
     isEnabled(): boolean;
   };
-  parseTaskWithLlm: (client: any, task: any) => Promise<any>;
-  parseTask: (task: any) => any;
-  learnFeedbackWithLlm: (client: any, input: { feedback: any; task: any; taskAnalysis: any }) => Promise<any>;
-  learnFeedback: (feedback: any) => any;
-  writeCandidateRule: (input: { vaultRoot: string; feedback: any; analysis: any }) => Promise<{ path: string; ruleId: string } | null>;
-  writeFeedbackResult: (input: { feedback: any; analysis: any; ruleId: string | null }) => Promise<any>;
-  attachRuleToTask: (input: { task: any; ruleId: string | null; feedbackId: string }) => Promise<any>;
+  parseTaskWithLlm: (client: any, task: Task) => Promise<TaskAnalysis>;
+  parseTask: (task: Task) => TaskAnalysis;
+  learnFeedbackWithLlm: (client: any, input: { feedback: Feedback; task: Task | null; taskAnalysis: TaskAnalysis | null }) => Promise<FeedbackAnalysis>;
+  learnFeedback: (feedback: Feedback) => FeedbackAnalysis;
+  writeCandidateRule: (input: { vaultRoot: string; feedback: Feedback; analysis: FeedbackAnalysis }) => Promise<{ path: string; ruleId: string } | null>;
+  writeFeedbackResult: (input: { feedback: Feedback; analysis: FeedbackAnalysis; ruleId: string | null }) => Promise<unknown>;
+  attachRuleToTask: (input: { task: Task; ruleId: string | null; feedbackId: string }) => Promise<unknown>;
 }) {
   if (!input.body.path) {
     sendJson(input.res, 400, { error: "Missing feedback path." });
@@ -65,7 +67,30 @@ export async function handleCreateFeedbackRoute(input: {
   vaultRoot: string;
   body: Record<string, unknown>;
   res: Parameters<typeof sendJson>[0];
-  createFeedback: (input: any) => Promise<any>;
+  createFeedback: (input: {
+    vaultRoot: string;
+    taskId?: string;
+    feedbackType?: string;
+    severity?: string;
+    action?: string;
+    rawFeedback: string;
+    affectedParagraph?: string;
+    affectedSection?: string;
+    affectsStructure?: string;
+    selectedText?: string;
+    selectionStart?: number;
+    selectionEnd?: number;
+    annotations?: Array<{
+      location?: string;
+      reason?: string;
+      comment?: string;
+      isReusable?: boolean;
+      priority?: string;
+      selectedText?: string;
+      selectionStart?: number;
+      selectionEnd?: number;
+    }>;
+  }) => Promise<unknown>;
 }) {
   if (typeof input.body.rawFeedback !== "string" || !input.body.rawFeedback.trim()) {
     sendJson(input.res, 400, { error: "rawFeedback 是必填项。" });
@@ -132,8 +157,25 @@ export async function handleEvaluateFeedbackRoute(input: {
     reason: string;
     comment: string;
     selectedText: string;
-  }) => any;
-  persistFeedbackEvaluation: (input: { feedbackPath: string; evaluation: any }) => Promise<any>;
+  }) => {
+    score: number;
+    level: string;
+    absorbed: boolean;
+    notes: string[];
+    changedRatio: number;
+    keywordHitRatio: number;
+  };
+  persistFeedbackEvaluation: (input: {
+    feedbackPath: string;
+    evaluation: {
+      score: number;
+      level: string;
+      absorbed: boolean;
+      notes: string[];
+      changedRatio: number;
+      keywordHitRatio: number;
+    };
+  }) => Promise<unknown>;
 }) {
   const beforeDraft = typeof input.body.beforeDraft === "string" ? input.body.beforeDraft : "";
   const afterDraft = typeof input.body.afterDraft === "string" ? input.body.afterDraft : "";
@@ -171,10 +213,10 @@ export async function handleRuleActionRoute(input: {
     rulePath: string;
     reason?: string;
   }) => Promise<{
-    rule: { id: string; status: any };
+    rule: Pick<Rule, "id" | "status">;
     profilePath: string;
-    updatedTasks: any;
-    snapshot: any;
+    updatedTasks: unknown;
+    snapshot: unknown;
   }>;
 }) {
   if (!input.body.path || !input.body.action) {
@@ -202,7 +244,7 @@ export async function handleRuleVersionsRoute(input: {
   vaultRoot: string;
   path: string | null;
   res: Parameters<typeof sendJson>[0];
-  listRuleVersions: (vaultRoot: string, ruleId: string) => Promise<any>;
+  listRuleVersions: (vaultRoot: string, ruleId: string) => Promise<unknown>;
 }) {
   if (!input.path) {
     sendJson(input.res, 400, { error: "Missing rule path." });
@@ -232,10 +274,10 @@ export async function handleRuleScopeRoute(input: {
     audiences: string[];
     reason?: string;
   }) => Promise<{
-    rule: { id: string; scope: string; docTypes: string[]; audiences: string[] };
+    rule: Pick<Rule, "id" | "scope" | "docTypes" | "audiences">;
     profilePath: string;
-    updatedTasks: any;
-    snapshot: any;
+    updatedTasks: unknown;
+    snapshot: unknown;
   }>;
 }) {
   if (typeof input.body.path !== "string" || !input.body.path.trim()) {
@@ -273,12 +315,12 @@ export async function handleRuleRollbackRoute(input: {
     versionId: string;
     reason?: string;
   }) => Promise<{
-    rule: { id: string; status: any; scope: string; docTypes: string[]; audiences: string[] };
+    rule: Pick<Rule, "id" | "status" | "scope" | "docTypes" | "audiences">;
     profilePath: string;
-    updatedTasks: any;
-    rollbackTo: any;
-    snapshot: any;
-    rollbackLog: any;
+    updatedTasks: unknown;
+    rollbackTo: unknown;
+    snapshot: unknown;
+    rollbackLog: unknown;
   }>;
 }) {
   if (!input.body.path || !input.body.versionId) {
