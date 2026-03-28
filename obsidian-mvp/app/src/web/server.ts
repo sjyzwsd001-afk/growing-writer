@@ -1,9 +1,8 @@
-import { createReadStream } from "node:fs";
 import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { access, appendFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -89,6 +88,7 @@ import {
   setPendingOauthRequest,
   type PendingOauthRequest,
 } from "./oauth-state.js";
+import { serveStatic } from "./static.js";
 
 type ServerOptions = {
   vaultRoot: string;
@@ -1047,28 +1047,6 @@ async function closeOauthCallbackServerIfIdle(vaultRoot?: string) {
 
 function toSafeId(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, "");
-}
-
-function getStaticContentType(path: string): string {
-  const extension = extname(path).toLowerCase();
-  if (extension === ".html") {
-    return "text/html; charset=utf-8";
-  }
-  if (extension === ".css") {
-    return "text/css; charset=utf-8";
-  }
-  if (extension === ".js") {
-    return "application/javascript; charset=utf-8";
-  }
-  return "text/plain; charset=utf-8";
-}
-
-async function serveStatic(res: ServerResponse, requestPath: string) {
-  const normalized = requestPath === "/" ? "/index.html" : requestPath;
-  const localPath = join(publicDir, normalized);
-  await access(localPath);
-  res.writeHead(200, { "Content-Type": getStaticContentType(localPath) });
-  createReadStream(localPath).pipe(res);
 }
 
 function replaceBulletLine(content: string, prefix: string, value: string): string {
@@ -2800,7 +2778,7 @@ export async function startWebServer(options?: Partial<ServerOptions>) {
 
       if (req.method === "GET" && (url.pathname === "/" || url.pathname.startsWith("/assets/"))) {
         const staticPath = url.pathname === "/" ? "/index.html" : url.pathname.replace(/^\/assets/, "");
-        await serveStatic(res, staticPath);
+        await serveStatic(publicDir, res, staticPath);
         return;
       }
 
