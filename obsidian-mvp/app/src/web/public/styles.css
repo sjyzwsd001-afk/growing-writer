@@ -1,21 +1,33 @@
 :root {
-  --bg: #08172a;
-  --paper: #0d1f36;
-  --panel: #10233b;
-  --border: rgba(108, 136, 173, 0.24);
-  --text: #f5f8ff;
-  --muted: #93a6be;
-  --accent: #4fc3f7;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-hover: #f8f9fb;
+  --surface-active: #eef0f4;
+  --paper: var(--surface);
+  --panel: var(--surface);
+  --border: #e4e6ea;
+  --border-subtle: #eceef1;
+  --border-strong: #d1d5db;
+  --line-soft: #e5e7eb;
+  --text: #1a1d23;
+  --muted: #6b7280;
+  --text-tertiary: #9ca3af;
+  --accent: #3b82f6;
   --accent-2: #2563eb;
-  --accent-contrast: #5ae6ff;
-  --accent-contrast-2: #9befff;
-  --success: #34d399;
-  --danger: #ff8f9c;
-  --shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
-  --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
-  --metal: linear-gradient(180deg, rgba(18, 36, 59, 0.98) 0%, rgba(11, 24, 42, 0.98) 100%);
-  --metal-strong: linear-gradient(180deg, #153254 0%, #0c1e35 100%);
-  --line-soft: rgba(103, 133, 171, 0.22);
+  --accent-hover: #2563eb;
+  --accent-light: #eff6ff;
+  --accent-contrast: #3b82f6;
+  --success: #10b981;
+  --success-light: #ecfdf5;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --danger: #ef4444;
+  --danger-light: #fef2f2;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.04), 0 4px 6px rgba(0, 0, 0, 0.03);
+  --shadow-soft: var(--shadow-md);
 }
 
 * {
@@ -26,11 +38,7 @@ body {
   margin: 0;
   color: var(--text);
   font-family: "SF Pro Display", "SF Pro Text", "PingFang SC", "Helvetica Neue", "Noto Sans SC", sans-serif;
-  background:
-    radial-gradient(circle at 18% 0%, rgba(25, 126, 205, 0.22), transparent 26%),
-    radial-gradient(circle at 78% 8%, rgba(16, 89, 179, 0.18), transparent 28%),
-    radial-gradient(circle at 50% 40%, rgba(0, 210, 255, 0.06), transparent 32%),
-    linear-gradient(180deg, #0c1f36 0%, #091628 44%, #07111f 100%);
+  background: var(--bg);
 }
 
 button,
@@ -49,9 +57,8 @@ select {
 
 .topbar {
   border: 1px solid var(--line-soft);
-  background: rgba(10, 25, 43, 0.72);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
+  background: var(--surface);
+  border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 16px 20px;
   display: flex;
@@ -70,18 +77,14 @@ select {
 .logo {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  color: var(--accent-contrast);
+  border-radius: 12px;
+  color: var(--accent);
   display: grid;
   place-items: center;
   font-weight: 700;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(91, 233, 255, 0.32), transparent 38%),
-    linear-gradient(180deg, #123559 0%, #0c1f35 100%);
-  border: 1px solid rgba(84, 123, 171, 0.34);
-  box-shadow:
-    inset 0 1px 0 rgba(152, 225, 255, 0.18),
-    0 10px 30px rgba(0, 0, 0, 0.22);
+  background: var(--accent-light);
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  box-shadow: var(--shadow-sm);
 }
 
 .subtitle {
@@ -98,19 +101,22 @@ h4 {
   margin: 0;
   font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
   letter-spacing: -0.02em;
-  font-weight: 600;
+  color: var(--text);
 }
 
 h1 {
-  font-size: 22px;
+  font-size: 28px;
+  font-weight: 300;
 }
 
 h2 {
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 500;
 }
 
 h3 {
-  font-size: 18px;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .status-wrap {
@@ -124,12 +130,12 @@ h3 {
 
 .status-item {
   border: 1px solid var(--line-soft);
-  background: rgba(13, 31, 54, 0.86);
+  background: var(--surface);
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
   color: var(--muted);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow-sm);
 }
 
 .status-item strong {
@@ -137,16 +143,17 @@ h3 {
 }
 
 .status-item-status {
-  border-color: rgba(79, 195, 247, 0.28);
+  border-color: rgba(59, 130, 246, 0.28);
 }
 
 .status-detail-toggle {
   border: 1px solid var(--line-soft);
-  background: rgba(13, 31, 54, 0.72);
+  background: var(--surface);
   border-radius: 999px;
   padding: 6px 12px;
   color: var(--muted);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 
 .status-detail-panel {
@@ -154,8 +161,8 @@ h3 {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line-soft);
-  border-radius: 16px;
-  background: rgba(10, 25, 43, 0.9);
+  border-radius: 14px;
+  background: var(--surface);
   padding: 10px 12px;
 }
 
@@ -186,22 +193,21 @@ h3 {
 }
 
 .tab {
-  border: 1px solid var(--line-soft);
-  background: rgba(13, 31, 54, 0.72);
-  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 8px;
   padding: 10px 16px;
   cursor: pointer;
   color: var(--muted);
-  box-shadow: inset 0 1px 0 rgba(130, 185, 255, 0.05);
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .tab.active {
-  color: #fff;
-  border-color: transparent;
-  background: var(--accent-2);
-  box-shadow:
-    0 8px 24px rgba(29, 200, 255, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .settings-subtabs {
@@ -211,19 +217,20 @@ h3 {
 }
 
 .settings-subtab {
-  border: 1px solid var(--line-soft);
-  background: rgba(13, 31, 54, 0.72);
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: 999px;
   padding: 8px 14px;
   cursor: pointer;
   color: var(--muted);
-  box-shadow: inset 0 1px 0 rgba(130, 185, 255, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-subtab.active {
-  color: #fff;
-  border-color: transparent;
-  background: var(--accent-2);
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .main {
@@ -251,8 +258,8 @@ h3 {
 
 .workbench-rail-card {
   border: 1px solid var(--line-soft);
-  border-radius: 18px;
-  background: rgba(10, 24, 43, 0.84);
+  border-radius: 14px;
+  background: var(--surface);
   box-shadow: var(--shadow-soft);
   padding: 12px 10px;
   display: grid;
@@ -267,28 +274,27 @@ h3 {
 .workbench-rail-button {
   width: 100%;
   text-align: left;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(13, 31, 54, 0.72);
+  background: var(--surface);
   color: var(--muted);
   padding: 9px 10px;
   cursor: pointer;
 }
 
 .workbench-rail-button.active {
-  color: #fff;
-  border-color: rgba(29, 200, 255, 0.32);
-  background: rgba(37, 99, 235, 0.24);
-  box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.16);
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
 }
 
 .workbench-statusbar {
   margin-top: 14px;
   min-height: 36px;
   border: 1px solid var(--line-soft);
-  border-radius: 18px;
-  background: rgba(10, 25, 43, 0.76);
-  backdrop-filter: blur(16px);
+  border-radius: 14px;
+  background: var(--surface);
   box-shadow: var(--shadow-soft);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -305,7 +311,7 @@ h3 {
 }
 
 .statusbar-item-accent {
-  color: var(--accent-contrast);
+  color: var(--accent);
 }
 
 .view {
@@ -327,17 +333,17 @@ h3 {
 }
 
 .panel {
-  border: 1px solid var(--line-soft);
-  border-radius: 24px;
-  background: linear-gradient(180deg, rgba(15, 33, 56, 0.94) 0%, rgba(10, 24, 43, 0.96) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
 
 .panel-header {
   padding: 15px 18px;
-  border-bottom: 1px solid rgba(199, 208, 218, 0.7);
-  background: rgba(16, 35, 59, 0.72);
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -354,7 +360,7 @@ h3 {
   padding: 4px 12px;
   color: var(--muted);
   font-size: 13px;
-  background: rgba(13, 31, 54, 0.82);
+  background: var(--surface-hover);
 }
 
 .workflow-stage-tracker {
@@ -365,9 +371,9 @@ h3 {
 }
 
 .workflow-stage-item {
-  border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  background: rgba(13, 28, 49, 0.82);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
   padding: 10px 10px 12px;
   display: grid;
   gap: 6px;
@@ -381,7 +387,7 @@ h3 {
   left: calc(100% + 6px);
   width: calc(100% - 12px);
   height: 1px;
-  background: rgba(103, 133, 171, 0.22);
+  background: var(--border-subtle);
 }
 
 .workflow-stage-item:last-child::after {
@@ -399,7 +405,7 @@ h3 {
   padding: 3px 8px;
   font-size: 11px;
   color: var(--muted);
-  background: rgba(98, 122, 153, 0.20);
+  background: var(--surface-active);
 }
 
 .workflow-stage-item .stage-name {
@@ -411,29 +417,30 @@ h3 {
 }
 
 .workflow-stage-item.active {
-  border-color: rgba(29, 200, 255, 0.52);
-  box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.18);
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
 }
 
 .workflow-stage-item.active .stage-status {
-  color: #fff;
-  background: var(--accent-2);
+  color: var(--accent-hover);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .workflow-stage-item.completed {
-  border-color: rgba(63, 211, 154, 0.3);
-  background: rgba(10, 34, 33, 0.68);
+  border-color: rgba(16, 185, 129, 0.18);
+  background: var(--success-light);
 }
 
 .workflow-stage-item.completed .stage-status {
-  color: #fff;
-  background: linear-gradient(135deg, #2b8759 0%, var(--success) 100%);
+  color: #047857;
+  background: rgba(16, 185, 129, 0.16);
 }
 
 .workflow-next-action {
   margin-top: 10px;
-  background: rgba(13, 31, 54, 0.84);
-  border-color: rgba(29, 200, 255, 0.16);
+  background: var(--surface-hover);
+  border-color: var(--border);
 }
 
 .workflow-editor-stage {
@@ -441,7 +448,7 @@ h3 {
   border-radius: 14px;
   padding: 9px 10px;
   color: var(--muted);
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface-hover);
 }
 
 .wizard-form {
@@ -464,14 +471,14 @@ h3 {
 }
 
 .wizard-focus-box {
-  background: rgba(13, 31, 54, 0.84);
-  border-color: rgba(29, 200, 255, 0.16);
+  background: var(--surface-hover);
+  border-color: var(--border);
 }
 
 .wizard-optional-panel {
   border: 1px solid var(--line-soft);
   border-radius: 16px;
-  background: rgba(11, 24, 42, 0.72);
+  background: var(--surface-hover);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -479,7 +486,7 @@ h3 {
 
 .wizard-optional-panel summary {
   cursor: pointer;
-  color: var(--accent-2);
+  color: var(--accent);
   font-weight: 600;
 }
 
@@ -497,18 +504,18 @@ h3 {
 .wizard-readiness-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface);
   padding: 10px 11px;
 }
 
 .wizard-readiness-item.ok {
-  border-color: rgba(63, 211, 154, 0.26);
-  background: rgba(10, 34, 33, 0.68);
+  border-color: rgba(16, 185, 129, 0.22);
+  background: var(--success-light);
 }
 
 .wizard-readiness-item.pending {
-  border-color: rgba(103, 133, 171, 0.22);
-  background: rgba(13, 28, 49, 0.82);
+  border-color: var(--border);
+  background: var(--surface);
 }
 
 .wizard-actions {
@@ -539,14 +546,13 @@ input,
 textarea,
 select {
   width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(103, 133, 171, 0.28);
-  background: rgba(8, 18, 33, 0.84);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text);
-  padding: 11px 12px;
-  box-shadow:
-    inset 0 1px 0 rgba(129, 183, 255, 0.06),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+  padding: 10px 12px;
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 textarea {
@@ -558,17 +564,15 @@ input:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: rgba(29, 200, 255, 0.48);
-  box-shadow:
-    0 0 0 3px rgba(29, 200, 255, 0.14),
-    inset 0 1px 0 rgba(129, 183, 255, 0.08);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.10);
 }
 
 fieldset {
   border: 1px solid var(--line-soft);
   border-radius: 16px;
   padding: 12px;
-  background: rgba(10, 24, 43, 0.50);
+  background: var(--surface-hover);
 }
 
 legend {
@@ -599,7 +603,7 @@ legend {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   padding: 9px 10px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface);
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -607,7 +611,7 @@ legend {
 
 .check-card {
   padding: 12px 12px;
-  background: rgba(13, 31, 54, 0.84);
+  background: var(--surface-hover);
 }
 
 .check-item input {
@@ -625,9 +629,9 @@ legend {
 }
 
 .template-primary-card {
-  border: 1px solid rgba(29, 200, 255, 0.18);
-  border-radius: 18px;
-  background: rgba(13, 31, 54, 0.86);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
   padding: 14px;
   display: grid;
   gap: 8px;
@@ -635,9 +639,8 @@ legend {
 }
 
 .template-primary-card.active {
-  box-shadow:
-    inset 0 0 0 1px rgba(29, 200, 255, 0.16),
-    var(--shadow-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12), var(--shadow-soft);
 }
 
 .template-primary-head {
@@ -655,9 +658,9 @@ legend {
 
 .choice-card {
   text-align: left;
-  border: 1px solid var(--line-soft);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface);
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -666,12 +669,9 @@ legend {
 }
 
 .choice-card.active {
-  border-color: rgba(29, 200, 255, 0.32);
-  box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.14);
-  background: rgba(15, 36, 59, 0.90);
-  border-color: rgba(183, 154, 116, 0.34);
-  box-shadow: inset 0 0 0 1px rgba(183, 154, 116, 0.16);
-  background: rgba(243, 247, 252, 0.98);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
+  background: var(--accent-light);
 }
 
 .mini {
@@ -682,32 +682,31 @@ legend {
 }
 
 .btn {
-  border: 1px solid rgba(184, 194, 206, 0.92);
-  border-radius: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   padding: 10px 14px;
   cursor: pointer;
-  background: var(--metal);
+  background: var(--surface);
   color: var(--text);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 3px 10px rgba(55, 68, 84, 0.08);
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
 .btn.primary {
   color: #fff;
   border-color: transparent;
-  background: var(--accent-2);
-  box-shadow: 0 10px 28px rgba(29, 200, 255, 0.34);
+  background: var(--accent);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn.success {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, #31dca4 0%, var(--success) 100%);
+  background: var(--success);
 }
 
 .btn.ghost {
-  background: rgba(13, 31, 54, 0.72);
+  background: transparent;
 }
 
 .btn:hover,
@@ -715,12 +714,25 @@ legend {
 .tab:hover,
 .settings-subtab:hover,
 .choice-card:hover {
-  transform: translateY(-1px);
+  transform: none;
+  background: var(--surface-hover);
 }
 
 .btn:active,
 .mini-btn:active {
   transform: translateY(0);
+}
+
+.btn.primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn.success:hover {
+  background: #059669;
+}
+
+.btn.ghost:hover {
+  background: var(--surface-hover);
 }
 
 .hidden {
@@ -731,21 +743,21 @@ legend {
   border-radius: 999px;
   border: 1px solid var(--line-soft);
   padding: 5px 12px;
-  background: rgba(13, 31, 54, 0.76);
+  background: var(--surface-hover);
   color: var(--muted);
   font-size: 13px;
 }
 
 .badge.danger {
   color: var(--danger);
-  border-color: rgba(155, 46, 46, 0.45);
+  border-color: rgba(239, 68, 68, 0.24);
 }
 
 .feedback-card {
   margin: 12px 16px 14px;
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(12, 26, 45, 0.82);
+  background: var(--surface);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -759,11 +771,11 @@ legend {
 }
 
 .text-warning {
-  color: #f3bb57;
+  color: var(--warning);
 }
 
 .text-danger {
-  color: #ff9ca7;
+  color: var(--danger);
 }
 
 @media (max-width: 960px) {
@@ -810,7 +822,7 @@ legend {
 .editor-overview-card {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(12, 26, 45, 0.82);
+  background: var(--surface);
   padding: 12px;
   display: grid;
   gap: 8px;
@@ -838,7 +850,7 @@ legend {
 .editor-side-card {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(12, 26, 45, 0.82);
+  background: var(--surface);
 }
 
 .editor-side-collapsible {
@@ -879,9 +891,9 @@ legend {
   display: grid;
   gap: 6px;
   padding: 10px 12px;
-  border: 1px solid rgba(199, 208, 218, 0.72);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface-hover);
 }
 
 .repurpose-status {
@@ -894,7 +906,7 @@ legend {
 }
 
 .editor-feedback-guide {
-  background: rgba(13, 31, 54, 0.84);
+  background: var(--surface-hover);
 }
 
 .selection-card-wrap {
@@ -930,7 +942,7 @@ legend {
 .history-block {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface);
   padding: 10px 12px;
 }
 
@@ -945,14 +957,14 @@ legend {
 .msg {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: rgba(13, 28, 49, 0.84);
+  background: var(--surface);
   padding: 11px 12px;
   line-height: 1.55;
-  box-shadow: inset 0 1px 0 rgba(129, 183, 255, 0.05);
+  box-shadow: none;
 }
 
 .wizard-next-box {
-  background: rgba(10, 30, 54, 0.88);
+  background: var(--surface-hover);
 }
 
 .wizard-status-row {
@@ -968,25 +980,25 @@ legend {
   gap: 6px;
   border-radius: 999px;
   padding: 6px 10px;
-  border: 1px solid rgba(103, 133, 171, 0.22);
-  background: rgba(15, 36, 59, 0.92);
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text);
   font-size: 13px;
   line-height: 1.4;
 }
 
 .wizard-state-pill.ready {
-  border-color: rgba(29, 200, 255, 0.3);
-  background: rgba(10, 41, 54, 0.94);
+  border-color: rgba(59, 130, 246, 0.18);
+  background: var(--accent-light);
 }
 
 .wizard-state-pill.pending {
-  border-color: rgba(103, 133, 171, 0.22);
-  background: rgba(15, 36, 59, 0.92);
+  border-color: var(--border);
+  background: var(--surface);
 }
 
 .wizard-state-pill.neutral {
-  background: rgba(13, 31, 54, 0.88);
+  background: var(--surface-hover);
 }
 
 .wizard-guidance-grid {
@@ -1000,17 +1012,17 @@ legend {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 10px 12px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface);
 }
 
 .wizard-guidance-card.ok {
-  background: rgba(10, 34, 33, 0.68);
-  border-color: rgba(63, 211, 154, 0.24);
+  background: var(--success-light);
+  border-color: rgba(16, 185, 129, 0.20);
 }
 
 .wizard-guidance-card.pending {
-  background: rgba(13, 28, 49, 0.82);
-  border-color: rgba(103, 133, 171, 0.22);
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 .wizard-guidance-title {
@@ -1033,17 +1045,17 @@ legend {
 
 .wizard-quick-chip {
   cursor: pointer;
-  background: rgba(13, 31, 54, 0.84);
+  background: var(--surface-hover);
   color: var(--text);
 }
 
 .wizard-quick-chip:hover {
-  border-color: rgba(29, 200, 255, 0.34);
-  color: var(--accent-contrast);
+  border-color: rgba(59, 130, 246, 0.34);
+  color: var(--accent);
 }
 
 .msg.error {
-  border-color: rgba(155, 46, 46, 0.4);
+  border-color: rgba(239, 68, 68, 0.2);
   color: var(--danger);
 }
 
@@ -1059,14 +1071,14 @@ legend {
 }
 
 .selection-card {
-  border: 1px dashed rgba(165, 176, 189, 0.9);
-  background: rgba(13, 28, 49, 0.82);
+  border: 1px dashed var(--border-strong);
+  background: var(--surface);
 }
 
 .selection-card.has-selection {
   border-style: solid;
-  border-color: rgba(29, 200, 255, 0.28);
-  background: rgba(10, 34, 55, 0.92);
+  border-color: rgba(59, 130, 246, 0.28);
+  background: var(--accent-light);
 }
 
 @media (max-width: 980px) {
@@ -1091,25 +1103,25 @@ legend {
 .annotation-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: rgba(13, 28, 49, 0.82);
+  background: var(--surface);
   padding: 9px 10px;
   display: grid;
   gap: 6px;
 }
 
 .annotation-item.newest {
-  border-color: rgba(29, 200, 255, 0.3);
-  background: rgba(10, 34, 55, 0.92);
+  border-color: rgba(59, 130, 246, 0.22);
+  background: var(--accent-light);
 }
 
 .annotation-item.active {
-  border-color: rgba(31, 83, 62, 0.38);
-  box-shadow: 0 0 0 1px rgba(31, 83, 62, 0.12);
-  background: #f3fbf6;
+  border-color: rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.08);
+  background: var(--success-light);
 }
 
 .annotation-status-card {
-  background: linear-gradient(180deg, #fffefb 0%, #fff6e8 100%);
+  background: var(--warning-light);
 }
 
 .annotation-controls {
@@ -1189,10 +1201,8 @@ legend {
 .learn-result-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(17, 36, 61, 0.92) 0%, rgba(10, 22, 39, 0.92) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(149, 201, 255, 0.08),
-    0 16px 34px rgba(0, 0, 0, 0.16);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
   padding: 10px 11px;
   line-height: 1.5;
 }
@@ -1204,12 +1214,9 @@ legend {
   max-height: 300px;
   overflow: auto;
   border: 1px solid var(--line-soft);
-  border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(13, 29, 50, 0.86) 0%, rgba(8, 18, 32, 0.86) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(160, 220, 255, 0.06),
-    0 22px 44px rgba(0, 0, 0, 0.16);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
 }
 
 .knowledge-group {
@@ -1231,15 +1238,13 @@ legend {
 }
 
 .knowledge-card {
-  border: 1px solid rgba(103, 133, 171, 0.18);
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(19, 40, 67, 0.96) 0%, rgba(10, 22, 39, 0.96) 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
   padding: 12px;
   display: grid;
   gap: 10px;
-  box-shadow:
-    inset 0 1px 0 rgba(170, 225, 255, 0.06),
-    0 14px 28px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--shadow-sm);
 }
 
 .knowledge-card-top {
@@ -1271,16 +1276,13 @@ legend {
 }
 
 .row-item {
-  border: 1px solid rgba(103, 133, 171, 0.18);
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(19, 40, 67, 0.96) 0%, rgba(10, 22, 39, 0.96) 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
   padding: 12px 13px;
   display: grid;
   gap: 10px;
-  box-shadow:
-    inset 0 1px 0 rgba(170, 225, 255, 0.06),
-    0 14px 28px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--shadow-sm);
 }
 
 .row-item.selectable {
@@ -1290,7 +1292,7 @@ legend {
 }
 
 .row-item strong {
-  color: #f7fbff;
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -1326,16 +1328,16 @@ legend {
 
 .list-group-head strong {
   font-size: 14px;
-  color: #f4f8ff;
+  color: var(--text);
 }
 
 .list-group-count {
   font-size: 12px;
-  color: #8fb6d7;
+  color: var(--muted);
   padding: 4px 9px;
-  border: 1px solid rgba(93, 132, 181, 0.2);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: rgba(13, 31, 54, 0.72);
+  background: var(--surface-hover);
 }
 
 .rule-provenance {
@@ -1361,21 +1363,21 @@ legend {
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 12px;
-  border: 1px solid rgba(103, 133, 171, 0.22);
-  background: rgba(13, 31, 54, 0.72);
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
   color: var(--muted);
 }
 
 .mini-chip.priority {
-  background: rgba(10, 34, 55, 0.72);
-  color: #7edfff;
-  border-color: rgba(29, 200, 255, 0.22);
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: rgba(59, 130, 246, 0.18);
 }
 
 .mini-chip.conflict {
-  background: rgba(52, 22, 33, 0.76);
+  background: var(--danger-light);
   color: var(--danger);
-  border-color: rgba(255, 143, 156, 0.22);
+  border-color: rgba(239, 68, 68, 0.16);
 }
 
 .status-chip {
@@ -1390,27 +1392,27 @@ legend {
 }
 
 .status-chip.status-confirmed {
-  background: rgba(10, 34, 33, 0.72);
-  border-color: rgba(63, 211, 154, 0.22);
-  color: #7ce7bc;
+  background: var(--success-light);
+  border-color: rgba(16, 185, 129, 0.18);
+  color: #047857;
 }
 
 .status-chip.status-candidate {
-  background: rgba(10, 34, 55, 0.72);
-  border-color: rgba(29, 200, 255, 0.22);
-  color: #7edfff;
+  background: var(--accent-light);
+  border-color: rgba(59, 130, 246, 0.18);
+  color: var(--accent);
 }
 
 .status-chip.status-disabled {
-  background: rgba(16, 27, 43, 0.72);
-  border-color: rgba(103, 133, 171, 0.18);
-  color: #8192a9;
+  background: var(--surface-active);
+  border-color: var(--border);
+  color: var(--muted);
 }
 
 .status-chip.status-neutral {
-  background: rgba(13, 31, 54, 0.72);
-  border-color: rgba(103, 133, 171, 0.18);
-  color: #8da3bf;
+  background: var(--surface-hover);
+  border-color: var(--border);
+  color: var(--muted);
 }
 
 .row-main {
@@ -1425,19 +1427,19 @@ legend {
 }
 
 .mini-btn {
-  border: 1px solid rgba(103, 133, 171, 0.24);
-  border-radius: 12px;
-  background: rgba(13, 31, 54, 0.74);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
   color: var(--text);
   padding: 5px 10px;
   cursor: pointer;
   font-size: 12px;
-  box-shadow: inset 0 1px 0 rgba(129, 183, 255, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .mini-btn.danger {
   color: var(--danger);
-  border-color: rgba(255, 143, 156, 0.24);
+  border-color: rgba(239, 68, 68, 0.18);
 }
 
 .section-meta {
@@ -1462,7 +1464,7 @@ legend {
 .llm-overview-card {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: rgba(12, 26, 45, 0.84);
+  background: var(--surface);
   padding: 12px 14px;
   display: grid;
   gap: 6px;
@@ -1470,10 +1472,8 @@ legend {
 }
 
 .llm-overview-primary {
-  background:
-    radial-gradient(circle at 8% 20%, rgba(29, 200, 255, 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(14, 31, 54, 0.94) 0%, rgba(9, 22, 39, 0.96) 100%);
-  border-color: rgba(29, 200, 255, 0.18);
+  background: var(--accent-light);
+  border-color: rgba(59, 130, 246, 0.18);
 }
 
 .llm-card-list {
@@ -1501,24 +1501,20 @@ legend {
 }
 
 .llm-card {
-  border: 1px solid rgba(103, 133, 171, 0.24);
-  border-radius: 18px;
-  background: rgba(12, 26, 45, 0.84);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
   padding: 11px;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   gap: 7px;
   min-height: 154px;
-  box-shadow:
-    inset 0 1px 0 rgba(129, 183, 255, 0.05),
-    0 14px 28px rgba(0, 0, 0, 0.20);
+  box-shadow: var(--shadow-sm);
 }
 
 .llm-card.active {
-  border-color: rgba(29, 200, 255, 0.34);
-  box-shadow:
-    inset 0 0 0 1px rgba(29, 200, 255, 0.14),
-    0 16px 32px rgba(0, 0, 0, 0.24);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12), var(--shadow-sm);
 }
 
 .llm-card-top {
@@ -1580,24 +1576,24 @@ legend {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1px solid rgba(103, 133, 171, 0.22);
-  background: rgba(13, 31, 54, 0.72);
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
   color: var(--muted);
   padding: 3px 8px;
   font-size: 11px;
-  box-shadow: inset 0 1px 0 rgba(129, 183, 255, 0.05);
+  box-shadow: none;
 }
 
 .status-chip.ok {
-  background: #eef5f0;
-  border-color: rgba(77, 108, 86, 0.18);
-  color: #506859;
+  background: var(--success-light);
+  border-color: rgba(16, 185, 129, 0.16);
+  color: #047857;
 }
 
 .status-chip.pending {
-  background: #eef2f7;
-  border-color: rgba(95, 111, 134, 0.18);
-  color: #546273;
+  background: var(--surface-active);
+  border-color: var(--border);
+  color: var(--muted);
 }
 
 .status-chip.error {
@@ -1607,9 +1603,9 @@ legend {
 }
 
 .chip.active {
-  color: #fff;
-  border-color: transparent;
-  background: linear-gradient(180deg, #7f8a98 0%, #a88d67 100%);
+  color: var(--accent);
+  border-color: rgba(59, 130, 246, 0.2);
+  background: var(--accent-light);
 }
 
 .llm-form-shell {
@@ -1625,7 +1621,7 @@ legend {
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(3, 9, 18, 0.55);
+  background: rgba(17, 24, 39, 0.28);
   backdrop-filter: blur(8px);
 }
 
@@ -1637,7 +1633,7 @@ legend {
   margin: 14px auto;
   border: 1px solid var(--line-soft);
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(15, 33, 56, 0.97) 0%, rgba(10, 24, 43, 0.98) 100%);
+  background: var(--surface);
   box-shadow: var(--shadow);
 }
 
@@ -1655,7 +1651,7 @@ legend {
 .llm-detail-item {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(13, 28, 49, 0.84);
+  background: var(--surface-hover);
   padding: 10px 12px;
   display: grid;
   gap: 4px;
@@ -1689,14 +1685,14 @@ legend {
 }
 
 .validation-item.warn {
-  border: 1px solid rgba(214, 172, 82, 0.18);
-  background: rgba(52, 40, 17, 0.72);
-  color: #ffd88e;
+  border: 1px solid rgba(245, 158, 11, 0.16);
+  background: var(--warning-light);
+  color: #92400e;
 }
 
 .validation-item.error {
-  border: 1px solid rgba(255, 143, 156, 0.18);
-  background: rgba(57, 23, 31, 0.72);
+  border: 1px solid rgba(239, 68, 68, 0.16);
+  background: var(--danger-light);
   color: var(--danger);
 }
 
@@ -1720,12 +1716,10 @@ legend {
 
 .result-summary-item {
   border: 1px solid var(--line-soft);
-  background: linear-gradient(180deg, rgba(19, 38, 63, 0.92) 0%, rgba(11, 24, 43, 0.92) 100%);
+  background: var(--surface-hover);
   border-radius: 16px;
   padding: 11px 13px;
-  box-shadow:
-    inset 0 1px 0 rgba(157, 214, 255, 0.06),
-    0 14px 28px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-sm);
 }
 
 .result-summary-label {
@@ -1755,20 +1749,16 @@ legend {
 .context-card {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
-  background: linear-gradient(180deg, rgba(18, 38, 63, 0.92) 0%, rgba(9, 21, 38, 0.92) 100%);
+  background: var(--surface);
   padding: 11px 13px;
   display: grid;
   gap: 8px;
-  box-shadow:
-    inset 0 1px 0 rgba(155, 214, 255, 0.06),
-    0 16px 30px rgba(0, 0, 0, 0.14);
+  box-shadow: var(--shadow-sm);
 }
 
 .context-card.context-card-emphasis {
-  background:
-    radial-gradient(circle at top left, rgba(32, 189, 255, 0.14), transparent 36%),
-    linear-gradient(180deg, rgba(16, 45, 74, 0.98) 0%, rgba(9, 24, 42, 0.96) 100%);
-  border-color: rgba(61, 190, 255, 0.26);
+  background: var(--accent-light);
+  border-color: rgba(59, 130, 246, 0.18);
 }
 
 .context-card strong {
@@ -1799,12 +1789,12 @@ legend {
 .section-check-item {
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  background: var(--surface-hover);
 }
 
 .context-log {
-  border-top: 1px dashed rgba(196, 175, 148, 0.9);
+  border-top: 1px dashed var(--border-strong);
   padding-top: 8px;
   display: grid;
   gap: 6px;
@@ -1823,22 +1813,22 @@ legend {
 }
 
 .template-recommend-item {
-  border: 1px solid rgba(214, 197, 169, 0.7);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fffef9;
+  background: var(--surface);
   padding: 8px 10px;
   display: grid;
   gap: 4px;
 }
 
 .template-recommend-item.strong {
-  border-color: rgba(72, 143, 86, 0.26);
-  background: linear-gradient(180deg, #f6fff7 0%, #fffef9 100%);
+  border-color: rgba(16, 185, 129, 0.18);
+  background: var(--success-light);
 }
 
 .template-recommend-item.medium {
-  border-color: rgba(194, 120, 64, 0.24);
-  background: linear-gradient(180deg, #fffaf0 0%, #fffef9 100%);
+  border-color: rgba(245, 158, 11, 0.18);
+  background: var(--warning-light);
 }
 
 .workflow-preview {
@@ -1859,7 +1849,7 @@ legend {
 .workflow-node {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fffefb;
+  background: var(--surface-hover);
   padding: 9px 10px;
   display: grid;
   gap: 6px;
@@ -1890,7 +1880,7 @@ legend {
   font-size: 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--paper);
+  background: var(--surface-hover);
   color: var(--muted);
   padding: 2px 8px;
 }
@@ -1898,7 +1888,7 @@ legend {
 .workflow-link-chip.action {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  background: var(--accent);
 }
 
 .workflow-graph-hints {
@@ -1939,7 +1929,7 @@ legend {
 .workflow-stage-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #fffefb;
+  background: var(--surface-hover);
   padding: 10px;
   display: grid;
   gap: 8px;
