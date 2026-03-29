@@ -1,32 +1,35 @@
 :root {
-  --bg: #f6f7f9;
+  --bg: #f8f7f4;
   --surface: #ffffff;
-  --surface-hover: #f8f9fb;
-  --surface-active: #eef0f4;
+  --surface-hover: #faf9f7;
+  --surface-active: #f3f1ee;
   --paper: var(--surface);
   --panel: var(--surface);
-  --border: #e4e6ea;
-  --border-subtle: #eceef1;
+  --border: #e8e5e0;
+  --border-subtle: #f0ede8;
   --border-strong: #d1d5db;
-  --line-soft: #e5e7eb;
-  --text: #1a1d23;
-  --muted: #6b7280;
-  --text-tertiary: #9ca3af;
-  --accent: #3b82f6;
-  --accent-2: #2563eb;
-  --accent-hover: #2563eb;
-  --accent-light: #eff6ff;
-  --accent-contrast: #3b82f6;
-  --success: #10b981;
+  --line-soft: #e8e5e0;
+  --text: #2c2a27;
+  --muted: #7a756d;
+  --text-tertiary: #a8a29e;
+  --accent: #6366f1;
+  --accent-2: #4f46e5;
+  --accent-hover: #4f46e5;
+  --accent-light: #eef2ff;
+  --accent-glow: rgba(99, 102, 241, 0.08);
+  --accent-contrast: #6366f1;
+  --warm: #d97706;
+  --warm-light: #fffbeb;
+  --success: #059669;
   --success-light: #ecfdf5;
-  --warning: #f59e0b;
+  --warning: #d97706;
   --warning-light: #fffbeb;
-  --danger: #ef4444;
+  --danger: #dc2626;
   --danger-light: #fef2f2;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.03);
-  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.04), 0 4px 6px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 2px rgba(44, 42, 39, 0.04);
+  --shadow: 0 1px 3px rgba(44, 42, 39, 0.06), 0 1px 2px rgba(44, 42, 39, 0.04);
+  --shadow-md: 0 4px 6px rgba(44, 42, 39, 0.04), 0 2px 4px rgba(44, 42, 39, 0.03);
+  --shadow-lg: 0 10px 15px rgba(44, 42, 39, 0.04), 0 4px 6px rgba(44, 42, 39, 0.03);
   --shadow-soft: var(--shadow-md);
 }
 
@@ -83,7 +86,7 @@ select {
   place-items: center;
   font-weight: 700;
   background: var(--accent-light);
-  border: 1px solid rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(99, 102, 241, 0.16);
   box-shadow: var(--shadow-sm);
 }
 
@@ -143,7 +146,7 @@ h3 {
 }
 
 .status-item-status {
-  border-color: rgba(59, 130, 246, 0.28);
+  border-color: rgba(99, 102, 241, 0.24);
 }
 
 .status-detail-toggle {
@@ -286,7 +289,7 @@ h3 {
   color: var(--text);
   border-color: var(--accent);
   background: var(--accent-light);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12);
 }
 
 .workbench-statusbar {
@@ -419,22 +422,22 @@ h3 {
 .workflow-stage-item.active {
   border-color: var(--accent);
   background: var(--accent-light);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.10);
 }
 
 .workflow-stage-item.active .stage-status {
   color: var(--accent-hover);
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .workflow-stage-item.completed {
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(5, 150, 105, 0.18);
   background: var(--success-light);
 }
 
 .workflow-stage-item.completed .stage-status {
-  color: #047857;
-  background: rgba(16, 185, 129, 0.16);
+  color: var(--success);
+  background: rgba(5, 150, 105, 0.12);
 }
 
 .workflow-next-action {
@@ -509,7 +512,7 @@ h3 {
 }
 
 .wizard-readiness-item.ok {
-  border-color: rgba(16, 185, 129, 0.22);
+  border-color: rgba(5, 150, 105, 0.18);
   background: var(--success-light);
 }
 
@@ -565,7 +568,7 @@ textarea:focus,
 select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.10);
+  box-shadow: 0 0 0 3px var(--accent-light);
 }
 
 fieldset {
@@ -640,7 +643,7 @@ legend {
 
 .template-primary-card.active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12), var(--shadow-soft);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12), var(--shadow-soft);
 }
 
 .template-primary-head {
@@ -670,7 +673,7 @@ legend {
 
 .choice-card.active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12);
   background: var(--accent-light);
 }
 
@@ -728,7 +731,7 @@ legend {
 }
 
 .btn.success:hover {
-  background: #059669;
+  background: var(--success);
 }
 
 .btn.ghost:hover {
@@ -750,7 +753,7 @@ legend {
 
 .badge.danger {
   color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.24);
+  border-color: rgba(220, 38, 38, 0.18);
 }
 
 .feedback-card {
@@ -988,7 +991,7 @@ legend {
 }
 
 .wizard-state-pill.ready {
-  border-color: rgba(59, 130, 246, 0.18);
+  border-color: rgba(99, 102, 241, 0.16);
   background: var(--accent-light);
 }
 
@@ -1017,7 +1020,7 @@ legend {
 
 .wizard-guidance-card.ok {
   background: var(--success-light);
-  border-color: rgba(16, 185, 129, 0.20);
+  border-color: rgba(5, 150, 105, 0.18);
 }
 
 .wizard-guidance-card.pending {
@@ -1050,12 +1053,12 @@ legend {
 }
 
 .wizard-quick-chip:hover {
-  border-color: rgba(59, 130, 246, 0.34);
+  border-color: rgba(99, 102, 241, 0.24);
   color: var(--accent);
 }
 
 .msg.error {
-  border-color: rgba(239, 68, 68, 0.2);
+  border-color: rgba(220, 38, 38, 0.16);
   color: var(--danger);
 }
 
@@ -1077,7 +1080,7 @@ legend {
 
 .selection-card.has-selection {
   border-style: solid;
-  border-color: rgba(59, 130, 246, 0.28);
+  border-color: rgba(99, 102, 241, 0.22);
   background: var(--accent-light);
 }
 
@@ -1110,13 +1113,13 @@ legend {
 }
 
 .annotation-item.newest {
-  border-color: rgba(59, 130, 246, 0.22);
+  border-color: rgba(99, 102, 241, 0.18);
   background: var(--accent-light);
 }
 
 .annotation-item.active {
-  border-color: rgba(16, 185, 129, 0.2);
-  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.08);
+  border-color: rgba(5, 150, 105, 0.18);
+  box-shadow: 0 0 0 1px rgba(5, 150, 105, 0.08);
   background: var(--success-light);
 }
 
@@ -1371,13 +1374,13 @@ legend {
 .mini-chip.priority {
   background: var(--accent-light);
   color: var(--accent);
-  border-color: rgba(59, 130, 246, 0.18);
+  border-color: rgba(99, 102, 241, 0.16);
 }
 
 .mini-chip.conflict {
   background: var(--danger-light);
   color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.16);
+  border-color: rgba(220, 38, 38, 0.14);
 }
 
 .status-chip {
@@ -1393,13 +1396,13 @@ legend {
 
 .status-chip.status-confirmed {
   background: var(--success-light);
-  border-color: rgba(16, 185, 129, 0.18);
-  color: #047857;
+  border-color: rgba(5, 150, 105, 0.16);
+  color: var(--success);
 }
 
 .status-chip.status-candidate {
   background: var(--accent-light);
-  border-color: rgba(59, 130, 246, 0.18);
+  border-color: rgba(99, 102, 241, 0.16);
   color: var(--accent);
 }
 
@@ -1439,7 +1442,7 @@ legend {
 
 .mini-btn.danger {
   color: var(--danger);
-  border-color: rgba(239, 68, 68, 0.18);
+  border-color: rgba(220, 38, 38, 0.16);
 }
 
 .section-meta {
@@ -1473,7 +1476,7 @@ legend {
 
 .llm-overview-primary {
   background: var(--accent-light);
-  border-color: rgba(59, 130, 246, 0.18);
+  border-color: rgba(99, 102, 241, 0.16);
 }
 
 .llm-card-list {
@@ -1514,7 +1517,7 @@ legend {
 
 .llm-card.active {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.12), var(--shadow-sm);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12), var(--shadow-sm);
 }
 
 .llm-card-top {
@@ -1586,8 +1589,8 @@ legend {
 
 .status-chip.ok {
   background: var(--success-light);
-  border-color: rgba(16, 185, 129, 0.16);
-  color: #047857;
+  border-color: rgba(5, 150, 105, 0.14);
+  color: var(--success);
 }
 
 .status-chip.pending {
@@ -1597,14 +1600,14 @@ legend {
 }
 
 .status-chip.error {
-  background: #f7eeee;
-  border-color: rgba(141, 74, 77, 0.2);
+  background: var(--danger-light);
+  border-color: rgba(220, 38, 38, 0.14);
   color: var(--danger);
 }
 
 .chip.active {
   color: var(--accent);
-  border-color: rgba(59, 130, 246, 0.2);
+  border-color: rgba(99, 102, 241, 0.16);
   background: var(--accent-light);
 }
 
@@ -1685,13 +1688,13 @@ legend {
 }
 
 .validation-item.warn {
-  border: 1px solid rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(217, 119, 6, 0.16);
   background: var(--warning-light);
-  color: #92400e;
+  color: #9a3412;
 }
 
 .validation-item.error {
-  border: 1px solid rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(220, 38, 38, 0.14);
   background: var(--danger-light);
   color: var(--danger);
 }
@@ -1758,7 +1761,7 @@ legend {
 
 .context-card.context-card-emphasis {
   background: var(--accent-light);
-  border-color: rgba(59, 130, 246, 0.18);
+  border-color: rgba(99, 102, 241, 0.16);
 }
 
 .context-card strong {
@@ -1822,13 +1825,13 @@ legend {
 }
 
 .template-recommend-item.strong {
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(5, 150, 105, 0.16);
   background: var(--success-light);
 }
 
 .template-recommend-item.medium {
-  border-color: rgba(245, 158, 11, 0.18);
-  background: var(--warning-light);
+  border-color: rgba(217, 119, 6, 0.16);
+  background: var(--warm-light);
 }
 
 .workflow-preview {
