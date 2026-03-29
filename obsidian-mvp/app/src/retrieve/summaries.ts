@@ -227,6 +227,68 @@ function deriveTemplateSections(content: string, count: number): string[] {
   return [...new Set(candidates)].slice(0, count);
 }
 
+function extractStructuredSectionsFromContent(
+  content: string,
+): Array<{ heading: string; normalized: string; body: string }> {
+  const lines = normalizeSummarySource(content).split(/\r?\n/);
+  const sections: Array<{ heading: string; normalized: string; body: string }> = [];
+  const headingPattern =
+    /^(?:(?:[一二三四五六七八九十百]+、)|(?:（[一二三四五六七八九十百]+）)|(?:【[一二三四五六七八九十百]+】)|(?:第[一二三四五六七八九十百]+[章节部分条点项])|(?:\(\d+\))|(?:（\d+）)|(?:\d+[.、]))/u;
+  let currentHeading = "";
+  let currentBody: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    if (headingPattern.test(line) && line.length <= 60) {
+      if (currentHeading) {
+        sections.push({
+          heading: currentHeading,
+          normalized: normalizeStructureLabel(currentHeading),
+          body: currentBody.join(" ").replace(/\s+/g, " ").trim(),
+        });
+      }
+      currentHeading = line;
+      currentBody = [];
+      continue;
+    }
+    if (currentHeading) {
+      currentBody.push(line);
+    }
+  }
+
+  if (currentHeading) {
+    sections.push({
+      heading: currentHeading,
+      normalized: normalizeStructureLabel(currentHeading),
+      body: currentBody.join(" ").replace(/\s+/g, " ").trim(),
+    });
+  }
+
+  return sections;
+}
+
+function pickSectionExcerpt(
+  sections: Array<{ heading: string; normalized: string; body: string }>,
+  target: string,
+): string {
+  const normalizedTarget = normalizeStructureLabel(target);
+  if (!normalizedTarget) {
+    return "";
+  }
+  const exact = sections.find((item) => item.normalized === normalizedTarget);
+  if (exact?.body) {
+    return pickExcerpt(exact.body, 220);
+  }
+  const fuzzy = sections.find(
+    (item) =>
+      item.normalized.includes(normalizedTarget) || normalizedTarget.includes(item.normalized),
+  );
+  return fuzzy?.body ? pickExcerpt(fuzzy.body, 220) : "";
+}
+
 function inferSectionIntentInfo(section: string): { label: string; description: string } {
   const text = `${section}`;
   if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(text)) {
@@ -768,18 +830,23 @@ export function buildTemplateRewriteHint(input: {
   const evidenceIds = evidenceCards.map((card) => card.card_id);
   const evidence = evidenceCards.map((card) => `${card.material_title}#${card.card_id}`).join("、");
   const logicChain = summary.logic_chain.slice(0, 8);
+  const templateSections = extractStructuredSectionsFromContent(input.selectedTemplate.content);
   const derivedSections = deriveTemplateSections(input.selectedTemplate.content, 6);
   const historySummaries = (input.referenceMaterials ?? [])
     .filter((material) => material.id !== input.selectedTemplate?.id)
-    .map((material) => summarizeMaterial(material))
-    .filter((item) => item.material_role !== "template");
-  const historyLogicChain = historySummaries.flatMap((item) => item.logic_chain).slice(0, 8);
+    .map((material) => ({
+      summary: summarizeMaterial(material),
+      sections: extractStructuredSectionsFromContent(material.content),
+    }))
+    .filter((item) => item.summary.material_role !== "template");
+  const historyLogicChain = historySummaries.flatMap((item) => item.summary.logic_chain).slice(0, 8);
   const historySectionHints = historySummaries
     .flatMap((item) =>
-      collectStructureSections(item).map((section) => ({
-        title: item.title,
+      collectStructureSections(item.summary).map((section) => ({
+        title: item.summary.title,
         section,
         normalized_section: normalizeStructureLabel(section),
+        excerpt: pickSectionExcerpt(item.sections, section),
       })),
     )
     .slice(0, 12);
@@ -855,10 +922,12 @@ export function buildTemplateRewriteHint(input: {
       assigned_facts: assignedFacts,
       assigned_requirements: assignedRequirements,
       assignment_confidence: factSelection.confidence,
+      template_section_excerpt: pickSectionExcerpt(templateSections, section),
       history_section_hints: matchedHistorySections.map((item) => ({
         material_title: item.title,
         section: item.section,
         normalized_section: item.normalized_section,
+        excerpt: item.excerpt,
       })),
       fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${
         assignedRequirements.length

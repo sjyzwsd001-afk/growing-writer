@@ -71,8 +71,12 @@ function renderReferences(input: {
               `${index + 1}. ${step.section}\n` +
               `- 槽位：${step.slot_name}\n` +
               `- 段落意图：${step.intent}\n` +
+              `- 模板原段参考：${step.template_section_excerpt || "无"}\n` +
               `- 填充策略：${step.fill_strategy}\n` +
               `- 证据来源：${step.source_hint}\n` +
+              `- 历史段落参考：${
+                step.history_section_hints?.map((item) => `${item.material_title}:${item.section}${item.excerpt ? `（${item.excerpt}）` : ""}`).join("；") || "无"
+              }\n` +
               `- 证据卡：${step.evidence_card_ids.join("、") || "无"}\n` +
               `- 逻辑位置：${
                 step.logic_after

@@ -38,10 +38,16 @@ function buildSectionWriteBriefs(input: {
         typeof matchedStep?.assignment_confidence === "number"
           ? Number(matchedStep.assignment_confidence.toFixed(2))
           : undefined,
+      template_section_excerpt: matchedStep?.template_section_excerpt ?? "",
       conservative_approach:
         typeof matchedStep?.assignment_confidence === "number"
           ? matchedStep.assignment_confidence < LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD
           : false,
+      history_section_hints: (matchedStep?.history_section_hints ?? []).slice(0, 2).map((item) => ({
+        material_title: item.material_title,
+        section: item.section,
+        excerpt: item.excerpt ?? "",
+      })),
       fill_strategy: matchedStep?.fill_strategy ?? "",
       logic_after: matchedStep?.logic_after
         ? {
@@ -98,6 +104,8 @@ export function buildGenerateDraftPrompt(input: {
 24. 如果 template_quality_assessment.mode = "derived-sections"，说明模板只有派生章节；请沿用章节骨架，但不要假定模板中存在更细的隐藏槽位。
 25. 如果 template_quality_assessment.mode = "generic-outline"，说明模板结构很弱；请优先保住 requirements 和 facts 的覆盖，不要伪造复杂结构映射。
 26. 如果 template_quality_assessment.warnings 非空，请把这些警告视为本次写作的高风险点，在 self_review 里优先检查相关段落。
+27. 如果某段提供了 template_section_excerpt，这代表模板原段落的写法骨架；请学习它的展开方式和语气，但必须把旧事实替换成这次任务事实。
+28. 如果某段提供了 history_section_hints.excerpt，这代表历史材料里对应段落的真实写法；请把它当内容参考，而不只是标题参考。
 
 然后做一轮自检：
 - 哪些地方写得比较稳

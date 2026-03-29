@@ -334,6 +334,12 @@ function validateDraftAgainstRewritePlan(
       .map((item) => `段落「${item.section}」还没有明显使用分配事实：${item.unmatched.slice(0, 2).join("；")}`),
     ...logicGaps,
   ].slice(0, 6);
+  const factViolations = factCoverage
+    .filter((item, index) => {
+      const confidence = rewritePlan[index]?.assignment_confidence ?? 0;
+      return confidence >= 0.45 && item.unmatched.length > 0 && item.matched.length === 0;
+    })
+    .map((item) => `高置信段落「${item.section}」尚未落到已分配事实，请优先修补。`);
 
   return {
     ...draft,
@@ -343,6 +349,7 @@ function validateDraftAgainstRewritePlan(
       rule_violations: [...new Set([
         ...(draft.self_review.rule_violations || []),
         ...(sectionOrderMissing.length ? [`提纲/正文未完整覆盖这些模板段落：${sectionOrderMissing.join("、")}`] : []),
+        ...factViolations,
       ])].slice(0, 6),
     },
     constraint_checks: {

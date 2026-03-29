@@ -101,10 +101,12 @@ export type TemplateRewriteStep = {
   assigned_facts: string[];
   assigned_requirements: string[];
   assignment_confidence?: number;
+  template_section_excerpt?: string;
   history_section_hints?: Array<{
     material_title: string;
     section: string;
     normalized_section?: string;
+    excerpt?: string;
   }>;
   fill_strategy: string;
   source_hint: string;
