@@ -23,6 +23,7 @@ const state = {
   finalizeMeta: null,
   selectedMaterialPaths: [],
   confirmResolver: null,
+  isRunningWizardCheck: false,
 };
 
 const MAX_WIZARD_STEP = 7;
@@ -55,6 +56,13 @@ const WIZARD_STEP_STAGE_MAP = {
   6: "USER_CONFIRM_OR_EDIT",
   7: "FINALIZE_AND_LEARN",
 };
+
+const WIZARD_PHASES = [
+  { id: "DEFINE", label: "写什么", steps: [1] },
+  { id: "MATERIALS", label: "用什么写", steps: [2, 3, 4] },
+  { id: "CONFIRM", label: "确认生成", steps: [5, 6] },
+  { id: "EDIT", label: "改稿定稿", steps: [7] },
+];
 
 const BUTTON_TOOLTIP_BY_ACTION = {
   "view-material": "查看这份材料或模板的摘要与原文。",
@@ -1134,6 +1142,28 @@ function deriveActiveStageIdByWizardStep(stages) {
   return stages[index]?.id || preferredStageId;
 }
 
+function getWizardPhaseIndex(step = state.wizardStep) {
+  const matchedIndex = WIZARD_PHASES.findIndex((phase) => phase.steps.includes(step));
+  return matchedIndex >= 0 ? matchedIndex : 0;
+}
+
+function renderWorkflowPhaseTracker(tracker, note, nextAction, editorStage) {
+  const activePhaseIndex = getWizardPhaseIndex();
+  tracker.innerHTML = WIZARD_PHASES.map((phase, index) => {
+    const status = index < activePhaseIndex ? "completed" : index === activePhaseIndex ? "active" : "pending";
+    const statusLabel = status === "active" ? "当前" : status === "completed" ? "已完成" : "待进行";
+    return `<div class="workflow-stage-item ${status}">
+      <div class="stage-no">阶段 ${index + 1}</div>
+      <strong class="stage-name">${escapeHtml(phase.label)}</strong>
+      <div class="stage-status">${escapeHtml(statusLabel)}</div>
+    </div>`;
+  }).join("");
+  const activePhase = WIZARD_PHASES[activePhaseIndex] || WIZARD_PHASES[0];
+  note.textContent = `当前阶段：${activePhase.label}（引导模式）`;
+  nextAction.textContent = `下一步：${getNextActionHint(activePhaseIndex, WIZARD_PHASES, false)}`;
+  editorStage.textContent = "当前编排阶段：未开始（先完成前3步并生成）";
+}
+
 function renderWorkflowStageTracker() {
   const tracker = document.getElementById("workflow-stage-tracker");
   const note = document.getElementById("workflow-stage-note");
@@ -1153,6 +1183,13 @@ function renderWorkflowStageTracker() {
   }
 
   const run = state.currentWorkflowRun;
+  if (!run) {
+    renderWorkflowPhaseTracker(tracker, note, nextAction, editorStage);
+    renderWorkbenchRail();
+    renderWorkbenchStatusBar();
+    return;
+  }
+
   const activeStageId = run?.currentStage || deriveActiveStageIdByWizardStep(stages);
   const activeIndex = Math.max(
     0,
@@ -1178,7 +1215,7 @@ function renderWorkflowStageTracker() {
       const statusLabel = status === "active" ? "当前" : status === "completed" ? "已完成" : "待进行";
       return `<div class="workflow-stage-item ${status}">
         <div class="stage-no">第 ${index + 1} 步</div>
-        <strong>${escapeHtml(stage.label || stage.id)}</strong>
+        <strong class="stage-name">${escapeHtml(stage.label || stage.id)}</strong>
         <div class="mini">${escapeHtml(stage.description || "")}</div>
         <div class="stage-status">${escapeHtml(statusLabel)}</div>
       </div>`;
@@ -1202,10 +1239,13 @@ function renderWorkbenchRail() {
     return;
   }
   const editorVisible = !document.getElementById("editor-panel")?.classList.contains("hidden");
+  const activePhaseIndex = getWizardPhaseIndex();
   container.querySelectorAll(".workbench-rail-button").forEach((button) => {
     const targetStep = Number(button.dataset.stepJump || 0);
     const panelTarget = button.dataset.panelJump || "";
-    const active = panelTarget === "editor" ? editorVisible : targetStep === state.wizardStep;
+    const active = panelTarget === "editor"
+      ? editorVisible
+      : getWizardPhaseIndex(targetStep) === activePhaseIndex;
     button.classList.toggle("active", active);
   });
 
@@ -1269,15 +1309,12 @@ function getNextActionHint(activeIndex, stages, hasRun) {
   }
 
   const hintsByStep = {
-    1: "先填写任务标题和文档类型。",
-    2: "挑 1 到 3 篇最像你写法的历史材料，或者直接跳过。",
-    3: "如果这类材料有固定套路，选一个模板。",
-    4: "补一段背景说明，再写几条关键事实。",
-    5: "点击“执行检查”，先看有没有关键内容缺失。",
-    6: "确认准备状态无误后，勾选并开始生成。",
-    7: "到下方编辑区继续改稿和定稿。",
+    0: "先填标题、文种、对象和场景。",
+    1: "把历史材料、模板和背景事实补齐。",
+    2: "系统会自动检查，确认后就能生成。",
+    3: "进入编辑区改稿、批注和定稿。",
   };
-  return hintsByStep[state.wizardStep] || "继续完成当前步骤。";
+  return hintsByStep[activeIndex] || "继续完成当前步骤。";
 }
 
 function getDocTypeGuidance(docTypeRaw) {
@@ -1454,6 +1491,37 @@ function updateWizardActionButtons() {
   }
 }
 
+function triggerWizardCheck({ autoAdvance = true, silent = false } = {}) {
+  const report = runWizardCheck();
+  renderWizardCheckResult(report);
+  if (report.ok && autoAdvance) {
+    state.wizardStep = 6;
+    updateWizardStep();
+    if (!silent) {
+      setInfo("检查通过，已带你进入最后确认。");
+    }
+  } else if (!report.ok && !silent) {
+    setInfo("检查未通过，请先修复阻塞项。", true);
+  }
+  updateWizardSummary();
+  updateWizardActionButtons();
+  return report;
+}
+
+function maybeAutoRunWizardCheck() {
+  if (state.wizardStep !== 5 || state.wizardCheckReport || state.isRunningWizardCheck) {
+    return;
+  }
+  state.isRunningWizardCheck = true;
+  window.requestAnimationFrame(() => {
+    try {
+      triggerWizardCheck({ autoAdvance: true, silent: true });
+    } finally {
+      state.isRunningWizardCheck = false;
+    }
+  });
+}
+
 function appendLineToWizardTextarea(fieldName, line) {
   const textarea = document.querySelector(`#wizard-form textarea[name="${fieldName}"]`);
   if (!(textarea instanceof HTMLTextAreaElement)) {
@@ -1473,7 +1541,12 @@ function appendLineToWizardTextarea(fieldName, line) {
 }
 
 function updateWizardStep() {
-  document.getElementById("wizard-step-index").textContent = String(state.wizardStep);
+  const phaseIndex = getWizardPhaseIndex() + 1;
+  document.getElementById("wizard-step-index").textContent = String(phaseIndex);
+  const totalNode = document.getElementById("wizard-step-total");
+  if (totalNode) {
+    totalNode.textContent = String(WIZARD_PHASES.length);
+  }
   document.querySelectorAll(".wizard-step").forEach((step) => {
     step.classList.toggle("active", Number(step.dataset.step) === state.wizardStep);
   });
@@ -1494,6 +1567,7 @@ function updateWizardStep() {
   renderWorkflowStageTracker();
   renderWorkbenchRail();
   renderWorkbenchStatusBar();
+  maybeAutoRunWizardCheck();
 }
 
 function renderCheckOptions(containerId, items, name) {
@@ -3929,12 +4003,19 @@ function updateTopStatus(data) {
   const validation = data.llm.validation || { errors: [], warnings: [] };
   const calibration = data.llm.calibration || null;
   const calibrationText = getCalibrationStatusText(calibration, validation, data.llm.enabled);
-  document.getElementById("llm-provider").textContent = data.llm.providerLabel || "-";
-  document.getElementById("llm-status").textContent = `${calibrationText}${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`;
-  document.getElementById("llm-source").textContent = data.llm.source || "-";
-  document.getElementById("llm-model-text").textContent = data.llm.model || "-";
-  document.getElementById("vault-root").textContent = data.vaultRoot || "-";
-  document.getElementById("llm-updated-at").textContent = data.llm.updatedAt || "未更新";
+  const setText = (id, value) => {
+    const node = document.getElementById(id);
+    if (node) {
+      node.textContent = value;
+    }
+  };
+  setText("llm-provider", data.llm.providerLabel || "-");
+  setText("llm-status", `${calibrationText}${data.llm.activeProfileName ? ` / ${data.llm.activeProfileName}` : ""}`);
+  setText("llm-source", data.llm.source || "-");
+  setText("llm-model-text", data.llm.model || "-");
+  setText("vault-root", data.vaultRoot || "-");
+  setText("llm-updated-at", data.llm.updatedAt || "未更新");
+  setText("llm-updated-top", data.llm.updatedAt || "未更新");
 }
 
 function getLlmCards() {
@@ -4793,17 +4874,7 @@ function bindWizard() {
   });
 
   document.getElementById("wizard-run-check").addEventListener("click", () => {
-    const report = runWizardCheck();
-    renderWizardCheckResult(report);
-    if (report.ok) {
-      state.wizardStep = 6;
-      updateWizardStep();
-      setInfo("检查通过，已带你进入最后确认。");
-    } else {
-      setInfo("检查未通过，请先修复阻塞项。", true);
-    }
-    updateWizardSummary();
-    updateWizardActionButtons();
+    triggerWizardCheck({ autoAdvance: true, silent: false });
   });
 
   document.getElementById("wizard-go-check").addEventListener("click", () => {
@@ -6343,6 +6414,20 @@ function bindWorkbenchActions() {
   });
 }
 
+function bindTopStatusDetails() {
+  const toggle = document.getElementById("status-detail-toggle");
+  const panel = document.getElementById("status-detail-panel");
+  if (!(toggle instanceof HTMLButtonElement) || !panel) {
+    return;
+  }
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+    toggle.textContent = expanded ? "详情 ▾" : "详情 ▴";
+    panel.classList.toggle("hidden", expanded);
+  });
+}
+
 window.addEventListener("message", async (event) => {
   if (!trustedOrigins.has(event.origin)) {
     return;
@@ -6363,6 +6448,7 @@ bindLlmSettings();
 bindWorkflowDefinitionEditor();
 bindSettingsActions();
 bindWorkbenchActions();
+bindTopStatusDetails();
 startButtonTooltipObserver();
 updateWizardStep();
 setEditorVisible(false);

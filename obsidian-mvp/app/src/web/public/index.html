@@ -17,11 +17,15 @@
           </div>
         </div>
         <div class="status-wrap">
-          <div class="status-item">模型：<strong id="llm-provider">加载中</strong></div>
-          <div class="status-item">状态：<strong id="llm-status">加载中</strong></div>
-          <div class="status-item">来源：<strong id="llm-source">-</strong></div>
-          <div class="status-item">Model：<strong id="llm-model-text">-</strong></div>
-          <div class="status-item">Vault：<code id="vault-root">-</code></div>
+          <div class="status-item status-item-primary">模型：<strong id="llm-provider">加载中</strong></div>
+          <div class="status-item status-item-status">状态：<strong id="llm-status">加载中</strong></div>
+          <button type="button" class="status-detail-toggle" id="status-detail-toggle" aria-expanded="false">详情 ▾</button>
+          <div id="status-detail-panel" class="status-detail-panel hidden">
+            <div class="status-detail-row"><span>来源</span><strong id="llm-source">-</strong></div>
+            <div class="status-detail-row"><span>Model</span><strong id="llm-model-text">-</strong></div>
+            <div class="status-detail-row"><span>Vault</span><code id="vault-root">-</code></div>
+            <div class="status-detail-row"><span>更新</span><strong id="llm-updated-top">-</strong></div>
+          </div>
         </div>
       </header>
 
@@ -38,13 +42,10 @@
                 <div class="subtitle">Workbench</div>
                 <h3>写作导航</h3>
                 <div id="workbench-rail-nav" class="workbench-rail-nav">
-                  <button type="button" class="workbench-rail-button active" data-step-jump="1">任务背景</button>
-                  <button type="button" class="workbench-rail-button" data-step-jump="2">历史材料</button>
-                  <button type="button" class="workbench-rail-button" data-step-jump="3">模板选择</button>
-                  <button type="button" class="workbench-rail-button" data-step-jump="4">背景事实</button>
-                  <button type="button" class="workbench-rail-button" data-step-jump="5">检查</button>
-                  <button type="button" class="workbench-rail-button" data-step-jump="6">确认生成</button>
-                  <button type="button" class="workbench-rail-button" data-step-jump="7">进入改稿</button>
+                  <button type="button" class="workbench-rail-button active" data-step-jump="1">1. 写什么</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="2">2. 用什么写</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="5">3. 确认生成</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="7">4. 改稿定稿</button>
                   <button type="button" class="workbench-rail-button" data-panel-jump="editor">修改工作台</button>
                 </div>
               </div>
@@ -57,10 +58,10 @@
           <section class="panel">
             <div class="panel-header">
               <h2>引导式写作</h2>
-              <div class="step-indicator">步骤 <span id="wizard-step-index">1</span> / 7</div>
+              <div class="step-indicator">阶段 <span id="wizard-step-index">1</span> / <span id="wizard-step-total">4</span></div>
             </div>
             <div class="panel-sub">
-              <h3>7步流程状态</h3>
+              <h3>4步主线状态</h3>
               <div id="workflow-stage-tracker" class="workflow-stage-tracker"></div>
               <div id="workflow-stage-note" class="mini">当前阶段：问背景</div>
               <div id="workflow-next-action" class="summary-box workflow-next-action">下一步：先填写任务标题和文档类型。</div>
@@ -272,21 +273,12 @@
               <h2>修改反馈与迭代</h2>
               <div id="task-badge" class="badge">任务未创建</div>
             </div>
-            <div class="panel-sub editor-overview-grid">
-              <div class="editor-overview-card">
-                <h3>当前阶段</h3>
+            <div class="panel-sub editor-overview-grid editor-overview-grid-compact">
+              <div class="editor-overview-card editor-overview-card-compact">
+                <h3>当前任务摘要</h3>
                 <div id="workflow-editor-stage" class="workflow-editor-stage">当前编排阶段：未开始</div>
-              </div>
-              <div class="editor-overview-card">
-                <h3>本次写作约束</h3>
                 <div id="task-context-summary" class="summary-box">生成后会显示本次命中的模板、规则和参考材料。</div>
-              </div>
-              <div class="editor-overview-card">
-                <h3>接下来怎么做</h3>
                 <div id="editor-next-guide" class="summary-box">先看约束和正文，再在右侧补批注、提交反馈或直接定稿。</div>
-              </div>
-              <div class="editor-overview-card">
-                <h3>当前改动摘要</h3>
                 <div id="draft-change-summary" class="summary-box">生成初稿后会显示改动摘要。</div>
               </div>
             </div>
@@ -352,12 +344,11 @@
                   <div id="feedback-learn-result" class="summary-box">提交反馈并再次生成后，这里会显示系统对本轮修改的学习结论。</div>
                 </div>
 
-                <div class="panel-sub editor-side-card">
+                <details class="panel-sub editor-side-card editor-side-collapsible">
+                  <summary>定稿复盘与一稿多用</summary>
+                  <div class="editor-side-collapsible-body">
                   <h3>定稿复盘</h3>
                   <div id="finalize-review" class="summary-box">定稿后，这里会总结这次写作学到了什么、用了哪些依据，以及后续是否值得沉淀成规则。</div>
-                </div>
-
-                <div class="panel-sub editor-side-card">
                   <h3>一稿多用</h3>
                   <div class="editor-actions">
                     <button id="generate-all-briefs" type="button" class="btn primary">一键生成全部</button>
@@ -397,12 +388,15 @@
                     <div class="mini repurpose-usage">适合继续扩成汇报提纲、PPT 页面标题，或发言提词。</div>
                     <div id="repurpose-outline" class="summary-box">生成后，这里会给出适合继续汇报或转 PPT 的提纲。</div>
                   </div>
-                </div>
+                  </div>
+                </details>
 
-                <div class="panel-sub editor-side-card">
-                  <h3>反馈记录（同位置最新权重最高）</h3>
-                  <div id="feedback-history" class="history-list"></div>
-                </div>
+                <details class="panel-sub editor-side-card editor-side-collapsible">
+                  <summary>反馈记录与历史轨迹</summary>
+                  <div class="editor-side-collapsible-body">
+                    <div id="feedback-history" class="history-list"></div>
+                  </div>
+                </details>
               </div>
             </div>
           </section>
@@ -610,28 +604,35 @@
               <div class="panel-header"><h2>材料导入</h2></div>
               <form id="material-form" class="grid one">
                 <div class="grid two">
+                  <label>标题<input name="title" placeholder="单文件导入时填写；批量导入时默认使用文件名" /></label>
+                  <label>文档类型<input name="docType" required placeholder="例如：汇报材料" /></label>
+                </div>
+                <div class="grid two">
                   <label>导入模式
                     <select name="mode">
                       <option value="normal">历史材料</option>
                       <option value="template">正式模板</option>
                     </select>
                   </label>
-                  <label>文档类型<input name="docType" required placeholder="例如：汇报材料" /></label>
+                  <div class="material-upload-inline">
+                    <label>上传文件</label>
+                    <input id="material-upload-input" class="visually-hidden" name="uploadFile" type="file" multiple accept=".txt,.md,.docx,.pdf,.xlsx,.pptx" />
+                    <button id="material-upload-trigger" type="button" class="btn ghost file-trigger">选择导入文件</button>
+                    <div id="material-upload-summary" class="mini summary-inline">还没有选择导入文件。</div>
+                  </div>
                 </div>
                 <div id="material-mode-hint" class="summary-box">填写标题、来源、标签后，系统会建议更适合的导入模式。</div>
-                <label>标题<input name="title" placeholder="单文件导入时填写；批量导入时默认使用文件名" /></label>
-                <div class="grid two">
-                  <label>面向对象<input name="audience" placeholder="例如：管理层" /></label>
-                  <label>场景<input name="scenario" placeholder="例如：月度汇报" /></label>
-                </div>
-                <label>来源<input name="source" placeholder="例如：历史最佳稿" /></label>
-                <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
-                <label>上传文件</label>
-                <input id="material-upload-input" class="visually-hidden" name="uploadFile" type="file" multiple accept=".txt,.md,.docx,.pdf,.xlsx,.pptx" />
-                <button id="material-upload-trigger" type="button" class="btn ghost file-trigger">选择导入文件</button>
-                <div id="material-upload-summary" class="mini summary-inline">还没有选择导入文件。</div>
-                <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx（本地路径模式仍一次仅支持一个文件）" /></label>
-                <label>正文<textarea name="body" rows="6" placeholder="可直接粘贴"></textarea></label>
+                <details class="wizard-optional-panel material-import-optional">
+                  <summary>补充信息（面向对象 / 场景 / 来源 / 标签 / 高级导入）</summary>
+                  <div class="grid two">
+                    <label>面向对象<input name="audience" placeholder="例如：管理层" /></label>
+                    <label>场景<input name="scenario" placeholder="例如：月度汇报" /></label>
+                  </div>
+                  <label>来源<input name="source" placeholder="例如：历史最佳稿" /></label>
+                  <label>标签（逗号分隔）<input name="tags" placeholder="例如：政务,周报,标准模板" /></label>
+                  <label>本地文件路径<input name="sourceFile" placeholder="/Users/xx/example.docx（本地路径模式仍一次仅支持一个文件）" /></label>
+                  <label>纯文本粘贴（高级）<textarea name="body" rows="6" placeholder="只有在没有文件、需要快速粘贴文本时再使用"></textarea></label>
+                </details>
                 <button class="btn primary" type="submit">导入材料</button>
                 <div id="material-form-status" class="summary-box mini">填写完文档类型后即可导入。导入时会在这里显示进度和结果。</div>
               </form>

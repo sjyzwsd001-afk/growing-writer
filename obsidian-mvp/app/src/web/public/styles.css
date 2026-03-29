@@ -5,11 +5,11 @@
   --border: rgba(108, 136, 173, 0.24);
   --text: #f5f8ff;
   --muted: #93a6be;
-  --accent: #1dc8ff;
-  --accent-2: #216dff;
+  --accent: #4fc3f7;
+  --accent-2: #2563eb;
   --accent-contrast: #5ae6ff;
   --accent-contrast-2: #9befff;
-  --success: #3fd39a;
+  --success: #34d399;
   --danger: #ff8f9c;
   --shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
   --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
@@ -117,6 +117,9 @@ h3 {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 520px;
 }
 
 .status-item {
@@ -127,6 +130,53 @@ h3 {
   font-size: 13px;
   color: var(--muted);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.status-item strong {
+  color: var(--text);
+}
+
+.status-item-status {
+  border-color: rgba(79, 195, 247, 0.28);
+}
+
+.status-detail-toggle {
+  border: 1px solid var(--line-soft);
+  background: rgba(13, 31, 54, 0.72);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.status-detail-panel {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: rgba(10, 25, 43, 0.9);
+  padding: 10px 12px;
+}
+
+.status-detail-panel.hidden {
+  display: none;
+}
+
+.status-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-detail-row strong,
+.status-detail-row code {
+  color: var(--text);
+  max-width: 62%;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .tabs {
@@ -148,7 +198,7 @@ h3 {
 .tab.active {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, #1dd0ff 0%, #216dff 100%);
+  background: var(--accent-2);
   box-shadow:
     0 8px 24px rgba(29, 200, 255, 0.32),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
@@ -173,7 +223,7 @@ h3 {
 .settings-subtab.active {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, #1dd0ff 0%, #216dff 100%);
+  background: var(--accent-2);
 }
 
 .main {
@@ -228,7 +278,7 @@ h3 {
 .workbench-rail-button.active {
   color: #fff;
   border-color: rgba(29, 200, 255, 0.32);
-  background: linear-gradient(135deg, rgba(29, 200, 255, 0.18) 0%, rgba(33, 109, 255, 0.22) 100%);
+  background: rgba(37, 99, 235, 0.24);
   box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.16);
 }
 
@@ -309,17 +359,33 @@ h3 {
 
 .workflow-stage-tracker {
   display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
 }
 
 .workflow-stage-item {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   background: rgba(13, 28, 49, 0.82);
-  padding: 8px 9px;
+  padding: 10px 10px 12px;
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  position: relative;
+}
+
+.workflow-stage-item::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: calc(100% + 6px);
+  width: calc(100% - 12px);
+  height: 1px;
+  background: rgba(103, 133, 171, 0.22);
+}
+
+.workflow-stage-item:last-child::after {
+  display: none;
 }
 
 .workflow-stage-item .stage-no {
@@ -336,6 +402,10 @@ h3 {
   background: rgba(98, 122, 153, 0.20);
 }
 
+.workflow-stage-item .stage-name {
+  font-size: 15px;
+}
+
 .workflow-stage-item.pending {
   opacity: 0.78;
 }
@@ -347,7 +417,7 @@ h3 {
 
 .workflow-stage-item.active .stage-status {
   color: #fff;
-  background: linear-gradient(135deg, #1dd0ff 0%, #216dff 100%);
+  background: var(--accent-2);
 }
 
 .workflow-stage-item.completed {
@@ -626,7 +696,7 @@ legend {
 .btn.primary {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, #21d4ff 0%, #216dff 100%);
+  background: var(--accent-2);
   box-shadow: 0 10px 28px rgba(29, 200, 255, 0.34);
 }
 
@@ -684,7 +754,7 @@ legend {
 
 .editor-overview-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -713,6 +783,14 @@ legend {
   .workbench-statusbar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .workflow-stage-tracker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflow-stage-item::after {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -721,6 +799,10 @@ legend {
   .grid.two,
   .check-grid,
   .editor-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-stage-tracker {
     grid-template-columns: 1fr;
   }
 }
@@ -733,6 +815,10 @@ legend {
   display: grid;
   gap: 8px;
   box-shadow: var(--shadow-soft);
+}
+
+.editor-overview-card-compact {
+  gap: 10px;
 }
 
 .editor-workbench {
@@ -753,6 +839,40 @@ legend {
   border: 1px solid var(--line-soft);
   border-radius: 18px;
   background: rgba(12, 26, 45, 0.82);
+}
+
+.editor-side-collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.editor-side-collapsible summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 16px;
+  font-weight: 600;
+}
+
+.editor-side-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-side-collapsible summary::after {
+  content: "展开";
+  float: right;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.editor-side-collapsible[open] summary::after {
+  content: "收起";
+}
+
+.editor-side-collapsible-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px 16px;
 }
 
 .repurpose-card {
@@ -794,6 +914,11 @@ legend {
 .editor-actions {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+}
+
+.material-upload-inline {
+  display: grid;
   gap: 8px;
 }
 
