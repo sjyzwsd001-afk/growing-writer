@@ -3344,6 +3344,10 @@ function renderTaskContextSummary() {
       ? context.draft.constraint_checks
       : null;
   const outlineChecks = context.outlineReview;
+  const repairTrace = [
+    ...(Array.isArray(context.outline?.repair_trace) ? context.outline.repair_trace : []),
+    ...(Array.isArray(context.draft?.repair_trace) ? context.draft.repair_trace : []),
+  ].slice(0, 4);
   const sectionChecklist = rewriteSteps.slice(0, 4).map((step) => {
     const reqs = Array.isArray(step.assigned_requirements) ? step.assigned_requirements : [];
     const missing = missingPoints.filter((item) =>
@@ -3469,6 +3473,23 @@ function renderTaskContextSummary() {
           outlineChecks && Array.isArray(outlineChecks.warnings) && outlineChecks.warnings.length
             ? `<div class="mini">提纲校验：${escapeHtml(outlineChecks.warnings.slice(0, 4).join(" / "))}</div>`
             : ""
+        }
+      </div>
+      <div class="context-card">
+        <strong>自动修补</strong>
+        ${
+          repairTrace.length
+            ? `<div class="section-checklist">${repairTrace
+                .map(
+                  (item) => `<div class="section-check-item">
+                    <div><strong>${escapeHtml(item.stage === "outline" ? "提纲修补" : "正文修补")}</strong></div>
+                    <div class="mini">${escapeHtml(item.reason || "系统已自动修补一轮。")}</div>
+                    <div class="mini">修补前：${escapeHtml((item.before_warnings || []).join(" / ") || "无明显告警")}</div>
+                    <div class="mini">修补后：${escapeHtml((item.after_warnings || []).join(" / ") || "未发现明显告警")}</div>
+                  </div>`,
+                )
+                .join("")}</div>`
+            : `<div class="mini">当前这轮生成没有触发自动修补，说明约束检查未发现明显结构缺口。</div>`
         }
       </div>
     </div>

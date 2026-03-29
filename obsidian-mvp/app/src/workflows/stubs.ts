@@ -544,6 +544,7 @@ export async function buildOutlineWithLlm(
     input.templateRewritePlan ?? [],
   );
   if (hasOutlineConstraintIssues(validated) && (input.templateRewritePlan ?? []).length) {
+    const beforeWarnings = validated.constraint_checks?.warnings ?? [];
     const repaired = await client.generateJson({
       system: BASE_SYSTEM_PROMPT,
       user: buildOutlineRepairPrompt({
@@ -559,6 +560,19 @@ export async function buildOutlineWithLlm(
       applyTemplateRewritePlanToOutline(repaired, input.templateRewritePlan ?? []),
       input.templateRewritePlan ?? [],
     );
+    validated = {
+      ...validated,
+      repair_trace: [
+        ...((validated.repair_trace ?? []).slice(0, 2)),
+        {
+          stage: "outline",
+          applied: true,
+          reason: "程序化校验发现提纲存在模板段落或 requirement 缺口，已触发一轮定向修补。",
+          before_warnings: beforeWarnings.slice(0, 6),
+          after_warnings: (validated.constraint_checks?.warnings ?? []).slice(0, 6),
+        },
+      ],
+    };
   }
   return validated;
 }
@@ -627,6 +641,7 @@ export async function generateDraftWithLlm(
     input.templateRewritePlan ?? [],
   );
   if (hasDraftConstraintIssues(validated) && (input.templateRewritePlan ?? []).length) {
+    const beforeWarnings = validated.constraint_checks?.warnings ?? [];
     const repaired = await client.generateJson({
       system: BASE_SYSTEM_PROMPT,
       user: buildDraftRepairPrompt({
@@ -644,6 +659,19 @@ export async function generateDraftWithLlm(
       input.outline,
       input.templateRewritePlan ?? [],
     );
+    validated = {
+      ...validated,
+      repair_trace: [
+        ...((validated.repair_trace ?? []).slice(0, 2)),
+        {
+          stage: "draft",
+          applied: true,
+          reason: "程序化校验发现正文仍有段落缺口，已触发一轮定向修补。",
+          before_warnings: beforeWarnings.slice(0, 6),
+          after_warnings: (validated.constraint_checks?.warnings ?? []).slice(0, 6),
+        },
+      ],
+    };
   }
   return validated;
 }

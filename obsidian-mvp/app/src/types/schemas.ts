@@ -55,6 +55,17 @@ export const outlineResultSchema = z.object({
       warnings: z.array(z.string()),
     })
     .optional(),
+  repair_trace: z
+    .array(
+      z.object({
+        stage: z.string(),
+        applied: z.boolean(),
+        reason: z.string(),
+        before_warnings: z.array(z.string()),
+        after_warnings: z.array(z.string()),
+      }),
+    )
+    .optional(),
 });
 
 export const draftResultSchema = z.object({
@@ -85,6 +96,17 @@ export const draftResultSchema = z.object({
       ),
       warnings: z.array(z.string()),
     })
+    .optional(),
+  repair_trace: z
+    .array(
+      z.object({
+        stage: z.string(),
+        applied: z.boolean(),
+        reason: z.string(),
+        before_warnings: z.array(z.string()),
+        after_warnings: z.array(z.string()),
+      }),
+    )
     .optional(),
 });
 
