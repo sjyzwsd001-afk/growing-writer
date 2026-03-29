@@ -13,6 +13,19 @@ import type { TaskAnalysis } from "../types/schemas.js";
 import { tokenizeForMatch } from "./text-utils.js";
 
 const LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD = 0.28;
+const FACT_SCORE_WEIGHTS = {
+  semantic: 2.8,
+  overlap: 1.5,
+  intent: 1.1,
+  evidence: 0.6,
+  numeric: 0.2,
+} as const;
+const FACT_SELECTION_MAX_SCORE =
+  FACT_SCORE_WEIGHTS.semantic +
+  FACT_SCORE_WEIGHTS.overlap +
+  FACT_SCORE_WEIGHTS.intent +
+  FACT_SCORE_WEIGHTS.evidence +
+  FACT_SCORE_WEIGHTS.numeric;
 
 function normalizeSummarySource(content: string): string {
   const rawContentSection = content.match(/# 原文内容\s*\n+([\s\S]*?)(?=\n# |\Z)/)?.[1]?.trim();
@@ -561,11 +574,11 @@ function scoreFactForStepV2(input: {
   // - intent bucket is a lighter tie-breaker
   // - evidence / numeric signals only nudge confidence upward
   return (
-    Math.min(1, semanticScore / 3.2) * 2.8 +
-    Math.min(1, overlapScore / 2.2) * 1.5 +
-    Math.min(1, intentScore / 1.8) * 1.1 +
-    evidenceScore * 0.6 +
-    numericSignal * 0.2
+    Math.min(1, semanticScore / 3.2) * FACT_SCORE_WEIGHTS.semantic +
+    Math.min(1, overlapScore / 2.2) * FACT_SCORE_WEIGHTS.overlap +
+    Math.min(1, intentScore / 1.8) * FACT_SCORE_WEIGHTS.intent +
+    evidenceScore * FACT_SCORE_WEIGHTS.evidence +
+    numericSignal * FACT_SCORE_WEIGHTS.numeric
   );
 }
 
@@ -673,7 +686,13 @@ function pickFactsForStep(input: {
 
   const top = scored.slice(0, 3);
   const confidence = top.length
-    ? Math.max(0, Math.min(1, top.reduce((sum, item) => sum + item.score, 0) / (top.length * 3.2)))
+    ? Math.max(
+        0,
+        Math.min(
+          1,
+          top.reduce((sum, item) => sum + item.score, 0) / (top.length * FACT_SELECTION_MAX_SCORE),
+        ),
+      )
     : 0;
 
   return {
@@ -749,6 +768,7 @@ export function buildTemplateRewriteHint(input: {
   const evidenceIds = evidenceCards.map((card) => card.card_id);
   const evidence = evidenceCards.map((card) => `${card.material_title}#${card.card_id}`).join("、");
   const logicChain = summary.logic_chain.slice(0, 8);
+  const derivedSections = deriveTemplateSections(input.selectedTemplate.content, 6);
   const historySummaries = (input.referenceMaterials ?? [])
     .filter((material) => material.id !== input.selectedTemplate?.id)
     .map((material) => summarizeMaterial(material))
@@ -766,8 +786,8 @@ export function buildTemplateRewriteHint(input: {
   const effectiveSlots =
     summary.template_slots.length
       ? summary.template_slots.slice(0, 6)
-      : collectStructureSections(summary).slice(0, 6).map(
-          (section, index) =>
+      : derivedSections.slice(0, 6).map(
+          (section: string, index: number) =>
             ({
               section,
               slot_name: section || `派生段落${index + 1}`,
@@ -786,7 +806,7 @@ export function buildTemplateRewriteHint(input: {
     );
   }
 
-  const rewriteSteps: TemplateRewriteStep[] = effectiveSlots.map((slot, index) => {
+  const rewriteSteps: TemplateRewriteStep[] = effectiveSlots.map((slot: TemplateSlotSummary, index: number) => {
     const section = slot.section?.trim() || `段落${index + 1}`;
     const intent =
       summary.section_intents.find((item) => item.section === section)?.intent ||

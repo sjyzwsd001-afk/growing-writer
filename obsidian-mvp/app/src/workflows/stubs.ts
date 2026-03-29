@@ -88,12 +88,15 @@ function hasOutlineConstraintIssues(outline: OutlineResult): boolean {
 }
 
 function hasDraftConstraintIssues(draft: DraftResult): boolean {
+  const cc = draft.constraint_checks;
+  if (!cc) {
+    return false;
+  }
   return Boolean(
-    draft.constraint_checks &&
-      (!draft.constraint_checks.section_order_ok ||
-        draft.constraint_checks.requirement_gaps.length > 0 ||
-        (draft.constraint_checks.logic_gaps?.length ?? 0) > 0 ||
-        draft.constraint_checks.warnings.length > 0),
+    !cc.section_order_ok ||
+      cc.requirement_gaps.length > 0 ||
+      (cc.logic_gaps?.length ?? 0) > 0 ||
+      cc.warnings.length > 0,
   );
 }
 
@@ -101,19 +104,31 @@ function normalizeHeadingKey(text: string): string {
   return normalizeStructureLabel(text);
 }
 
-function collectLogicGapWarnings(headings: string[], rewritePlan: TemplateRewriteStep[]): string[] {
-  const headingIndex = new Map(
-    headings.map((heading, index) => [normalizeHeadingKey(heading), index] as const),
-  );
+function resolveHeadingIndex(headings: string[], target: string): number | undefined {
+  const normalizedTarget = normalizeHeadingKey(target);
+  if (!normalizedTarget) {
+    return undefined;
+  }
+  const exactIndex = headings.findIndex((heading) => normalizeHeadingKey(heading) === normalizedTarget);
+  if (exactIndex >= 0) {
+    return exactIndex;
+  }
+  const fuzzyIndex = headings.findIndex((heading) => {
+    const normalizedHeading = normalizeHeadingKey(heading);
+    return normalizedHeading.includes(normalizedTarget) || normalizedTarget.includes(normalizedHeading);
+  });
+  return fuzzyIndex >= 0 ? fuzzyIndex : undefined;
+}
 
+function collectLogicGapWarnings(headings: string[], rewritePlan: TemplateRewriteStep[]): string[] {
   return rewritePlan
     .flatMap((step) => {
       const logic = step.logic_after;
       if (!logic) {
         return [];
       }
-      const fromIndex = headingIndex.get(normalizeHeadingKey(logic.from));
-      const toIndex = headingIndex.get(normalizeHeadingKey(logic.to));
+      const fromIndex = resolveHeadingIndex(headings, logic.from);
+      const toIndex = resolveHeadingIndex(headings, logic.to);
       if (fromIndex === undefined || toIndex === undefined) {
         return [`未能在当前结构中完整找到逻辑承接：${logic.from} -> ${logic.to}`];
       }
