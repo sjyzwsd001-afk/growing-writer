@@ -608,26 +608,39 @@ export function buildOutline(input: {
   evidenceCards?: EvidenceCard[];
   profiles?: Profile[];
   templateRewritePlan?: TemplateRewriteStep[];
+  factSectionHints?: DiagnosisResult["fact_section_mapping"];
 }): OutlineResult {
   const baseOutline = {
     outline_title: input.task.title,
     sections:
       input.templateRewritePlan?.length
-        ? input.templateRewritePlan.slice(0, 6).map((step) => ({
-            heading: step.section,
-            purpose: step.intent,
-            key_points: [
-              ...step.assigned_requirements.map((item) => `必须覆盖：${item}`),
-              step.fill_strategy,
-            ].slice(0, 5),
-            source_basis: [
-              `模板槽位:${step.section}`,
-              ...(step.logic_after
-                ? [`逻辑承接:${step.logic_after.from} -> ${step.logic_after.to}（${step.logic_after.reason}）`]
-                : []),
-              ...input.matchedRules.slice(0, 2).map((rule) => rule.title),
-            ].slice(0, 5),
-          }))
+        ? input.templateRewritePlan.slice(0, 6).map((step) => {
+            const matchedHints = (input.factSectionHints ?? [])
+              .filter((item) => {
+                const left = normalizeStructureLabel(item.recommended_section);
+                const right = normalizeStructureLabel(step.section);
+                return left === right || left.includes(right) || right.includes(left);
+              })
+              .slice(0, 4);
+            return {
+              heading: step.section,
+              purpose: step.intent,
+              key_points: [
+                ...matchedHints.map((item) => `优先事实：${item.fact}`),
+                ...matchedHints.flatMap((item) => (item.recommended_requirements ?? []).map((req) => `优先覆盖：${req}`)),
+                ...step.assigned_requirements.map((item) => `必须覆盖：${item}`),
+                step.fill_strategy,
+              ].slice(0, 6),
+              source_basis: [
+                `模板槽位:${step.section}`,
+                ...matchedHints.map((item) => `诊断映射:${item.fact}`),
+                ...(step.logic_after
+                  ? [`逻辑承接:${step.logic_after.from} -> ${step.logic_after.to}（${step.logic_after.reason}）`]
+                  : []),
+                ...input.matchedRules.slice(0, 2).map((rule) => rule.title),
+              ].slice(0, 6),
+            };
+          })
         : input.diagnosis.recommended_structure.map((section) => ({
             heading: section.section,
             purpose: section.purpose,
