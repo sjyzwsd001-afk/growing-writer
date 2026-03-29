@@ -289,54 +289,83 @@ function pickSectionExcerpt(
   return fuzzy?.body ? pickExcerpt(fuzzy.body, 220) : "";
 }
 
-function inferWritingPattern(excerpt: string): string {
+function inferWritingPattern(
+  excerpt: string,
+  options?: {
+    section?: string;
+    intent?: string;
+  },
+): string {
   const text = String(excerpt || "").replace(/\s+/g, " ").trim();
-  if (!text) {
-    return "";
-  }
   const hints: string[] = [];
-  const sentences = text
-    .split(/[。！？!?]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  const firstSentence = sentences[0] || text;
-  const lastSentence = sentences[sentences.length - 1] || text;
-  if (/^(首先|一是|一方面|为进一步|为贯彻|根据|围绕)/.test(text)) {
-    hints.push("开头直接交代依据或切入点");
-  } else if (/^(项目|本次|当前|针对|关于)/.test(text)) {
-    hints.push("开头先点明对象或当前事项");
+  if (text) {
+    const sentences = text
+      .split(/[。！？!?]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const firstSentence = sentences[0] || text;
+    const lastSentence = sentences[sentences.length - 1] || text;
+    if (/^(首先|一是|一方面|为进一步|为贯彻|根据|围绕)/.test(text)) {
+      hints.push("开头直接交代依据或切入点");
+    } else if (/^(项目|本次|当前|针对|关于)/.test(text)) {
+      hints.push("开头先点明对象或当前事项");
+    }
+    if (/^(经|根据|按照|围绕|结合|为|针对)/.test(firstSentence)) {
+      hints.push("常先交代依据或判断前提，再展开正文");
+    }
+    if (/^(目前|当前|现阶段|从现有情况看|经梳理)/.test(firstSentence)) {
+      hints.push("常先交代现状或事实背景，再进入分析");
+    }
+    if (/\d|%|万元|亿元|家|项|天|月|年/.test(text)) {
+      hints.push("正文里常夹带数据或量化事实");
+    }
+    if (/因此|同时|另一方面|下一步|此外|其中|在此基础上/.test(text)) {
+      hints.push("段内会用承接词推进逻辑");
+    }
+    if (/问题|风险|不足|短板/.test(text) && /建议|措施|改进|完善|推进|落实/.test(text)) {
+      hints.push("常按问题或风险在前、措施和动作在后展开");
+    }
+    if (/情况|进展|成效|结果/.test(firstSentence) && /建议|判断|下一步|安排/.test(lastSentence)) {
+      hints.push("常先铺事实或进展，再收束到判断和安排");
+    }
+    if (/认为|总体看|综合研判|建议/.test(lastSentence)) {
+      hints.push("结尾会收束成判断、结论或明确建议");
+    }
+    if (/一是|二是|三是|首先|其次|再次/.test(text)) {
+      hints.push("常按分点并列方式展开论证");
+    }
+    if (/例如|以.*为例|具体.*如下/.test(text)) {
+      hints.push("常用案例、数据或具体事项引出论证");
+    }
+    if (/因此|由此可见|综上|总而言之/.test(text)) {
+      hints.push("段末常通过总结句收束观点");
+    }
+    if (/建议|应当|需|将|推进|落实|完善/.test(text)) {
+      hints.push("结尾常落到建议、安排或动作");
+    }
+    if (/，/.test(text) && text.length > 80) {
+      hints.push("句式偏长，倾向先铺事实再收束判断");
+    } else {
+      hints.push("句式偏短，适合直接落结论");
+    }
   }
-  if (/^(经|根据|按照|围绕|结合|为|针对)/.test(firstSentence)) {
-    hints.push("常先交代依据或判断前提，再展开正文");
-  }
-  if (/^(目前|当前|现阶段|从现有情况看|经梳理)/.test(firstSentence)) {
-    hints.push("常先交代现状或事实背景，再进入分析");
-  }
-  if (/\d|%|万元|亿元|家|项|天|月|年/.test(text)) {
-    hints.push("正文里常夹带数据或量化事实");
-  }
-  if (/因此|同时|另一方面|下一步|此外|其中|在此基础上/.test(text)) {
-    hints.push("段内会用承接词推进逻辑");
-  }
-  if (/问题|风险|不足|短板/.test(text) && /建议|措施|改进|完善|推进|落实/.test(text)) {
-    hints.push("常按问题或风险在前、措施和动作在后展开");
-  }
-  if (/情况|进展|成效|结果/.test(firstSentence) && /建议|判断|下一步|安排/.test(lastSentence)) {
-    hints.push("常先铺事实或进展，再收束到判断和安排");
-  }
-  if (/认为|总体看|综合研判|建议/.test(lastSentence)) {
-    hints.push("结尾会收束成判断、结论或明确建议");
-  }
-  if (/一是|二是|三是|首先|其次|再次/.test(text)) {
-    hints.push("常按分点并列方式展开论证");
-  }
-  if (/建议|应当|需|将|推进|落实|完善/.test(text)) {
-    hints.push("结尾常落到建议、安排或动作");
-  }
-  if (/，/.test(text) && text.length > 80) {
-    hints.push("句式偏长，倾向先铺事实再收束判断");
-  } else {
-    hints.push("句式偏短，适合直接落结论");
+  if (!hints.length) {
+    const combined = `${options?.section ?? ""} ${options?.intent ?? ""}`.trim();
+    if (/风险|问题|隐患|挑战/.test(combined)) {
+      hints.push("该节功能偏向展开风险或问题分析");
+    }
+    if (/成果|成效|产出|结果|进展/.test(combined)) {
+      hints.push("该节适合呈现结果、进展或量化事实");
+    }
+    if (/措施|计划|建议|下一步|安排|方案/.test(combined)) {
+      hints.push("该节结尾宜收束到具体动作或安排");
+    }
+    if (/组织|分工|职责|机制|小组/.test(combined)) {
+      hints.push("该节应先交代参与主体，再说明责任分工");
+    }
+    if (/背景|现状|概况|依据|说明/.test(combined)) {
+      hints.push("该节宜先交代背景、范围或前提，再进入主体信息");
+    }
   }
   return [...new Set(hints)].slice(0, 3).join("；");
 }
@@ -899,7 +928,10 @@ export function buildTemplateRewriteHint(input: {
         section,
         normalized_section: normalizeStructureLabel(section),
         excerpt: pickSectionExcerpt(item.sections, section),
-        writing_pattern: inferWritingPattern(pickSectionExcerpt(item.sections, section)),
+        writing_pattern: inferWritingPattern(pickSectionExcerpt(item.sections, section), {
+          section,
+          intent: inferSectionIntent(section),
+        }),
       })),
     )
     .slice(0, 12);
@@ -931,6 +963,7 @@ export function buildTemplateRewriteHint(input: {
     const intent =
       summary.section_intents.find((item) => item.section === section)?.intent ||
       summary.section_intents[index]?.intent ||
+      inferSectionIntent(section) ||
       "沿用模板段落功能，但改写为本次任务语境";
     const matchedHistoryLogic = historyLogicChain
       .map((item) => ({
@@ -966,7 +999,10 @@ export function buildTemplateRewriteHint(input: {
     });
     const assignedFacts = factSelection.facts;
     const templateExcerpt = pickSectionExcerpt(templateSections, section);
-    const templatePattern = inferWritingPattern(templateExcerpt);
+    const templatePattern = inferWritingPattern(templateExcerpt, {
+      section,
+      intent,
+    });
     const matchedHistoryHints = matchedHistorySections.map((item) => ({
       material_title: item.title,
       section: item.section,
