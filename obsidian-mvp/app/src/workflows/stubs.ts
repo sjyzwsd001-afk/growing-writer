@@ -30,6 +30,68 @@ import {
   taskAnalysisSchema,
 } from "../types/schemas.js";
 
+function buildOutlineRepairPrompt(input: {
+  outline: OutlineResult;
+  rewritePlan: TemplateRewriteStep[];
+}) {
+  return `请修补这份提纲，使其更严格符合模板改写计划。
+
+修补要求：
+1. 必须补齐缺失的模板段落
+2. 每一段 key_points 要覆盖 assigned_requirements
+3. 不要新增无关段落
+4. 保持 JSON schema 不变
+
+当前提纲:
+${JSON.stringify(input.outline, null, 2)}
+
+模板改写计划:
+${JSON.stringify(input.rewritePlan, null, 2)}
+`;
+}
+
+function buildDraftRepairPrompt(input: {
+  draft: DraftResult;
+  outline: OutlineResult;
+  rewritePlan: TemplateRewriteStep[];
+}) {
+  return `请修补这份正文，使其更严格符合提纲和模板改写计划。
+
+修补要求：
+1. 保留已有可用内容
+2. 优先补齐 missing_points 和 rule_violations 里指出的缺口
+3. 每段优先覆盖 assigned_requirements，并尽量落到 assigned_facts
+4. 不要编造事实
+5. 保持 JSON schema 不变
+
+当前正文结果:
+${JSON.stringify(input.draft, null, 2)}
+
+提纲:
+${JSON.stringify(input.outline, null, 2)}
+
+模板改写计划:
+${JSON.stringify(input.rewritePlan, null, 2)}
+`;
+}
+
+function hasOutlineConstraintIssues(outline: OutlineResult): boolean {
+  return Boolean(
+    outline.constraint_checks &&
+      (!outline.constraint_checks.section_order_ok ||
+        outline.constraint_checks.requirement_gaps.length > 0),
+  );
+}
+
+function hasDraftConstraintIssues(draft: DraftResult): boolean {
+  return Boolean(
+    draft.constraint_checks &&
+      (!draft.constraint_checks.section_order_ok ||
+        draft.constraint_checks.requirement_gaps.length > 0 ||
+        draft.constraint_checks.warnings.length > 0),
+  );
+}
+
 function applyTemplateRewritePlanToOutline(
   outline: OutlineResult,
   templateRewritePlan: TemplateRewriteStep[],
@@ -477,10 +539,28 @@ export async function buildOutlineWithLlm(
     maxTokens: 1400,
     timeoutMs: 75_000,
   });
-  return validateOutlineAgainstRewritePlan(
+  let validated = validateOutlineAgainstRewritePlan(
     applyTemplateRewritePlanToOutline(outline, input.templateRewritePlan ?? []),
     input.templateRewritePlan ?? [],
   );
+  if (hasOutlineConstraintIssues(validated) && (input.templateRewritePlan ?? []).length) {
+    const repaired = await client.generateJson({
+      system: BASE_SYSTEM_PROMPT,
+      user: buildOutlineRepairPrompt({
+        outline: validated,
+        rewritePlan: input.templateRewritePlan ?? [],
+      }),
+      schema: outlineResultSchema,
+      schemaHint: OUTLINE_SCHEMA_HINT,
+      maxTokens: 1500,
+      timeoutMs: 60_000,
+    });
+    validated = validateOutlineAgainstRewritePlan(
+      applyTemplateRewritePlanToOutline(repaired, input.templateRewritePlan ?? []),
+      input.templateRewritePlan ?? [],
+    );
+  }
+  return validated;
 }
 
 export function generateDraft(input: {
@@ -541,11 +621,31 @@ export async function generateDraftWithLlm(
     maxTokens: 1600,
     timeoutMs: 60_000,
   });
-  return validateDraftAgainstRewritePlan(
+  let validated = validateDraftAgainstRewritePlan(
     alignDraftToOutline(draft, input.outline),
     input.outline,
     input.templateRewritePlan ?? [],
   );
+  if (hasDraftConstraintIssues(validated) && (input.templateRewritePlan ?? []).length) {
+    const repaired = await client.generateJson({
+      system: BASE_SYSTEM_PROMPT,
+      user: buildDraftRepairPrompt({
+        draft: validated,
+        outline: input.outline,
+        rewritePlan: input.templateRewritePlan ?? [],
+      }),
+      schema: draftResultSchema,
+      schemaHint: DRAFT_SCHEMA_HINT,
+      maxTokens: 1800,
+      timeoutMs: 60_000,
+    });
+    validated = validateDraftAgainstRewritePlan(
+      alignDraftToOutline(repaired, input.outline),
+      input.outline,
+      input.templateRewritePlan ?? [],
+    );
+  }
+  return validated;
 }
 
 export function learnFeedback(feedback: Feedback): FeedbackAnalysis {
