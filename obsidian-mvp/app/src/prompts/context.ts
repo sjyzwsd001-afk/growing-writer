@@ -122,11 +122,13 @@ export function compactTemplateRewritePlan(
         ? Number(step.assignment_confidence.toFixed(2))
         : undefined,
     template_section_excerpt: clip(step.template_section_excerpt ?? "", 220),
+    template_writing_pattern: clip(step.template_writing_pattern ?? "", 100),
     history_section_hints: (step.history_section_hints ?? []).slice(0, 3).map((item) => ({
       material_title: clip(item.material_title, 70),
       section: clip(item.section, 120),
       normalized_section: clip(item.normalized_section ?? "", 80),
       excerpt: clip(item.excerpt ?? "", 180),
+      writing_pattern: clip(item.writing_pattern ?? "", 100),
     })),
     fill_strategy: clip(step.fill_strategy, 120),
     source_hint: clip(step.source_hint, 90),

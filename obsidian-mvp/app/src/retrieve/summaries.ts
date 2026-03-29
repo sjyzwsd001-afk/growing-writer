@@ -289,6 +289,34 @@ function pickSectionExcerpt(
   return fuzzy?.body ? pickExcerpt(fuzzy.body, 220) : "";
 }
 
+function inferWritingPattern(excerpt: string): string {
+  const text = String(excerpt || "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "";
+  }
+  const hints: string[] = [];
+  if (/^(首先|一是|一方面|为进一步|为贯彻|根据|围绕)/.test(text)) {
+    hints.push("开头直接交代依据或切入点");
+  } else if (/^(项目|本次|当前|针对|关于)/.test(text)) {
+    hints.push("开头先点明对象或当前事项");
+  }
+  if (/\d|%|万元|亿元|家|项|天|月|年/.test(text)) {
+    hints.push("正文里常夹带数据或量化事实");
+  }
+  if (/因此|同时|另一方面|下一步|此外|其中|在此基础上/.test(text)) {
+    hints.push("段内会用承接词推进逻辑");
+  }
+  if (/建议|应当|需|将|推进|落实|完善/.test(text)) {
+    hints.push("结尾常落到建议、安排或动作");
+  }
+  if (/，/.test(text) && text.length > 80) {
+    hints.push("句式偏长，倾向先铺事实再收束判断");
+  } else {
+    hints.push("句式偏短，适合直接落结论");
+  }
+  return [...new Set(hints)].slice(0, 3).join("；");
+}
+
 function inferSectionIntentInfo(section: string): { label: string; description: string } {
   const text = `${section}`;
   if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(text)) {
@@ -847,6 +875,7 @@ export function buildTemplateRewriteHint(input: {
         section,
         normalized_section: normalizeStructureLabel(section),
         excerpt: pickSectionExcerpt(item.sections, section),
+        writing_pattern: inferWritingPattern(pickSectionExcerpt(item.sections, section)),
       })),
     )
     .slice(0, 12);
@@ -923,11 +952,13 @@ export function buildTemplateRewriteHint(input: {
       assigned_requirements: assignedRequirements,
       assignment_confidence: factSelection.confidence,
       template_section_excerpt: pickSectionExcerpt(templateSections, section),
+      template_writing_pattern: inferWritingPattern(pickSectionExcerpt(templateSections, section)),
       history_section_hints: matchedHistorySections.map((item) => ({
         material_title: item.title,
         section: item.section,
         normalized_section: item.normalized_section,
         excerpt: item.excerpt,
+        writing_pattern: item.writing_pattern,
       })),
       fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${
         assignedRequirements.length

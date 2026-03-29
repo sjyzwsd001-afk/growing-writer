@@ -39,6 +39,7 @@ function buildSectionWriteBriefs(input: {
           ? Number(matchedStep.assignment_confidence.toFixed(2))
           : undefined,
       template_section_excerpt: matchedStep?.template_section_excerpt ?? "",
+      template_writing_pattern: matchedStep?.template_writing_pattern ?? "",
       conservative_approach:
         typeof matchedStep?.assignment_confidence === "number"
           ? matchedStep.assignment_confidence < LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD
@@ -47,6 +48,7 @@ function buildSectionWriteBriefs(input: {
         material_title: item.material_title,
         section: item.section,
         excerpt: item.excerpt ?? "",
+        writing_pattern: item.writing_pattern ?? "",
       })),
       fill_strategy: matchedStep?.fill_strategy ?? "",
       logic_after: matchedStep?.logic_after
@@ -106,6 +108,7 @@ export function buildGenerateDraftPrompt(input: {
 26. 如果 template_quality_assessment.warnings 非空，请把这些警告视为本次写作的高风险点，在 self_review 里优先检查相关段落。
 27. 如果某段提供了 template_section_excerpt，这代表模板原段落的写法骨架；请学习它的展开方式和语气，但必须把旧事实替换成这次任务事实。
 28. 如果某段提供了 history_section_hints.excerpt，这代表历史材料里对应段落的真实写法；请把它当内容参考，而不只是标题参考。
+29. 如果某段提供了 template_writing_pattern 或 history_section_hints.writing_pattern，请优先沿用这些写法模式，例如“先交代依据再展开事实”“句式偏短直接落结论”等，而不是只模仿词面。
 
 然后做一轮自检：
 - 哪些地方写得比较稳
