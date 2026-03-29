@@ -41,6 +41,8 @@ export function buildOutlinePrompt(input: {
 13. 如果 template_quality_assessment.mode = "derived-sections"，说明模板只有派生章节，没有稳定槽位；请保留章节顺序，但对每节内容保持保守，不要假定模板细节已经完整。
 14. 如果 template_quality_assessment.mode = "generic-outline"，说明模板结构很弱；请优先遵守默认顺序和已分配的 requirements，不要伪造精细的模板对应关系。
 15. 如果 template_quality_assessment.warnings 非空，请把这些警告当作结构风险，避免过度自信地展开不存在的细节。
+16. 如果 rewrite_steps 中提供了 template_section_excerpt 或 template_writing_pattern，请据此提炼每节应该如何展开，而不是只保留标题。
+17. 如果 history_section_hints 里带有 excerpt 或 writing_pattern，请把它们当成内容参考，帮助补齐每节 key_points 和 source_basis。
 
 输出要求：
 - 只输出 JSON
