@@ -401,6 +401,20 @@ const DIAGNOSIS_SCHEMA_HINT = `{
   "applied_rules": ["string"],
   "reference_materials": ["string"],
   "writing_risks": ["string"],
+  "input_quality_assessment": {
+    "template_quality": "strong | partial | weak",
+    "history_material_quality": "strong | partial | weak",
+    "fact_coverage_quality": "strong | partial | weak",
+    "warnings": ["string"]
+  },
+  "fact_section_mapping": [
+    {
+      "fact": "string",
+      "recommended_section": "string",
+      "reason": "string",
+      "confidence": 0.0
+    }
+  ],
   "next_action": "string"
 }`;
 
@@ -523,6 +537,28 @@ export function diagnoseTask(input: {
             ? "已按模板改写计划生成诊断骨架；若要更细的段落裁决，仍建议走 LLM 诊断。"
             : "待接入诊断 prompt，当前结果仅为骨架",
         ],
+    input_quality_assessment: {
+      template_quality: input.templateRewritePlan?.length ? "partial" : "weak",
+      history_material_quality: input.matchedMaterials.length > 1 ? "partial" : "weak",
+      fact_coverage_quality: weakTaskAnalysis ? "weak" : "partial",
+      warnings: weakTaskAnalysis
+        ? ["任务解析结果过弱，背景事实不足。"]
+        : [
+            input.templateRewritePlan?.length
+              ? "已按模板改写计划生成诊断骨架，但仍建议使用 LLM 做事实-章节匹配。"
+              : "当前模板结构较弱，诊断主要依赖任务事实和规则。",
+          ],
+    },
+    fact_section_mapping: (input.templateRewritePlan ?? [])
+      .flatMap((step) =>
+        (step.assigned_facts ?? []).slice(0, 3).map((fact) => ({
+          fact,
+          recommended_section: step.section,
+          reason: `本地兜底按段落意图「${step.intent}」做了初步分配。`,
+          confidence: typeof step.assignment_confidence === "number" ? step.assignment_confidence : 0.3,
+        })),
+      )
+      .slice(0, 8),
     next_action: weakTaskAnalysis ? "先补充背景事实并重新解析任务，再继续写作。" : "补充 LLM 实现后生成正式写前诊断",
   };
 }

@@ -38,11 +38,14 @@ export function buildDiagnoseTaskPrompt(input: {
 12. 如果 template_quality_assessment.mode = "derived-sections"，说明当前模板主要依赖派生章节；诊断时应优先保住章节顺序和任务事实覆盖，不要假设模板里还有隐藏槽位。
 13. 如果 template_quality_assessment.mode = "generic-outline"，说明当前模板结构较弱；诊断时应更多依赖任务事实、规则和历史材料，不要把模板章节当成强约束。
 14. 如果 template_quality_assessment.warnings 非空，请把这些警告视为本次结构诊断的高风险点，在诊断摘要和 recommended_structure 中主动规避相关风险。
+15. 请额外输出 input_quality_assessment，评估模板质量、历史材料参考质量、背景事实充分度，并给出 warnings。
+16. 请额外输出 fact_section_mapping，把重要事实匹配到最适合承载它的章节，并说明原因与置信度；如果没有明显完美匹配，也要给出最接近的章节。
 
 输出要求：
 - 只输出 JSON
 - 不要直接写正文
 - 结构建议必须可执行
+- input_quality_assessment 和 fact_section_mapping 也必须尽量填写完整
 - 以下输入已经做过裁剪，请优先抓住最相关信息，不要因为缺少细枝末节而编造内容
 
 任务分析:

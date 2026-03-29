@@ -27,6 +27,24 @@ export const diagnosisResultSchema = z.object({
   applied_rules: z.array(z.string()),
   reference_materials: z.array(z.string()),
   writing_risks: z.array(z.string()),
+  input_quality_assessment: z
+    .object({
+      template_quality: z.enum(["strong", "partial", "weak"]),
+      history_material_quality: z.enum(["strong", "partial", "weak"]),
+      fact_coverage_quality: z.enum(["strong", "partial", "weak"]),
+      warnings: z.array(z.string()),
+    })
+    .optional(),
+  fact_section_mapping: z
+    .array(
+      z.object({
+        fact: z.string(),
+        recommended_section: z.string(),
+        reason: z.string(),
+        confidence: z.number().min(0).max(1),
+      }),
+    )
+    .optional(),
   next_action: z.string(),
 });
 

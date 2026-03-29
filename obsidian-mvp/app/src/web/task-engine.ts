@@ -9,7 +9,7 @@ import {
 } from "../config/env.js";
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRulesWithPolicy } from "../retrieve/matchers.js";
-import { buildEvidenceCards, buildTemplateRewriteHint } from "../retrieve/summaries.js";
+import { buildEvidenceCards, buildTemplateRewriteHint, normalizeStructureLabel } from "../retrieve/summaries.js";
 import { VaultRepository } from "../vault/repository.js";
 import {
   buildOutline,
@@ -461,6 +461,32 @@ export async function runTaskAction(input: {
   const diagnosis = diagnosisResult.value;
   routeMetas.push(diagnosisResult.routeMeta);
   const withRoutingDecisionLog = [...ruleDecisionLog];
+  const refinedTemplateRewriteHint = !templateRewriteHint
+    ? null
+    : {
+        ...templateRewriteHint,
+        warnings: [
+          ...(templateRewriteHint.warnings ?? []),
+          ...((diagnosis.input_quality_assessment?.warnings ?? []).map((item) => `诊断提醒：${item}`)),
+        ].slice(0, 10),
+        rewrite_steps: (templateRewriteHint.rewrite_steps ?? []).map((step) => {
+          const matchedMappings = (diagnosis.fact_section_mapping ?? [])
+            .filter((item) => {
+              const left = normalizeStructureLabel(item.recommended_section);
+              const right = normalizeStructureLabel(step.section);
+              return left === right || left.includes(right) || right.includes(left);
+            })
+            .sort((left, right) => right.confidence - left.confidence);
+          return {
+            ...step,
+            assigned_facts: [...new Set([...matchedMappings.map((item) => item.fact), ...step.assigned_facts])].slice(0, 5),
+            assignment_confidence:
+              typeof matchedMappings[0]?.confidence === "number"
+                ? Math.max(step.assignment_confidence ?? 0, matchedMappings[0].confidence)
+                : step.assignment_confidence,
+          };
+        }),
+      };
   withRoutingDecisionLog.push(
     `模型路由[diagnose]：used=${diagnosisResult.routeMeta.usedModel} / tried=${diagnosisResult.routeMeta.triedModels.join(",") || "-"}${diagnosisResult.routeMeta.errors.length ? ` / fallbackErrors=${diagnosisResult.routeMeta.errors.length}` : ""}`,
   );
@@ -499,7 +525,7 @@ export async function runTaskAction(input: {
       ruleDecisionLog: withRoutingDecisionLog,
       matchedRules,
       matchedMaterials,
-      templateRewriteHint,
+      templateRewriteHint: refinedTemplateRewriteHint,
     };
   }
 
@@ -511,10 +537,10 @@ export async function runTaskAction(input: {
     matchedMaterials,
     evidenceCards,
     profiles,
-    templateRewritePlan: templateRewriteHint?.rewrite_steps ?? [],
+    templateRewritePlan: refinedTemplateRewriteHint?.rewrite_steps ?? [],
     templateQualityAssessment: {
-      mode: templateRewriteHint?.fallback_mode ?? "structured",
-      warnings: templateRewriteHint?.warnings ?? [],
+      mode: refinedTemplateRewriteHint?.fallback_mode ?? "structured",
+      warnings: refinedTemplateRewriteHint?.warnings ?? [],
     },
   };
 
@@ -557,7 +583,7 @@ export async function runTaskAction(input: {
       matchedMaterials,
       evidenceCards,
       decisionLog: withRoutingDecisionLog,
-      templateRewriteHint,
+      templateRewriteHint: refinedTemplateRewriteHint,
     });
     return {
       analysis,
@@ -568,7 +594,7 @@ export async function runTaskAction(input: {
       ruleDecisionLog: withRoutingDecisionLog,
       matchedRules,
       matchedMaterials,
-      templateRewriteHint,
+      templateRewriteHint: refinedTemplateRewriteHint,
     };
   }
 
@@ -586,10 +612,10 @@ export async function runTaskAction(input: {
         matchedMaterials,
         evidenceCards,
         profiles,
-        templateRewritePlan: templateRewriteHint?.rewrite_steps ?? [],
+        templateRewritePlan: refinedTemplateRewriteHint?.rewrite_steps ?? [],
         templateQualityAssessment: {
-          mode: templateRewriteHint?.fallback_mode ?? "structured",
-          warnings: templateRewriteHint?.warnings ?? [],
+          mode: refinedTemplateRewriteHint?.fallback_mode ?? "structured",
+          warnings: refinedTemplateRewriteHint?.warnings ?? [],
         },
       }),
     fallback: () =>
@@ -631,9 +657,9 @@ export async function runTaskAction(input: {
     draft,
     matchedRules,
     matchedMaterials,
-    evidenceCards,
-    decisionLog: withRoutingDecisionLog,
-    templateRewriteHint,
+      evidenceCards,
+      decisionLog: withRoutingDecisionLog,
+    templateRewriteHint: refinedTemplateRewriteHint,
   });
 
   return {
@@ -646,7 +672,7 @@ export async function runTaskAction(input: {
     ruleDecisionLog: withRoutingDecisionLog,
     matchedRules,
     matchedMaterials,
-    templateRewriteHint,
+    templateRewriteHint: refinedTemplateRewriteHint,
   };
 }
 

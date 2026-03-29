@@ -157,6 +157,20 @@ export function compactDiagnosis(diagnosis: DiagnosisResult): Record<string, unk
     applied_rules: clipList(diagnosis.applied_rules, 6, 80),
     reference_materials: clipList(diagnosis.reference_materials, 6, 80),
     writing_risks: clipList(diagnosis.writing_risks, 6, 100),
+    input_quality_assessment: diagnosis.input_quality_assessment
+      ? {
+          template_quality: diagnosis.input_quality_assessment.template_quality,
+          history_material_quality: diagnosis.input_quality_assessment.history_material_quality,
+          fact_coverage_quality: diagnosis.input_quality_assessment.fact_coverage_quality,
+          warnings: clipList(diagnosis.input_quality_assessment.warnings ?? [], 5, 100),
+        }
+      : null,
+    fact_section_mapping: (diagnosis.fact_section_mapping ?? []).slice(0, 6).map((item) => ({
+      fact: clip(item.fact, 120),
+      recommended_section: clip(item.recommended_section, 80),
+      reason: clip(item.reason, 120),
+      confidence: Number(item.confidence.toFixed(2)),
+    })),
     next_action: clip(diagnosis.next_action, 120),
   };
 }
