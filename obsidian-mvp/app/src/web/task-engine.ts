@@ -515,7 +515,7 @@ export async function runTaskAction(input: {
       matchedMaterials,
       evidenceCards,
       decisionLog: withRoutingDecisionLog,
-      templateRewriteHint,
+      templateRewriteHint: refinedTemplateRewriteHint,
     });
     return {
       analysis,
@@ -657,8 +657,8 @@ export async function runTaskAction(input: {
     draft,
     matchedRules,
     matchedMaterials,
-      evidenceCards,
-      decisionLog: withRoutingDecisionLog,
+    evidenceCards,
+    decisionLog: withRoutingDecisionLog,
     templateRewriteHint: refinedTemplateRewriteHint,
   });
 
