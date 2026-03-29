@@ -16,6 +16,10 @@ export function buildDiagnoseTaskPrompt(input: {
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
   templateRewritePlan?: TemplateRewriteStep[];
+  templateQualityAssessment?: {
+    mode: "structured" | "derived-sections" | "generic-outline";
+    warnings: string[];
+  };
 }): string {
   return `请根据任务分析、已命中规则、相似材料摘要和写作画像，输出写前诊断。
 
@@ -31,6 +35,9 @@ export function buildDiagnoseTaskPrompt(input: {
 9. 如果既没有明确模板逻辑链，也没有足够清晰的历史逻辑链，默认按“背景/现状 -> 主体事项 -> 结论/安排”的顺序诊断结构
 10. 如果模板改写计划中提供了 template_section_excerpt 或 template_writing_pattern，请据此判断每一节应如何展开，不要只停留在标题级诊断。
 11. 如果 history_section_hints 带有 excerpt 或 writing_pattern，请把它们当成历史段落的真实内容参考，用来提示哪些段更适合作为写法借鉴。
+12. 如果 template_quality_assessment.mode = "derived-sections"，说明当前模板主要依赖派生章节；诊断时应优先保住章节顺序和任务事实覆盖，不要假设模板里还有隐藏槽位。
+13. 如果 template_quality_assessment.mode = "generic-outline"，说明当前模板结构较弱；诊断时应更多依赖任务事实、规则和历史材料，不要把模板章节当成强约束。
+14. 如果 template_quality_assessment.warnings 非空，请把这些警告视为本次结构诊断的高风险点，在诊断摘要和 recommended_structure 中主动规避相关风险。
 
 输出要求：
 - 只输出 JSON
@@ -54,5 +61,15 @@ ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 ${JSON.stringify(compactProfiles(input.profiles), null, 2)}
 
 模板改写计划:
-${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}`;
+${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}
+
+template_quality_assessment:
+${JSON.stringify(
+    {
+      mode: input.templateQualityAssessment?.mode ?? "structured",
+      warnings: (input.templateQualityAssessment?.warnings ?? []).slice(0, 6),
+    },
+    null,
+    2,
+  )}`;
 }

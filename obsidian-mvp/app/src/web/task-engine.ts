@@ -443,6 +443,10 @@ export async function runTaskAction(input: {
     evidenceCards,
     profiles,
     templateRewritePlan: templateRewriteHint?.rewrite_steps ?? [],
+    templateQualityAssessment: {
+      mode: templateRewriteHint?.fallback_mode ?? "structured",
+      warnings: templateRewriteHint?.warnings ?? [],
+    },
   };
 
   const routeMetas: RouteMeta[] = [];

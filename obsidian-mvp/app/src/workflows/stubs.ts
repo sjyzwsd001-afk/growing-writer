@@ -537,6 +537,10 @@ export async function diagnoseTaskWithLlm(
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
     templateRewritePlan?: TemplateRewriteStep[];
+    templateQualityAssessment?: {
+      mode: "structured" | "derived-sections" | "generic-outline";
+      warnings: string[];
+    };
   },
 ): Promise<DiagnosisResult> {
   return client.generateJson({
@@ -548,6 +552,7 @@ export async function diagnoseTaskWithLlm(
       evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
       templateRewritePlan: input.templateRewritePlan ?? [],
+      templateQualityAssessment: input.templateQualityAssessment,
     }),
     schema: diagnosisResultSchema,
     schemaHint: DIAGNOSIS_SCHEMA_HINT,
@@ -661,7 +666,7 @@ export async function buildOutlineWithLlm(
     validated = {
       ...validated,
       repair_trace: [
-        ...((validated.repair_trace ?? []).slice(0, 4)),
+        ...((validated.repair_trace ?? []).slice(0, 8)),
         {
           stage: "outline",
           applied: true,
@@ -765,7 +770,7 @@ export async function generateDraftWithLlm(
     validated = {
       ...validated,
       repair_trace: [
-        ...((validated.repair_trace ?? []).slice(0, 4)),
+        ...((validated.repair_trace ?? []).slice(0, 8)),
         {
           stage: "draft",
           applied: true,

@@ -3347,7 +3347,7 @@ function renderTaskContextSummary() {
   const repairTrace = [
     ...(Array.isArray(context.outline?.repair_trace) ? context.outline.repair_trace : []),
     ...(Array.isArray(context.draft?.repair_trace) ? context.draft.repair_trace : []),
-  ].slice(0, 4);
+  ].slice(0, 8);
   const sectionChecklist = rewriteSteps.slice(0, 4).map((step) => {
     const reqs = Array.isArray(step.assigned_requirements) ? step.assigned_requirements : [];
     const missing = missingPoints.filter((item) =>
