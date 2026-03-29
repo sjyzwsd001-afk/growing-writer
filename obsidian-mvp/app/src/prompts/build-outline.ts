@@ -18,6 +18,10 @@ export function buildOutlinePrompt(input: {
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
   templateRewritePlan?: TemplateRewriteStep[];
+  templateQualityAssessment?: {
+    mode: "structured" | "derived-sections" | "generic-outline";
+    warnings: string[];
+  };
 }): string {
   return `请生成一份可直接用于写作的提纲。
 
@@ -34,6 +38,9 @@ export function buildOutlinePrompt(input: {
 10. 相似材料里的 logic_chain / template_slots / section_intents 是结构化约束；请直接利用 from -> to、section、intent 这些字段，不要把它们当普通示例
 11. 如果模板逻辑链与历史材料逻辑链冲突，优先遵循模板逻辑链；历史材料逻辑链只用于补充承接理由或局部排序
 12. 如果没有可执行的模板逻辑链或历史逻辑链，默认按“背景/现状 -> 主体事项 -> 结论/安排”的顺序组织 sections
+13. 如果 template_quality_assessment.mode = "derived-sections"，说明模板只有派生章节，没有稳定槽位；请保留章节顺序，但对每节内容保持保守，不要假定模板细节已经完整。
+14. 如果 template_quality_assessment.mode = "generic-outline"，说明模板结构很弱；请优先遵守默认顺序和已分配的 requirements，不要伪造精细的模板对应关系。
+15. 如果 template_quality_assessment.warnings 非空，请把这些警告当作结构风险，避免过度自信地展开不存在的细节。
 
 输出要求：
 - 只输出 JSON
@@ -59,5 +66,15 @@ ${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
 ${JSON.stringify(compactProfiles(input.profiles), null, 2)}
 
 模板改写计划:
-${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}`;
+${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}
+
+template_quality_assessment:
+${JSON.stringify(
+    {
+      mode: input.templateQualityAssessment?.mode ?? "structured",
+      warnings: (input.templateQualityAssessment?.warnings ?? []).slice(0, 6),
+    },
+    null,
+    2,
+  )}`;
 }

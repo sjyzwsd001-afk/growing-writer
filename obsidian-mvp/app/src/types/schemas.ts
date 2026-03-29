@@ -52,6 +52,7 @@ export const outlineResultSchema = z.object({
           missing: z.array(z.string()),
         }),
       ),
+      logic_gaps: z.array(z.string()).optional(),
       warnings: z.array(z.string()),
     })
     .optional(),
@@ -94,6 +95,7 @@ export const draftResultSchema = z.object({
           unmatched: z.array(z.string()),
         }),
       ),
+      logic_gaps: z.array(z.string()).optional(),
       warnings: z.array(z.string()),
     })
     .optional(),

@@ -10,6 +10,9 @@ import type {
   TemplateRewriteStep,
 } from "../types/domain.js";
 import type { TaskAnalysis } from "../types/schemas.js";
+import { tokenizeForMatch } from "./text-utils.js";
+
+const LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD = 0.28;
 
 function normalizeSummarySource(content: string): string {
   const rawContentSection = content.match(/# 原文内容\s*\n+([\s\S]*?)(?=\n# |\Z)/)?.[1]?.trim();
@@ -211,49 +214,56 @@ function deriveTemplateSections(content: string, count: number): string[] {
   return [...new Set(candidates)].slice(0, count);
 }
 
+function inferSectionIntentInfo(section: string): { label: string; description: string } {
+  const text = `${section}`;
+  if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(text)) {
+    return {
+      label: "background",
+      description: "先交代背景、范围和总体情况",
+    };
+  }
+  if (/组织|分工|成员|职责|责任|机制|协同|专班|小组/.test(text)) {
+    return {
+      label: "organization",
+      description: "交代参与主体、组织方式和责任安排",
+    };
+  }
+  if (/方案|建议|措施|安排|计划|路径|抓手|动作|落实/.test(text)) {
+    return {
+      label: "action",
+      description: "承接前文事实后，落到方案、建议或下一步动作",
+    };
+  }
+  if (/风险|问题|挑战|难点|短板|隐患|影响/.test(text)) {
+    return {
+      label: "risk",
+      description: "展开风险、问题及影响，为后续措施做铺垫",
+    };
+  }
+  if (/结果|成效|成果|产出|数据|指标|进展/.test(text)) {
+    return {
+      label: "result",
+      description: "集中呈现关键结果、进展或量化成效，作为后续判断基础",
+    };
+  }
+  if (/结论|收尾|总结|建议事项|下一步/.test(text)) {
+    return {
+      label: "conclusion",
+      description: "在主体事实之后收束判断，并明确后续安排或决策建议",
+    };
+  }
+  return {
+    label: "generic",
+    description: "作为固定结构段落，需结合本次背景替换旧事实和旧结论",
+  };
+}
+
 function inferSectionIntent(section: string): string {
-  if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(section)) {
-    return "先交代背景、范围和总体情况";
-  }
-  if (/组织|分工|成员|职责|责任|机制|协同|专班|小组/.test(section)) {
-    return "交代参与主体、组织方式和责任安排";
-  }
-  if (/方案|建议|措施|安排|计划|路径|抓手|动作|落实/.test(section)) {
-    return "承接前文事实后，落到方案、建议或下一步动作";
-  }
-  if (/风险|问题|挑战|难点|短板|隐患|影响/.test(section)) {
-    return "展开风险、问题及影响，为后续措施做铺垫";
-  }
-  if (/结果|成效|成果|产出|数据|指标|进展/.test(section)) {
-    return "集中呈现关键结果、进展或量化成效，作为后续判断基础";
-  }
-  if (/结论|收尾|总结|建议事项|下一步/.test(section)) {
-    return "在主体事实之后收束判断，并明确后续安排或决策建议";
-  }
-  return "作为固定结构段落，需结合本次背景替换旧事实和旧结论";
+  return inferSectionIntentInfo(section).description;
 }
 
 function inferSectionIntentLabel(section: string): string {
-  const text = `${section}`;
-  if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(text)) {
-    return "background";
-  }
-  if (/组织|分工|成员|职责|责任|机制|协同|专班|小组/.test(text)) {
-    return "organization";
-  }
-  if (/方案|建议|措施|安排|计划|路径|抓手|动作|落实/.test(text)) {
-    return "action";
-  }
-  if (/风险|问题|挑战|难点|短板|隐患|影响/.test(text)) {
-    return "risk";
-  }
-  if (/结果|成效|成果|产出|数据|指标|进展/.test(text)) {
-    return "result";
-  }
-  if (/结论|收尾|总结|建议事项|下一步/.test(text)) {
-    return "conclusion";
-  }
-  return "generic";
+  return inferSectionIntentInfo(section).label;
 }
 
 export function summarizeMaterial(material: Material): MaterialSummary {
@@ -354,7 +364,7 @@ function normalizePieces(input: string[]): string[] {
     .filter((item) => item.length >= 2);
 }
 
-function normalizeStructureLabel(text: string): string {
+export function normalizeStructureLabel(text: string): string {
   return String(text || "")
     .replace(/^[\s#-]+/, "")
     .replace(
@@ -490,21 +500,14 @@ function scoreFactForStep(input: {
   return score;
 }
 
-function tokenizeForMatching(text: string): string[] {
-  const normalized = String(text || "").toLowerCase();
-  const chineseGroups = normalized.match(/[\u4e00-\u9fff]{2,}/g) || [];
-  const latinGroups = normalized.match(/[a-z0-9]{3,}/g) || [];
-  return [...chineseGroups, ...latinGroups];
-}
-
 function scoreSemanticKeywordOverlap(input: {
   fact: string;
   section: string;
   intent: string;
   mustInclude: string[];
 }): number {
-  const factTokens = tokenizeForMatching(input.fact);
-  const stepTokens = tokenizeForMatching(
+  const factTokens = tokenizeForMatch(input.fact);
+  const stepTokens = tokenizeForMatch(
     `${input.section} ${input.intent} ${input.mustInclude.join(" ")}`,
   );
   if (!factTokens.length || !stepTokens.length) {
@@ -540,24 +543,30 @@ function scoreFactForStepV2(input: {
   evidenceCards: EvidenceCard[];
 }): number {
   const fact = input.fact.trim();
-  let score = scoreFactForStep(input);
-  score += scoreSemanticKeywordOverlap(input);
-  score += scoreIntentBucket(input.section, input.intent, fact);
+  const semanticScore = scoreFactForStep(input);
+  const overlapScore = scoreSemanticKeywordOverlap(input);
+  const intentScore = scoreIntentBucket(input.section, input.intent, fact);
 
   const factLower = fact.toLowerCase();
   const evidenceHit = input.evidenceCards.some((card) =>
     factLower.includes(card.excerpt.toLowerCase().slice(0, 18)) ||
     card.excerpt.toLowerCase().includes(factLower.slice(0, 18)),
   );
-  if (evidenceHit) {
-    score += 0.8;
-  }
+  const evidenceScore = evidenceHit ? 1 : 0;
+  const numericSignal = /^\d+[%万千百]?|预算|金额|数量|指标|进度|节点|合同|供应商|交付/.test(fact) ? 1 : 0;
 
-  if (/^\d+[%万千百]?|预算|金额|数量|指标|进度|节点|合同|供应商|交付/.test(fact)) {
-    score += 0.35;
-  }
-
-  return score;
+  // Weighted combination:
+  // - semantic buckets carry the strongest prior about "this fact belongs in this section"
+  // - token overlap refines local wording match
+  // - intent bucket is a lighter tie-breaker
+  // - evidence / numeric signals only nudge confidence upward
+  return (
+    Math.min(1, semanticScore / 3.2) * 2.8 +
+    Math.min(1, overlapScore / 2.2) * 1.5 +
+    Math.min(1, intentScore / 1.8) * 1.1 +
+    evidenceScore * 0.6 +
+    numericSignal * 0.2
+  );
 }
 
 function scoreRequirementForStep(input: {
@@ -816,7 +825,7 @@ export function buildTemplateRewriteHint(input: {
       mustInclude: mustIncludeItems,
     });
     const assignedFacts = factSelection.facts;
-    if (factSelection.confidence < 0.28) {
+    if (factSelection.confidence < LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD) {
       warnings.push(`段落「${section}」当前事实匹配置信度偏低，建议补充更直接的背景事实或模板说明。`);
     }
     return {

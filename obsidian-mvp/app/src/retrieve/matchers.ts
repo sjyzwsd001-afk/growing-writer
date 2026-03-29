@@ -1,5 +1,6 @@
 import type { Feedback, Material, MatchedRule, Profile, Rule, Task } from "../types/domain.js";
 import { summarizeMaterial } from "./summaries.js";
+import { tokenizeForMatch } from "./text-utils.js";
 
 type RuleMatchInput = {
   task: Task;
@@ -14,12 +15,19 @@ type RuleMatchOutput = {
   decisionLog: string[];
 };
 
+type ScoredMatchedRule = MatchedRule & {
+  _score: number;
+  _signal: string;
+};
+
 const SOURCE_WEIGHTS = {
   template: 1.5,
   confirmed_rule: 1.2,
   candidate_rule: 0.7,
   profile: 1.0,
 } as const;
+
+const CONFLICT_PENALTY_FACTOR = 0.72;
 
 type TaskFeedbackSignalEntry = {
   count: number;
@@ -31,20 +39,6 @@ type TaskFeedbackSignalEntry = {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function tokenizeForMatch(text: string): string[] {
-  const normalized = String(text || "").toLowerCase().trim();
-  if (!normalized) {
-    return [];
-  }
-  const roughTokens = normalized
-    .split(/[\s,.;:!?，。；：！？、（）()\[\]{}"'`~\-_/\\]+/)
-    .map((item) => item.trim())
-    .filter((item) => item.length >= 2);
-
-  const hanChunks = [...normalized.matchAll(/[\u4e00-\u9fff]{2,8}/g)].map((item) => item[0]);
-  return [...new Set([...roughTokens, ...hanChunks])].slice(0, 18);
 }
 
 function isTemplateMaterial(material: Material): boolean {
@@ -305,7 +299,10 @@ function feedbackSignalFactor(input: {
   const structuralFeedbackCount = input.feedbackEntries.filter(
     (entry) => entry.taskId === input.task.id && /是|true/i.test(entry.affectsStructure || ""),
   ).length;
-  if (structuralFeedbackCount > 0 && /结构|顺序|层次|提纲|段落/.test(normalizedSignal)) {
+  if (
+    structuralFeedbackCount > 0 &&
+    /结构|顺序|层次|提纲|段落|structure|outline|flow|paragraph|transition|intro|conclusion/.test(normalizedSignal)
+  ) {
     factor += Math.min(0.1, structuralFeedbackCount * 0.03);
     reasons.push(`结构类反馈累计${structuralFeedbackCount}次`);
   }
@@ -344,11 +341,11 @@ function applyConflictPenalty(
       }
 
       if (left._score >= right._score) {
-        right._score *= 0.72;
+        right._score *= CONFLICT_PENALTY_FACTOR;
         right.overridden_by = left.title;
         decisionLog.push(`冲突裁决：保留「${left.title}」，降权「${right.title}」。`);
       } else {
-        left._score *= 0.72;
+        left._score *= CONFLICT_PENALTY_FACTOR;
         left.overridden_by = right.title;
         decisionLog.push(`冲突裁决：保留「${right.title}」，降权「${left.title}」。`);
       }
@@ -369,7 +366,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
 
   const resolvedRules = input.rules
     .filter((rule) => rule.status !== "disabled")
-    .map((rule) => {
+    .reduce<ScoredMatchedRule[]>((items, rule) => {
       const fromTemplate =
         rule.sourceMaterials?.some((materialId) => templateMaterialIds.has(materialId)) ?? false;
       const sourceType: MatchedRule["source"] = fromTemplate
@@ -378,7 +375,12 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
           ? "confirmed_rule"
           : "candidate_rule";
       const sourceWeight = SOURCE_WEIGHTS[sourceType];
-      const confidence = clamp(rule.confidence || 0.5, 0, 1);
+      const confidence =
+        typeof rule.confidence === "number" ? clamp(rule.confidence, 0, 1) : 0.5;
+      if (confidence === 0) {
+        decisionLog.push(`规则「${rule.title}」置信度为 0，已跳过匹配。`);
+        return items;
+      }
       const recency = recencyFactor(
         typeof rule.frontmatter.updated_at === "string" ? rule.frontmatter.updated_at : "",
       );
@@ -405,7 +407,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
         ...signalFactor.reasons,
       ].filter(Boolean);
 
-      return {
+      items.push({
         rule_id: rule.id,
         title: rule.title,
         priority: 90,
@@ -414,16 +416,17 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
         overridden_by: undefined,
         _score: score,
         _signal: `${rule.title}\n${rule.content}`,
-      };
-    });
+      });
+      return items;
+    }, []);
 
-  const profileRules = extractProfileRules(profiles).map((rule) => ({
+  const profileRules: ScoredMatchedRule[] = extractProfileRules(profiles).map((rule) => ({
     ...rule,
     _score: SOURCE_WEIGHTS.profile * 0.9,
     _signal: rule.title,
   }));
 
-  const all = [...resolvedRules, ...profileRules];
+  const all: ScoredMatchedRule[] = [...resolvedRules, ...profileRules];
   applyConflictPenalty(all, decisionLog);
 
   const sorted = all
@@ -431,7 +434,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
     .slice(0, 10)
     .map((item, index) => {
       const normalizedScore = Number(item._score.toFixed(3));
-      const priority = 100 - Math.min(95, Math.round(item._score * 22)) + index;
+      const priority = Math.max(10, 100 - index * 5);
       return {
         rule_id: item.rule_id,
         title: item.title,

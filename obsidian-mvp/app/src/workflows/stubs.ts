@@ -21,7 +21,7 @@ import { buildDiagnoseTaskPrompt } from "../prompts/diagnose-task.js";
 import { buildGenerateDraftPrompt } from "../prompts/generate-draft.js";
 import { buildLearnFeedbackPrompt } from "../prompts/learn-feedback.js";
 import { buildParseTaskPrompt } from "../prompts/parse-task.js";
-import { summarizeMaterial } from "../retrieve/summaries.js";
+import { normalizeStructureLabel, summarizeMaterial } from "../retrieve/summaries.js";
 import {
   diagnosisResultSchema,
   draftResultSchema,
@@ -39,8 +39,9 @@ function buildOutlineRepairPrompt(input: {
 修补要求：
 1. 必须补齐缺失的模板段落
 2. 每一段 key_points 要覆盖 assigned_requirements
-3. 不要新增无关段落
-4. 保持 JSON schema 不变
+3. 如果 rewritePlan 中给出了 logic_after，提纲中的段落顺序必须体现 from -> to
+4. 不要新增无关段落
+5. 保持 JSON schema 不变
 
 当前提纲:
 ${JSON.stringify(input.outline, null, 2)}
@@ -61,8 +62,10 @@ function buildDraftRepairPrompt(input: {
 1. 保留已有可用内容
 2. 优先补齐 missing_points 和 rule_violations 里指出的缺口
 3. 每段优先覆盖 assigned_requirements，并尽量落到 assigned_facts
-4. 不要编造事实
-5. 保持 JSON schema 不变
+4. 如果 rewritePlan 中给出了 logic_after，正文段落顺序必须体现 from -> to
+5. assignment_confidence 偏低的段落要用保守表达，不要把猜测写成确定事实
+6. 不要编造事实
+7. 保持 JSON schema 不变
 
 当前正文结果:
 ${JSON.stringify(input.draft, null, 2)}
@@ -79,7 +82,8 @@ function hasOutlineConstraintIssues(outline: OutlineResult): boolean {
   return Boolean(
     outline.constraint_checks &&
       (!outline.constraint_checks.section_order_ok ||
-        outline.constraint_checks.requirement_gaps.length > 0),
+        outline.constraint_checks.requirement_gaps.length > 0 ||
+        (outline.constraint_checks.logic_gaps?.length ?? 0) > 0),
   );
 }
 
@@ -88,8 +92,37 @@ function hasDraftConstraintIssues(draft: DraftResult): boolean {
     draft.constraint_checks &&
       (!draft.constraint_checks.section_order_ok ||
         draft.constraint_checks.requirement_gaps.length > 0 ||
+        (draft.constraint_checks.logic_gaps?.length ?? 0) > 0 ||
         draft.constraint_checks.warnings.length > 0),
   );
+}
+
+function normalizeHeadingKey(text: string): string {
+  return normalizeStructureLabel(text);
+}
+
+function collectLogicGapWarnings(headings: string[], rewritePlan: TemplateRewriteStep[]): string[] {
+  const headingIndex = new Map(
+    headings.map((heading, index) => [normalizeHeadingKey(heading), index] as const),
+  );
+
+  return rewritePlan
+    .flatMap((step) => {
+      const logic = step.logic_after;
+      if (!logic) {
+        return [];
+      }
+      const fromIndex = headingIndex.get(normalizeHeadingKey(logic.from));
+      const toIndex = headingIndex.get(normalizeHeadingKey(logic.to));
+      if (fromIndex === undefined || toIndex === undefined) {
+        return [`未能在当前结构中完整找到逻辑承接：${logic.from} -> ${logic.to}`];
+      }
+      if (toIndex <= fromIndex) {
+        return [`当前结构未体现逻辑承接顺序：${logic.from} 应先于 ${logic.to}`];
+      }
+      return [];
+    })
+    .slice(0, 6);
 }
 
 function applyTemplateRewritePlanToOutline(
@@ -157,6 +190,10 @@ function validateOutlineAgainstRewritePlan(
       missing,
     };
   });
+  const logicGaps = collectLogicGapWarnings(
+    outline.sections.map((section) => section.heading),
+    rewritePlan,
+  );
 
   const warnings = [
     ...(sectionOrderMissing.length
@@ -165,6 +202,7 @@ function validateOutlineAgainstRewritePlan(
     ...requirementGaps
       .filter((item) => item.missing.length)
       .map((item) => `提纲段落「${item.section}」仍缺少：${item.missing.join("；")}`),
+    ...logicGaps,
   ].slice(0, 6);
 
   return {
@@ -174,6 +212,7 @@ function validateOutlineAgainstRewritePlan(
       section_order_ok: sectionOrderMissing.length === 0,
       section_order_missing: sectionOrderMissing,
       requirement_gaps: requirementGaps.filter((item) => item.missing.length),
+      logic_gaps: logicGaps,
       warnings,
     },
   };
@@ -266,6 +305,10 @@ function validateDraftAgainstRewritePlan(
     const unmatched = (step.assigned_facts || []).filter((fact) => !textContainsComparable(body, fact));
     return { section: step.section, matched, unmatched };
   });
+  const logicGaps = collectLogicGapWarnings(
+    sections.map((section) => section.heading),
+    rewritePlan,
+  );
 
   const warnings = [
     ...requirementGaps
@@ -274,6 +317,7 @@ function validateDraftAgainstRewritePlan(
     ...factCoverage
       .filter((item) => item.unmatched.length && item.matched.length === 0)
       .map((item) => `段落「${item.section}」还没有明显使用分配事实：${item.unmatched.slice(0, 2).join("；")}`),
+    ...logicGaps,
   ].slice(0, 6);
 
   return {
@@ -291,6 +335,7 @@ function validateDraftAgainstRewritePlan(
       section_order_missing: sectionOrderMissing,
       requirement_gaps: requirementGaps.filter((item) => item.missing.length),
       fact_coverage: factCoverage,
+      logic_gaps: logicGaps,
       warnings,
     },
   };
@@ -521,6 +566,10 @@ export async function buildOutlineWithLlm(
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
     templateRewritePlan?: TemplateRewriteStep[];
+    templateQualityAssessment?: {
+      mode: "structured" | "derived-sections" | "generic-outline";
+      warnings: string[];
+    };
   },
 ): Promise<OutlineResult> {
   const outline = await client.generateJson({
@@ -533,6 +582,7 @@ export async function buildOutlineWithLlm(
       evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
       templateRewritePlan: input.templateRewritePlan ?? [],
+      templateQualityAssessment: input.templateQualityAssessment,
     }),
     schema: outlineResultSchema,
     schemaHint: OUTLINE_SCHEMA_HINT,
@@ -616,6 +666,10 @@ export async function generateDraftWithLlm(
     evidenceCards?: EvidenceCard[];
     profiles: Profile[];
     templateRewritePlan?: TemplateRewriteStep[];
+    templateQualityAssessment?: {
+      mode: "structured" | "derived-sections" | "generic-outline";
+      warnings: string[];
+    };
   },
 ): Promise<DraftResult> {
   const draft = await client.generateJson({
@@ -629,6 +683,7 @@ export async function generateDraftWithLlm(
       evidenceCards: input.evidenceCards ?? [],
       profiles: input.profiles,
       templateRewritePlan: input.templateRewritePlan ?? [],
+      templateQualityAssessment: input.templateQualityAssessment,
     }),
     schema: draftResultSchema,
     schemaHint: DRAFT_SCHEMA_HINT,

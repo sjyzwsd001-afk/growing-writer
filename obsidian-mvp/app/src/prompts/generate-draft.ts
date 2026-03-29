@@ -10,18 +10,21 @@ import {
   compactTaskAnalysis,
   compactTemplateRewritePlan,
 } from "./context.js";
+import { normalizeStructureLabel } from "../retrieve/summaries.js";
+
+const LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD = 0.28;
 
 function buildSectionWriteBriefs(input: {
   outline: OutlineResult;
   templateRewritePlan: TemplateRewriteStep[];
 }): Array<Record<string, unknown>> {
   const rewriteMap = new Map(
-    input.templateRewritePlan.map((step) => [step.section, step] as const),
+    input.templateRewritePlan.map((step) => [normalizeStructureLabel(step.section), step] as const),
   );
 
   return input.outline.sections.slice(0, 6).map((section, index) => {
     const matchedStep =
-      rewriteMap.get(section.heading) ||
+      rewriteMap.get(normalizeStructureLabel(section.heading)) ||
       input.templateRewritePlan[index] ||
       null;
 
@@ -35,6 +38,10 @@ function buildSectionWriteBriefs(input: {
         typeof matchedStep?.assignment_confidence === "number"
           ? Number(matchedStep.assignment_confidence.toFixed(2))
           : undefined,
+      conservative_approach:
+        typeof matchedStep?.assignment_confidence === "number"
+          ? matchedStep.assignment_confidence < LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD
+          : false,
       fill_strategy: matchedStep?.fill_strategy ?? "",
       logic_after: matchedStep?.logic_after
         ? {
@@ -57,6 +64,10 @@ export function buildGenerateDraftPrompt(input: {
   evidenceCards: EvidenceCard[];
   profiles: Profile[];
   templateRewritePlan?: TemplateRewriteStep[];
+  templateQualityAssessment?: {
+    mode: "structured" | "derived-sections" | "generic-outline";
+    warnings: string[];
+  };
 }): string {
   return `请基于提纲、任务事实、规则和风格摘要，生成正式材料初稿。
 
@@ -83,6 +94,10 @@ export function buildGenerateDraftPrompt(input: {
 20. 如果模板逻辑链与历史材料逻辑链冲突，优先服从模板逻辑链；历史材料逻辑链只作为局部承接或补充理由
 21. 如果没有可执行的模板逻辑链或历史逻辑链，默认按“背景/现状 -> 主体事项 -> 结论/安排”的顺序组织正文
 22. 如果某段 assignment_confidence 明显偏低，不要硬编事实；请用保守表述，并在 self_review.missing_points 中指出该段事实支撑不足
+23. 如果 section_write_briefs 里的 conservative_approach=true，请显式使用保守表达，如“从现有材料看”“当前材料主要显示”，不要把推测写成确定事实。
+24. 如果 template_quality_assessment.mode = "derived-sections"，说明模板只有派生章节；请沿用章节骨架，但不要假定模板中存在更细的隐藏槽位。
+25. 如果 template_quality_assessment.mode = "generic-outline"，说明模板结构很弱；请优先保住 requirements 和 facts 的覆盖，不要伪造复杂结构映射。
+26. 如果 template_quality_assessment.warnings 非空，请把这些警告视为本次写作的高风险点，在 self_review 里优先检查相关段落。
 
 然后做一轮自检：
 - 哪些地方写得比较稳
@@ -124,6 +139,16 @@ ${JSON.stringify(
       outline: input.outline,
       templateRewritePlan: input.templateRewritePlan ?? [],
     }),
+    null,
+    2,
+  )}
+
+template_quality_assessment:
+${JSON.stringify(
+    {
+      mode: input.templateQualityAssessment?.mode ?? "structured",
+      warnings: (input.templateQualityAssessment?.warnings ?? []).slice(0, 6),
+    },
     null,
     2,
   )}`;

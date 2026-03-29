@@ -3360,6 +3360,8 @@ function renderTaskContextSummary() {
       missing,
       confidence:
         typeof step.assignment_confidence === "number" ? step.assignment_confidence : null,
+      conservative:
+        typeof step.assignment_confidence === "number" ? step.assignment_confidence < 0.28 : false,
     };
   });
 
@@ -3454,6 +3456,11 @@ function renderTaskContextSummary() {
                     <div class="mini">应覆盖：${escapeHtml(item.requirements.join(" / ") || "待模型继续判断")}</div>
                     <div class="mini">优先事实：${escapeHtml(item.facts.join(" / ") || "待从背景中补充")}</div>
                     <div class="mini">事实匹配置信度：${escapeHtml(typeof item.confidence === "number" ? item.confidence.toFixed(2) : "-")}</div>
+                    ${
+                      item.conservative
+                        ? `<div class="mini text-warning">当前建议保守写法：事实支撑偏弱，先避免写得过满。</div>`
+                        : ""
+                    }
                     <div class="mini ${item.missing.length ? "text-danger" : ""}">${
                       item.missing.length
                         ? `当前缺口：${escapeHtml(item.missing.join(" / "))}`
