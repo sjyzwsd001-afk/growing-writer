@@ -180,6 +180,84 @@ h3 {
   margin-top: 12px;
 }
 
+.workbench-grid {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.workbench-content {
+  display: grid;
+  gap: 14px;
+}
+
+.workbench-rail {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.workbench-rail-card {
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: rgba(10, 24, 43, 0.84);
+  box-shadow: var(--shadow-soft);
+  padding: 12px 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.workbench-rail-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.workbench-rail-button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(13, 31, 54, 0.72);
+  color: var(--muted);
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.workbench-rail-button.active {
+  color: #fff;
+  border-color: rgba(29, 200, 255, 0.32);
+  background: linear-gradient(135deg, rgba(29, 200, 255, 0.18) 0%, rgba(33, 109, 255, 0.22) 100%);
+  box-shadow: inset 0 0 0 1px rgba(29, 200, 255, 0.16);
+}
+
+.workbench-statusbar {
+  margin-top: 14px;
+  min-height: 36px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: rgba(10, 25, 43, 0.76);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.statusbar-item {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusbar-item-accent {
+  color: var(--accent-contrast);
+}
+
 .view {
   display: none;
 }
@@ -608,6 +686,43 @@ legend {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.text-warning {
+  color: #f3bb57;
+}
+
+.text-danger {
+  color: #ff9ca7;
+}
+
+@media (max-width: 960px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workbench-rail {
+    position: static;
+    order: -1;
+  }
+
+  .workbench-rail-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workbench-statusbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .workbench-rail-nav,
+  .workbench-statusbar,
+  .grid.two,
+  .check-grid,
+  .editor-overview-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .editor-overview-card {

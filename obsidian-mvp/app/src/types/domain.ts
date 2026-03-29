@@ -25,6 +25,10 @@ export type Rule = MarkdownDocument & {
   audiences: string[];
   sourceMaterials: string[];
   confidence: number;
+  usageCount: number;
+  positiveFeedbackCount: number;
+  negativeFeedbackCount: number;
+  lastFeedbackAt: string;
 };
 
 export type Task = MarkdownDocument & {

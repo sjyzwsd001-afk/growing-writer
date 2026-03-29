@@ -111,6 +111,8 @@ export function buildGenerateDraftPrompt(input: {
 28. 如果某段提供了 history_section_hints.excerpt，这代表历史材料里对应段落的真实写法；请把它当内容参考，而不只是标题参考。
 29. 如果某段提供了 template_writing_pattern 或 history_section_hints.writing_pattern，请优先沿用这些写法模式，例如“先交代依据再展开事实”“句式偏短直接落结论”等，而不是只模仿词面。
 30. 如果某段出现 content_hint_warning，说明该段缺少稳定的正文参考；请更保守地依赖 assigned_facts、assigned_requirements 和 outline purpose，不要擅自补充模板里未出现的展开方式。
+31. 如果写作画像里存在高优先级偏好，请把它们视为正文风格硬约束；例如偏好的开头方式、句式密度、收束习惯应优先执行。
+32. 如果写作画像里存在常见禁忌，请显式规避这些表达和写法；不要因为模板或历史材料里出现过类似写法就照搬。
 
 然后做一轮自检：
 - 哪些地方写得比较稳

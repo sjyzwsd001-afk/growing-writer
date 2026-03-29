@@ -11,6 +11,7 @@ import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { matchMaterials, matchRulesWithPolicy } from "../retrieve/matchers.js";
 import { buildEvidenceCards, buildTemplateRewriteHint, normalizeStructureLabel } from "../retrieve/summaries.js";
 import { VaultRepository } from "../vault/repository.js";
+import { writeMarkdownDocument } from "../vault/markdown.js";
 import {
   buildOutline,
   buildOutlineWithLlm,
@@ -34,6 +35,7 @@ import { createTask } from "../writers/task-create-writer.js";
 import { writeTaskSections } from "../writers/task-writer.js";
 import { appendObservabilityEvent } from "./observability.js";
 import { isTemplateMaterial } from "./materials.js";
+import type { Material, Rule, Task } from "../types/domain.js";
 
 export type TaskCreateRequest = {
   title: string;
@@ -56,6 +58,67 @@ export type TaskCreateRequest = {
 };
 
 export type WorkflowAdvanceAction = "regenerate" | "finalize";
+
+function createBuiltinDefaultTemplate(task: Task, analysis: ReturnType<typeof parseTask>): Material {
+  const normalizedType = `${task.docType} ${task.scenario} ${analysis.task_type}`.toLowerCase();
+  const sections = /风险|问题|预警/.test(normalizedType)
+    ? [
+        ["一、背景概况", "先交代当前背景、阶段和本次写作目的。"],
+        ["二、主要风险", "按重要程度列出核心风险，并说明影响范围。"],
+        ["三、原因分析", "解释导致当前风险或问题的关键因素。"],
+        ["四、应对措施", "给出已采取措施和拟采取安排。"],
+        ["五、下一步安排", "收束到明确动作、责任和时间点。"],
+      ]
+    : /方案|建议|请示|立项/.test(normalizedType)
+      ? [
+          ["一、背景与目标", "说明背景、约束条件和本次目标。"],
+          ["二、现状与需求", "概述现状、缺口和核心需求。"],
+          ["三、方案设计", "分点说明方案内容和关键做法。"],
+          ["四、风险与边界", "说明主要风险、前提和边界条件。"],
+          ["五、建议与下一步", "给出建议结论和后续安排。"],
+        ]
+      : [
+          ["一、背景与目标", "先交代背景、目的和当前任务语境。"],
+          ["二、核心事项", "展开需要重点说明的事实、成效或问题。"],
+          ["三、分析与判断", "对关键事实做归纳判断，说明影响。"],
+          ["四、建议与下一步", "收束到建议、措施和后续安排。"],
+        ];
+  const content = sections.map(([heading, body]) => `${heading}\n${body}`).join("\n\n");
+  return {
+    path: `${task.path}#builtin-default-template`,
+    frontmatter: {
+      id: "template-builtin-default",
+      title: `默认模板：${task.docType || analysis.task_type || "正式材料"}`,
+      source: "template",
+      tags: ["template", "builtin-default"],
+      doc_type: task.docType || analysis.task_type || "正式材料",
+      audience: task.audience || analysis.audience || "",
+      scenario: task.scenario || analysis.scenario || "",
+      quality: "high",
+    },
+    content,
+    id: "template-builtin-default",
+    title: `默认模板：${task.docType || analysis.task_type || "正式材料"}`,
+    docType: task.docType || analysis.task_type || "正式材料",
+    audience: task.audience || analysis.audience || "",
+    scenario: task.scenario || analysis.scenario || "",
+    quality: "high",
+    tags: ["template", "builtin-default"],
+  };
+}
+
+async function incrementRuleUsage(ruleRecords: Rule[]): Promise<void> {
+  await Promise.all(
+    ruleRecords.map(async (rule) => {
+      const nextFrontmatter = {
+        ...rule.frontmatter,
+        usage_count: Number(rule.frontmatter.usage_count ?? rule.usageCount ?? 0) + 1,
+        updated_at: new Date().toISOString(),
+      };
+      await writeMarkdownDocument(rule.path, nextFrontmatter, rule.content);
+    }),
+  );
+}
 
 export function normalizeTemplateMode(value: unknown): "strict" | "hybrid" | "light" {
   if (value === "strict" || value === "hybrid" || value === "light") {
@@ -355,7 +418,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
           }, {})
       : {};
 
-  const selectedTemplate =
+  const explicitOrMatchedTemplate =
     (templateId && materials.find((item) => item.id === templateId)) ||
     baseMatchedMaterials.find((item) =>
       isTemplateMaterial({
@@ -365,6 +428,15 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
       }),
     ) ||
     null;
+  const selectedTemplate =
+    explicitOrMatchedTemplate ||
+    (!baseMatchedMaterials.some((item) => isTemplateMaterial({
+      tags: item.tags,
+      source: typeof item.frontmatter.source === "string" ? item.frontmatter.source : "",
+      docType: item.docType,
+    }))
+      ? createBuiltinDefaultTemplate(task, analysis)
+      : null);
 
   const templateRules = selectedTemplate
     ? [
@@ -390,6 +462,9 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   const matchedRules = [...templateRules, ...baseMatchedRules]
     .sort((a, b) => (b.effective_score || 0) - (a.effective_score || 0))
     .slice(0, 10);
+  const matchedRuleRecords = rules.filter((rule) =>
+    matchedRules.some((item) => item.rule_id === rule.id),
+  );
   const matchedMaterials = selectedTemplate
     ? [selectedTemplate, ...baseMatchedMaterials.filter((item) => item.id !== selectedTemplate.id)]
     : baseMatchedMaterials;
@@ -408,7 +483,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
   const ruleDecisionLog = [
     ...ruleMatch.decisionLog,
     selectedTemplate
-      ? `模板继承：启用 ${selectedTemplate.title}（mode=${templateMode}，overrides=${Object.keys(templateOverrides).length}）`
+      ? `模板继承：启用 ${selectedTemplate.title}（mode=${templateMode}，overrides=${Object.keys(templateOverrides).length}${selectedTemplate.tags.includes("builtin-default") ? "，builtin-default" : ""}）`
       : "模板继承：未指定模板，使用常规规则匹配。",
     templateRewriteHint
       ? `模板改写计划：${templateRewriteHint.rewrite_plan.length} 条`
@@ -420,6 +495,7 @@ async function buildTaskSnapshot(vaultRoot: string, taskPath: string) {
     profiles,
     analysis,
     matchedRules,
+    matchedRuleRecords,
     matchedMaterials,
     templateRewriteHint,
     evidenceCards,
@@ -432,7 +508,7 @@ export async function runTaskAction(input: {
   taskPath: string;
   action: "diagnose" | "outline" | "draft";
 }) {
-  const { task, profiles, analysis, matchedRules, matchedMaterials, templateRewriteHint, evidenceCards, ruleDecisionLog } =
+  const { task, profiles, analysis, matchedRules, matchedRuleRecords, matchedMaterials, templateRewriteHint, evidenceCards, ruleDecisionLog } =
     await buildTaskSnapshot(input.vaultRoot, input.taskPath);
 
   const diagnosisInput = {
@@ -668,6 +744,9 @@ export async function runTaskAction(input: {
     decisionLog: withRoutingDecisionLog,
     templateRewriteHint: refinedTemplateRewriteHint,
   });
+  if (input.action === "draft" && matchedRuleRecords.length) {
+    await incrementRuleUsage(matchedRuleRecords).catch(() => undefined);
+  }
 
   return {
     analysis,

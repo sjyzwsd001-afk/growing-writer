@@ -72,6 +72,8 @@ export async function confirmRule(rule: Rule, reason?: string): Promise<Rule> {
     status: "confirmed",
     updated_at: now,
     confirmed_at: now,
+    positive_feedback_count: Number(rule.frontmatter.positive_feedback_count ?? rule.positiveFeedbackCount ?? 0) + 1,
+    last_feedback_at: now,
     status_reason: reason ?? rule.frontmatter.status_reason,
   };
 
@@ -87,6 +89,10 @@ export async function confirmRule(rule: Rule, reason?: string): Promise<Rule> {
     frontmatter: nextFrontmatter,
     content: nextContent,
     status: "confirmed",
+    usageCount: rule.usageCount,
+    positiveFeedbackCount: Number(nextFrontmatter.positive_feedback_count ?? 0),
+    negativeFeedbackCount: rule.negativeFeedbackCount,
+    lastFeedbackAt: String(nextFrontmatter.last_feedback_at || ""),
   };
 }
 
@@ -101,6 +107,8 @@ async function updateRuleStatus(
     ...rule.frontmatter,
     status,
     updated_at: now,
+    negative_feedback_count: Number(rule.frontmatter.negative_feedback_count ?? rule.negativeFeedbackCount ?? 0) + 1,
+    last_feedback_at: now,
     status_reason: reason ?? rule.frontmatter.status_reason,
   };
 
@@ -116,6 +124,10 @@ async function updateRuleStatus(
     frontmatter: nextFrontmatter,
     content: nextContent,
     status,
+    usageCount: rule.usageCount,
+    positiveFeedbackCount: rule.positiveFeedbackCount,
+    negativeFeedbackCount: Number(nextFrontmatter.negative_feedback_count ?? 0),
+    lastFeedbackAt: String(nextFrontmatter.last_feedback_at || ""),
   };
 }
 

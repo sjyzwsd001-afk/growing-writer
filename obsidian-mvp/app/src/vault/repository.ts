@@ -51,6 +51,10 @@ export class VaultRepository {
       audiences: normalizeStringArray(doc.frontmatter.audiences),
       sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
       confidence: normalizeNumber(doc.frontmatter.confidence, 0),
+      usageCount: normalizeNumber(doc.frontmatter.usage_count, 0),
+      positiveFeedbackCount: normalizeNumber(doc.frontmatter.positive_feedback_count, 0),
+      negativeFeedbackCount: normalizeNumber(doc.frontmatter.negative_feedback_count, 0),
+      lastFeedbackAt: normalizeString(doc.frontmatter.last_feedback_at),
     }));
   }
 
@@ -200,6 +204,10 @@ export class VaultRepository {
       audiences: normalizeStringArray(doc.frontmatter.audiences),
       sourceMaterials: normalizeStringArray(doc.frontmatter.source_materials),
       confidence: normalizeNumber(doc.frontmatter.confidence, 0),
+      usageCount: normalizeNumber(doc.frontmatter.usage_count, 0),
+      positiveFeedbackCount: normalizeNumber(doc.frontmatter.positive_feedback_count, 0),
+      negativeFeedbackCount: normalizeNumber(doc.frontmatter.negative_feedback_count, 0),
+      lastFeedbackAt: normalizeString(doc.frontmatter.last_feedback_at),
     };
   }
 

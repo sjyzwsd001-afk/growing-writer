@@ -30,6 +30,10 @@ export async function writeCandidateRule(input: {
     audiences: input.analysis.candidate_rule.audiences,
     source_materials: [],
     confidence: input.analysis.candidate_rule.confidence,
+    usage_count: 0,
+    positive_feedback_count: 0,
+    negative_feedback_count: 0,
+    last_feedback_at: input.feedback.createdAt || new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

@@ -179,6 +179,10 @@ export async function buildDashboard(input: {
         linkedTaskTitles: linkedTasks.slice(0, 3).map((task) => task.title),
         linkedFeedbackCount: linkedFeedbacks.length,
         linkedFeedbackIds: linkedFeedbacks.slice(0, 3).map((feedback) => feedback.id),
+        usageCount: item.usageCount,
+        positiveFeedbackCount: item.positiveFeedbackCount,
+        negativeFeedbackCount: item.negativeFeedbackCount,
+        lastFeedbackAt: item.lastFeedbackAt,
         conflictHints: ruleConflictHints.get(item.id) || [],
         path: item.path,
       };

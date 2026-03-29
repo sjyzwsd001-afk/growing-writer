@@ -41,6 +41,25 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function computeRuleEvolutionFactor(rule: Rule): { factor: number; reasons: string[] } {
+  const usageCount = Math.max(0, Number(rule.usageCount || 0));
+  const positive = Math.max(0, Number(rule.positiveFeedbackCount || 0));
+  const negative = Math.max(0, Number(rule.negativeFeedbackCount || 0));
+  const feedbackTotal = positive + negative;
+  const usageFactor = 1 + Math.min(0.18, usageCount * 0.015);
+  const sentimentDelta =
+    feedbackTotal > 0 ? clamp((positive - negative) / feedbackTotal, -1, 1) * 0.18 : 0;
+  const factor = clamp(usageFactor + sentimentDelta, 0.72, 1.35);
+  const reasons: string[] = [];
+  if (usageCount > 0) {
+    reasons.push(`累计命中 ${usageCount} 次`);
+  }
+  if (feedbackTotal > 0) {
+    reasons.push(`正负反馈 ${positive}/${negative}`);
+  }
+  return { factor, reasons };
+}
+
 function isTemplateMaterial(material: Material): boolean {
   const source = typeof material.frontmatter.source === "string" ? material.frontmatter.source : "";
   return (
@@ -384,6 +403,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
       const recency = recencyFactor(
         typeof rule.frontmatter.updated_at === "string" ? rule.frontmatter.updated_at : "",
       );
+      const evolution = computeRuleEvolutionFactor(rule);
       const scopeResult = computeRuleScopeFactor(input.task, rule);
       const hitFactor = feedbackRuleHitFactor(input.task, rule, feedbackEntries);
       const signalFactor = feedbackSignalFactor({
@@ -396,6 +416,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
         sourceWeight *
         confidence *
         recency *
+        evolution.factor *
         scopeResult.factor *
         hitFactor.factor *
         signalFactor.factor;
@@ -403,6 +424,7 @@ export function matchRulesWithPolicy(input: RuleMatchInput): RuleMatchOutput {
         fromTemplate ? "模板高权重" : "",
         rule.status === "confirmed" ? "已确认规则" : "候选规则",
         ...scopeResult.reasons,
+        ...evolution.reasons,
         ...hitFactor.reasons,
         ...signalFactor.reasons,
       ].filter(Boolean);

@@ -697,6 +697,8 @@ function buildPreviewGrid(items) {
       )
       .join("")}
   </div>`;
+  renderWorkbenchRail();
+  renderWorkbenchStatusBar();
 }
 
 function buildDocumentPreview(title, raw, kind) {
@@ -1190,6 +1192,65 @@ function renderWorkflowStageTracker() {
   editorStage.textContent = run
     ? `当前编排阶段：${activeStage.label || activeStage.id} / ${run.currentStage || "-"}`
     : "当前编排阶段：未开始（先完成前4步并生成）";
+  renderWorkbenchRail();
+  renderWorkbenchStatusBar();
+}
+
+function renderWorkbenchRail() {
+  const container = document.getElementById("workbench-rail-nav");
+  if (!container) {
+    return;
+  }
+  const editorVisible = !document.getElementById("editor-panel")?.classList.contains("hidden");
+  container.querySelectorAll(".workbench-rail-button").forEach((button) => {
+    const targetStep = Number(button.dataset.stepJump || 0);
+    const panelTarget = button.dataset.panelJump || "";
+    const active = panelTarget === "editor" ? editorVisible : targetStep === state.wizardStep;
+    button.classList.toggle("active", active);
+  });
+
+  const summary = document.getElementById("workbench-rail-summary");
+  if (!summary) {
+    return;
+  }
+  const latestWarnings = Array.isArray(state.currentGenerationContext?.templateRewriteHint?.warnings)
+    ? state.currentGenerationContext.templateRewriteHint.warnings.slice(0, 2)
+    : [];
+  const latestTask =
+    state.currentTask?.title ||
+    String(document.querySelector('#wizard-form input[name="title"]')?.value || "").trim() ||
+    "未创建任务";
+  const latestStage = document.getElementById("workflow-stage-note")?.textContent || "当前阶段：问背景";
+  summary.innerHTML = `<strong>${escapeHtml(latestTask)}</strong><div class="mini">${escapeHtml(latestStage)}</div><div class="mini">${escapeHtml(latestWarnings.join(" / ") || "当前没有明显结构告警。")}</div>`;
+}
+
+function renderWorkbenchStatusBar() {
+  const taskNode = document.getElementById("workbench-status-task");
+  const stageNode = document.getElementById("workbench-status-stage");
+  const riskNode = document.getElementById("workbench-status-risk");
+  const nextNode = document.getElementById("workbench-status-next");
+  if (!taskNode || !stageNode || !riskNode || !nextNode) {
+    return;
+  }
+  const taskTitle =
+    state.currentTask?.title ||
+    String(document.querySelector('#wizard-form input[name="title"]')?.value || "").trim() ||
+    "未创建";
+  const stageText = document.getElementById("workflow-stage-note")?.textContent || "当前阶段：问背景";
+  const nextText = document.getElementById("workflow-next-action")?.textContent || "下一步：先填写任务标题和文档类型。";
+  const riskCandidates = [
+    ...(Array.isArray(state.currentGenerationContext?.templateRewriteHint?.warnings)
+      ? state.currentGenerationContext.templateRewriteHint.warnings.slice(0, 2)
+      : []),
+    ...(Array.isArray(state.wizardCheckReport?.blockingIssues) ? state.wizardCheckReport.blockingIssues.slice(0, 1) : []),
+    ...(Array.isArray(state.currentGenerationContext?.draft?.constraint_checks?.warnings)
+      ? state.currentGenerationContext.draft.constraint_checks.warnings.slice(0, 1)
+      : []),
+  ].filter(Boolean);
+  taskNode.textContent = `任务：${taskTitle}`;
+  stageNode.textContent = `阶段：${stageText.replace(/^当前阶段：/, "").trim() || "未开始"}`;
+  riskNode.textContent = `风险：${riskCandidates.join(" / ") || "暂无明显告警"}`;
+  nextNode.textContent = nextText;
 }
 
 function getNextActionHint(activeIndex, stages, hasRun) {
@@ -1431,6 +1492,8 @@ function updateWizardStep() {
   updateDocTypeGuidance();
   updateWizardActionButtons();
   renderWorkflowStageTracker();
+  renderWorkbenchRail();
+  renderWorkbenchStatusBar();
 }
 
 function renderCheckOptions(containerId, items, name) {
@@ -2649,6 +2712,8 @@ function renderFeedbackHistory() {
 
 function setEditorVisible(visible) {
   document.getElementById("editor-panel").classList.toggle("hidden", !visible);
+  renderWorkbenchRail();
+  renderWorkbenchStatusBar();
 }
 
 function updateEditorNextGuide(mode = "idle") {
@@ -4382,6 +4447,8 @@ async function loadDashboard() {
   updateWizardSummary();
   renderWorkflowStageTracker();
   renderTaskContextSummary();
+  renderWorkbenchRail();
+  renderWorkbenchStatusBar();
 }
 
 async function importBackgroundMaterialIfNeeded(formData) {
@@ -6254,6 +6321,28 @@ function bindSettingsActions() {
   });
 }
 
+function bindWorkbenchActions() {
+  document.querySelectorAll(".workbench-rail-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetStep = Number(button.dataset.stepJump || 0);
+      const panelTarget = button.dataset.panelJump || "";
+      if (panelTarget === "editor") {
+        setEditorVisible(true);
+        focusEditorWorkbench({ focusDraft: false });
+        return;
+      }
+      if (targetStep >= 1 && targetStep <= MAX_WIZARD_STEP) {
+        state.wizardStep = targetStep;
+        updateWizardStep();
+        document.querySelector(`.wizard-step[data-step="${targetStep}"]`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    });
+  });
+}
+
 window.addEventListener("message", async (event) => {
   if (!trustedOrigins.has(event.origin)) {
     return;
@@ -6273,9 +6362,12 @@ bindBackgroundUploadSummary();
 bindLlmSettings();
 bindWorkflowDefinitionEditor();
 bindSettingsActions();
+bindWorkbenchActions();
 startButtonTooltipObserver();
 updateWizardStep();
 setEditorVisible(false);
+renderWorkbenchRail();
+renderWorkbenchStatusBar();
 
 loadDashboard().catch((error) => {
   setInfo(`初始化失败：${error.message}`, true);

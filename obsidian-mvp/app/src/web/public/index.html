@@ -32,6 +32,28 @@
 
       <main class="main">
         <section id="view-create" class="view active">
+          <div class="workbench-grid">
+            <aside class="workbench-rail">
+              <div class="workbench-rail-card">
+                <div class="subtitle">Workbench</div>
+                <h3>写作导航</h3>
+                <div id="workbench-rail-nav" class="workbench-rail-nav">
+                  <button type="button" class="workbench-rail-button active" data-step-jump="1">任务背景</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="2">历史材料</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="3">模板选择</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="4">背景事实</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="5">检查</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="6">确认生成</button>
+                  <button type="button" class="workbench-rail-button" data-step-jump="7">进入改稿</button>
+                  <button type="button" class="workbench-rail-button" data-panel-jump="editor">修改工作台</button>
+                </div>
+              </div>
+              <div class="workbench-rail-card">
+                <h3>当前摘要</h3>
+                <div id="workbench-rail-summary" class="summary-box">这里会快速显示当前任务、阶段和最近提醒。</div>
+              </div>
+            </aside>
+            <div class="workbench-content">
           <section class="panel">
             <div class="panel-header">
               <h2>引导式写作</h2>
@@ -384,6 +406,8 @@
               </div>
             </div>
           </section>
+            </div>
+          </div>
         </section>
 
         <section id="view-settings" class="view">
@@ -744,6 +768,12 @@
           </div>
         </section>
       </main>
+      <footer class="workbench-statusbar">
+        <div id="workbench-status-task" class="statusbar-item">任务：未创建</div>
+        <div id="workbench-status-stage" class="statusbar-item">阶段：问背景</div>
+        <div id="workbench-status-risk" class="statusbar-item">风险：暂无明显告警</div>
+        <div id="workbench-status-next" class="statusbar-item statusbar-item-accent">下一步：先填写任务标题和文档类型。</div>
+      </footer>
     </div>
     <script type="module" src="/assets/app.js"></script>
   </body>
