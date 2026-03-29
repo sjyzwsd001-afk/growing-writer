@@ -168,6 +168,7 @@ export function compactDiagnosis(diagnosis: DiagnosisResult): Record<string, unk
     fact_section_mapping: (diagnosis.fact_section_mapping ?? []).slice(0, 6).map((item) => ({
       fact: clip(item.fact, 120),
       recommended_section: clip(item.recommended_section, 80),
+      recommended_requirements: clipList(item.recommended_requirements ?? [], 4, 80),
       reason: clip(item.reason, 120),
       confidence: Number(item.confidence.toFixed(2)),
     })),

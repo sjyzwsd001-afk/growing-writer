@@ -40,6 +40,7 @@ export const diagnosisResultSchema = z.object({
       z.object({
         fact: z.string(),
         recommended_section: z.string(),
+        recommended_requirements: z.array(z.string()).optional(),
         reason: z.string(),
         confidence: z.number().min(0).max(1),
       }),

@@ -22,6 +22,7 @@ export function buildOutlinePrompt(input: {
     mode: "structured" | "derived-sections" | "generic-outline";
     warnings: string[];
   };
+  factSectionHints?: DiagnosisResult["fact_section_mapping"];
 }): string {
   return `请生成一份可直接用于写作的提纲。
 
@@ -43,6 +44,7 @@ export function buildOutlinePrompt(input: {
 15. 如果 template_quality_assessment.warnings 非空，请把这些警告当作结构风险，避免过度自信地展开不存在的细节。
 16. 如果 rewrite_steps 中提供了 template_section_excerpt 或 template_writing_pattern，请据此提炼每节应该如何展开，而不是只保留标题。
 17. 如果 history_section_hints 里带有 excerpt 或 writing_pattern，请把它们当成内容参考，帮助补齐每节 key_points 和 source_basis。
+18. 如果 fact_section_hints 非空，请优先把其中匹配到当前章节的事实和 recommended_requirements 转成该节 key_points，不要让模型自己重新发明事实归属。
 
 输出要求：
 - 只输出 JSON
@@ -78,5 +80,8 @@ ${JSON.stringify(
     },
     null,
     2,
-  )}`;
+  )}
+
+fact_section_hints:
+${JSON.stringify((input.factSectionHints ?? []).slice(0, 8), null, 2)}`;
 }

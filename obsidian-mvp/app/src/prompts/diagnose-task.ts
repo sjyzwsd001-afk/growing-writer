@@ -40,6 +40,7 @@ export function buildDiagnoseTaskPrompt(input: {
 14. 如果 template_quality_assessment.warnings 非空，请把这些警告视为本次结构诊断的高风险点，在诊断摘要和 recommended_structure 中主动规避相关风险。
 15. 请额外输出 input_quality_assessment，评估模板质量、历史材料参考质量、背景事实充分度，并给出 warnings。
 16. 请额外输出 fact_section_mapping，把重要事实匹配到最适合承载它的章节，并说明原因与置信度；如果没有明显完美匹配，也要给出最接近的章节。
+17. fact_section_mapping 里的 recommended_requirements 请写出“这条事实最适合帮助覆盖哪些 must_include 或段落要求”；如果没有明显要求，可返回空数组。
 
 输出要求：
 - 只输出 JSON

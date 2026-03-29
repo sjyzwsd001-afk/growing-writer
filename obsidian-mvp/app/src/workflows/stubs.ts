@@ -70,10 +70,10 @@ function buildDraftRepairPrompt(input: {
 2. 优先补齐 missing_points 和 rule_violations 里指出的缺口
 3. 每段优先覆盖 assigned_requirements，并尽量落到 assigned_facts
 4. 对“高置信但未明显使用已分配事实”的段落，优先修补事实落点，不要只调整语气或格式
-4. 如果 rewritePlan 中给出了 logic_after，正文段落顺序必须体现 from -> to
-5. assignment_confidence 偏低的段落要用保守表达，不要把猜测写成确定事实
-6. 不要编造事实
-7. 保持 JSON schema 不变
+5. 如果 rewritePlan 中给出了 logic_after，正文段落顺序必须体现 from -> to
+6. assignment_confidence 偏低的段落要用保守表达，不要把猜测写成确定事实
+7. 不要编造事实
+8. 保持 JSON schema 不变
 
 当前正文结果:
 ${JSON.stringify(input.draft, null, 2)}
@@ -411,6 +411,7 @@ const DIAGNOSIS_SCHEMA_HINT = `{
     {
       "fact": "string",
       "recommended_section": "string",
+      "recommended_requirements": ["string"],
       "reason": "string",
       "confidence": 0.0
     }
@@ -554,6 +555,7 @@ export function diagnoseTask(input: {
         (step.assigned_facts ?? []).slice(0, 3).map((fact) => ({
           fact,
           recommended_section: step.section,
+          recommended_requirements: (step.assigned_requirements ?? []).slice(0, 3),
           reason: `本地兜底按段落意图「${step.intent}」做了初步分配。`,
           confidence: typeof step.assignment_confidence === "number" ? step.assignment_confidence : 0.3,
         })),
@@ -659,6 +661,7 @@ export async function buildOutlineWithLlm(
       mode: "structured" | "derived-sections" | "generic-outline";
       warnings: string[];
     };
+    factSectionHints?: DiagnosisResult["fact_section_mapping"];
   },
 ): Promise<OutlineResult> {
   const outline = await client.generateJson({
@@ -672,6 +675,7 @@ export async function buildOutlineWithLlm(
       profiles: input.profiles,
       templateRewritePlan: input.templateRewritePlan ?? [],
       templateQualityAssessment: input.templateQualityAssessment,
+      factSectionHints: input.factSectionHints,
     }),
     schema: outlineResultSchema,
     schemaHint: OUTLINE_SCHEMA_HINT,

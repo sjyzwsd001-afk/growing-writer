@@ -480,6 +480,12 @@ export async function runTaskAction(input: {
           return {
             ...step,
             assigned_facts: [...new Set([...matchedMappings.map((item) => item.fact), ...step.assigned_facts])].slice(0, 5),
+            assigned_requirements: [
+              ...new Set([
+                ...matchedMappings.flatMap((item) => item.recommended_requirements ?? []),
+                ...step.assigned_requirements,
+              ]),
+            ].slice(0, 5),
             assignment_confidence:
               typeof matchedMappings[0]?.confidence === "number"
                 ? Math.max(step.assignment_confidence ?? 0, matchedMappings[0].confidence)
@@ -542,6 +548,7 @@ export async function runTaskAction(input: {
       mode: refinedTemplateRewriteHint?.fallback_mode ?? "structured",
       warnings: refinedTemplateRewriteHint?.warnings ?? [],
     },
+    factSectionHints: diagnosis.fact_section_mapping ?? [],
   };
 
   const outlineResult = await executeWithModelRouting({
