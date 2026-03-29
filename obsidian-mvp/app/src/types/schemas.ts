@@ -53,6 +53,26 @@ export const draftResultSchema = z.object({
     rule_violations: z.array(z.string()),
   }),
   revision_suggestions: z.array(z.string()),
+  constraint_checks: z
+    .object({
+      section_order_ok: z.boolean(),
+      section_order_missing: z.array(z.string()),
+      requirement_gaps: z.array(
+        z.object({
+          section: z.string(),
+          missing: z.array(z.string()),
+        }),
+      ),
+      fact_coverage: z.array(
+        z.object({
+          section: z.string(),
+          matched: z.array(z.string()),
+          unmatched: z.array(z.string()),
+        }),
+      ),
+      warnings: z.array(z.string()),
+    })
+    .optional(),
 });
 
 export const feedbackAnalysisSchema = z.object({

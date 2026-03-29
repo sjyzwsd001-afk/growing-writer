@@ -233,6 +233,29 @@ function inferSectionIntent(section: string): string {
   return "作为固定结构段落，需结合本次背景替换旧事实和旧结论";
 }
 
+function inferSectionIntentLabel(section: string): string {
+  const text = `${section}`;
+  if (/概况|背景|总体|情况|现状|目标|缘由|依据|范围|说明|综述/.test(text)) {
+    return "background";
+  }
+  if (/组织|分工|成员|职责|责任|机制|协同|专班|小组/.test(text)) {
+    return "organization";
+  }
+  if (/方案|建议|措施|安排|计划|路径|抓手|动作|落实/.test(text)) {
+    return "action";
+  }
+  if (/风险|问题|挑战|难点|短板|隐患|影响/.test(text)) {
+    return "risk";
+  }
+  if (/结果|成效|成果|产出|数据|指标|进展/.test(text)) {
+    return "result";
+  }
+  if (/结论|收尾|总结|建议事项|下一步/.test(text)) {
+    return "conclusion";
+  }
+  return "generic";
+}
+
 export function summarizeMaterial(material: Material): MaterialSummary {
   const materialRole = detectMaterialRole(material);
   const frontmatterLogicChain = parseFrontmatterLogicChain(material.frontmatter.logic_chain);
@@ -467,6 +490,76 @@ function scoreFactForStep(input: {
   return score;
 }
 
+function tokenizeForMatching(text: string): string[] {
+  const normalized = String(text || "").toLowerCase();
+  const chineseGroups = normalized.match(/[\u4e00-\u9fff]{2,}/g) || [];
+  const latinGroups = normalized.match(/[a-z0-9]{3,}/g) || [];
+  return [...chineseGroups, ...latinGroups];
+}
+
+function scoreSemanticKeywordOverlap(input: {
+  fact: string;
+  section: string;
+  intent: string;
+  mustInclude: string[];
+}): number {
+  const factTokens = tokenizeForMatching(input.fact);
+  const stepTokens = tokenizeForMatching(
+    `${input.section} ${input.intent} ${input.mustInclude.join(" ")}`,
+  );
+  if (!factTokens.length || !stepTokens.length) {
+    return 0;
+  }
+  const overlap = factTokens.filter((token) =>
+    stepTokens.some((stepToken) => stepToken.includes(token) || token.includes(stepToken)),
+  );
+  return Math.min(2.2, overlap.length * 0.55);
+}
+
+function scoreIntentBucket(section: string, intent: string, fact: string): number {
+  const bucket = inferSectionIntentLabel(`${section} ${intent}`);
+  if (bucket === "generic") {
+    return 0;
+  }
+  const mapping: Record<string, RegExp> = {
+    background: /背景|现状|总体|目标|缘由|依据|范围|需求|来源|阶段|项目|任务/,
+    organization: /组织|分工|职责|责任|机制|成员|协同|专班|小组|部门|牵头/,
+    action: /措施|建议|安排|计划|下一步|路径|方案|动作|推进|落实|优化|整改/,
+    risk: /风险|问题|挑战|影响|难点|短板|隐患|延迟|不足|波动/,
+    result: /结果|成效|成果|产出|数据|指标|进展|金额|预算|资金|数量|比例/,
+    conclusion: /结论|总结|建议|安排|下一步|决定|判断/,
+  };
+  return mapping[bucket]?.test(fact.toLowerCase()) ? 1.8 : 0;
+}
+
+function scoreFactForStepV2(input: {
+  fact: string;
+  section: string;
+  intent: string;
+  mustInclude: string[];
+  evidenceCards: EvidenceCard[];
+}): number {
+  const fact = input.fact.trim();
+  let score = scoreFactForStep(input);
+  score += scoreSemanticKeywordOverlap(input);
+  score += scoreIntentBucket(input.section, input.intent, fact);
+
+  const factLower = fact.toLowerCase();
+  const evidenceHit = input.evidenceCards.some((card) =>
+    factLower.includes(card.excerpt.toLowerCase().slice(0, 18)) ||
+    card.excerpt.toLowerCase().includes(factLower.slice(0, 18)),
+  );
+  if (evidenceHit) {
+    score += 0.8;
+  }
+
+  if (/^\d+[%万千百]?|预算|金额|数量|指标|进度|节点|合同|供应商|交付/.test(fact)) {
+    score += 0.35;
+  }
+
+  return score;
+}
+
 function scoreRequirementForStep(input: {
   requirement: string;
   section: string;
@@ -545,30 +638,39 @@ function pickFactsForStep(input: {
   rawFacts: string[];
   mustInclude: string[];
   evidenceCards: EvidenceCard[];
-}): string[] {
+}): { facts: string[]; confidence: number } {
   const candidateFacts = [
     ...normalizePieces(input.rawFacts),
     ...normalizePieces(input.mustInclude),
     ...input.evidenceCards
-      .slice(0, 3)
+      .slice(0, 5)
       .map((card) => card.excerpt)
       .filter(isFactLikeText),
   ];
 
-  return candidateFacts
+  const scored = candidateFacts
     .map((fact) => ({
       fact,
-      score: scoreFactForStep({
+      score: scoreFactForStepV2({
         fact,
         section: input.section,
         intent: input.intent,
         mustInclude: input.mustInclude,
+        evidenceCards: input.evidenceCards,
       }),
     }))
     .sort((a, b) => b.score - a.score)
-    .filter((item, index, list) => item.score > 0 && list.findIndex((entry) => entry.fact === item.fact) === index)
-    .slice(0, 3)
-    .map((item) => item.fact);
+    .filter((item, index, list) => item.score > 0 && list.findIndex((entry) => entry.fact === item.fact) === index);
+
+  const top = scored.slice(0, 3);
+  const confidence = top.length
+    ? Math.max(0, Math.min(1, top.reduce((sum, item) => sum + item.score, 0) / (top.length * 3.2)))
+    : 0;
+
+  return {
+    facts: top.map((item) => item.fact),
+    confidence,
+  };
 }
 
 export function buildEvidenceCards(input: {
@@ -652,7 +754,30 @@ export function buildTemplateRewriteHint(input: {
       })),
     )
     .slice(0, 12);
-  const rewriteSteps: TemplateRewriteStep[] = summary.template_slots.slice(0, 6).map((slot, index) => {
+  const effectiveSlots =
+    summary.template_slots.length
+      ? summary.template_slots.slice(0, 6)
+      : collectStructureSections(summary).slice(0, 6).map(
+          (section, index) =>
+            ({
+              section,
+              slot_name: section || `派生段落${index + 1}`,
+              fill_rule: "保留段落职责，按本次任务背景与事实重写本段。",
+              source_hint: "优先引用本次背景材料、任务事实与对应证据卡。",
+            }) satisfies TemplateSlotSummary,
+        );
+  const warnings: string[] = [];
+  let fallbackMode: TemplateRewriteHint["fallback_mode"] = "structured";
+  if (!summary.template_slots.length) {
+    fallbackMode = effectiveSlots.length ? "derived-sections" : "generic-outline";
+    warnings.push(
+      effectiveSlots.length
+        ? "当前模板缺少已分析槽位，系统已改为按派生章节进行段落级改写。"
+        : "当前模板未识别出稳定章节结构，系统只能按通用骨架生成，结构约束会明显变弱。",
+    );
+  }
+
+  const rewriteSteps: TemplateRewriteStep[] = effectiveSlots.map((slot, index) => {
     const section = slot.section?.trim() || `段落${index + 1}`;
     const intent =
       summary.section_intents.find((item) => item.section === section)?.intent ||
@@ -678,7 +803,7 @@ export function buildTemplateRewriteHint(input: {
     const logicAfter =
       (index > 0 ? logicChain[index - 1] || logicChain[0] || null : null) ||
       matchedHistoryLogic;
-    const assignedFacts = pickFactsForStep({
+    const factSelection = pickFactsForStep({
       section,
       intent,
       rawFacts: input.taskAnalysis.raw_facts,
@@ -690,12 +815,17 @@ export function buildTemplateRewriteHint(input: {
       intent,
       mustInclude: mustIncludeItems,
     });
+    const assignedFacts = factSelection.facts;
+    if (factSelection.confidence < 0.28) {
+      warnings.push(`段落「${section}」当前事实匹配置信度偏低，建议补充更直接的背景事实或模板说明。`);
+    }
     return {
       section,
       slot_name: slot.slot_name || `${section}对应内容`,
       intent,
       assigned_facts: assignedFacts,
       assigned_requirements: assignedRequirements,
+      assignment_confidence: factSelection.confidence,
       history_section_hints: matchedHistorySections.map((item) => ({
         material_title: item.title,
         section: item.section,
@@ -726,20 +856,37 @@ export function buildTemplateRewriteHint(input: {
   });
 
   if (!plan.length) {
-    rewriteSteps.push({
-      section: "整体结构",
-      slot_name: "沿用模板整体结构",
-      intent: "保持模板的整体段落顺序和表达功能",
-      assigned_facts: normalizePieces(input.taskAnalysis.raw_facts).slice(0, 3),
-      assigned_requirements: mustIncludeItems,
-      fill_strategy: `将旧背景、旧事实和旧结论替换为本次任务事实：${facts || "待从背景材料中抽取"}`,
-      source_hint: evidence || "优先使用本次背景材料与任务事实",
-      evidence_card_ids: evidenceIds,
-      logic_after: logicChain[0] || null,
+    const genericSections = ["背景与现状", "主体事项", "结论与安排"];
+    genericSections.forEach((section, index) => {
+      const intent = inferSectionIntent(section);
+      const factSelection = pickFactsForStep({
+        section,
+        intent,
+        rawFacts: input.taskAnalysis.raw_facts,
+        mustInclude: mustIncludeItems,
+        evidenceCards,
+      });
+      const requirements = pickRequirementsForStep({
+        section,
+        intent,
+        mustInclude: mustIncludeItems,
+      });
+      rewriteSteps.push({
+        section,
+        slot_name: `${section}（通用兜底）`,
+        intent,
+        assigned_facts: factSelection.facts,
+        assigned_requirements: requirements,
+        assignment_confidence: factSelection.confidence,
+        fill_strategy: `按通用写作顺序重建本段，并优先填入「${factSelection.facts.join("；") || facts || "待补充事实"}」`,
+        source_hint: evidence || "优先使用本次背景材料与任务事实",
+        evidence_card_ids: evidenceIds,
+        logic_after: index > 0 ? { from: genericSections[index - 1], to: section, reason: "按默认背景-主体-结论顺序组织" } : null,
+      });
     });
-    plan.push(
-      `优先沿用模板《${input.selectedTemplate.title}》的整体结构，但将其中旧背景、旧事实和旧结论替换为本次任务事实：${facts || "待从背景材料中抽取"}`,
-    );
+    fallbackMode = "generic-outline";
+    warnings.push("当前模板完全缺少稳定槽位与章节结构，系统已切到三段式通用骨架生成。");
+    plan.push(`当前模板结构缺失，已切换为“背景与现状 -> 主体事项 -> 结论与安排”的通用骨架写作。`);
   }
 
   summary.logic_chain.slice(0, 3).forEach((item) => {
@@ -754,6 +901,8 @@ export function buildTemplateRewriteHint(input: {
 
   return {
     template_title: input.selectedTemplate.title,
+    fallback_mode: fallbackMode,
+    warnings: [...new Set(warnings)].slice(0, 6),
     rewrite_steps: rewriteSteps.slice(0, 8),
     rewrite_plan: plan.slice(0, 8),
   };

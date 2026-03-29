@@ -116,6 +116,79 @@ function alignDraftToOutline(draft: DraftResult, outline: OutlineResult): DraftR
   };
 }
 
+function normalizeComparableText(text: string): string {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/[，。；：、“”‘’"'`()（）【】\[\]\-—_]/g, "");
+}
+
+function textContainsComparable(text: string, fragment: string): boolean {
+  const normalizedText = normalizeComparableText(text);
+  const normalizedFragment = normalizeComparableText(fragment);
+  if (!normalizedText || !normalizedFragment) {
+    return false;
+  }
+  return normalizedText.includes(normalizedFragment) || normalizedFragment.includes(normalizedText);
+}
+
+function validateDraftAgainstRewritePlan(
+  draft: DraftResult,
+  outline: OutlineResult,
+  rewritePlan: TemplateRewriteStep[],
+): DraftResult {
+  if (!rewritePlan.length) {
+    return draft;
+  }
+
+  const sections = splitMarkdownSections(draft.draft_markdown);
+  const sectionMap = new Map(sections.map((item) => [item.heading || "", item.body || ""] as const));
+  const sectionOrderMissing = rewritePlan
+    .filter((step) => !outline.sections.some((section) => section.heading === step.section))
+    .map((step) => step.section);
+
+  const requirementGaps = rewritePlan.map((step) => {
+    const body = sectionMap.get(step.section) || "";
+    const missing = (step.assigned_requirements || []).filter((requirement) => !textContainsComparable(body, requirement));
+    return { section: step.section, missing };
+  });
+
+  const factCoverage = rewritePlan.map((step) => {
+    const body = sectionMap.get(step.section) || "";
+    const matched = (step.assigned_facts || []).filter((fact) => textContainsComparable(body, fact));
+    const unmatched = (step.assigned_facts || []).filter((fact) => !textContainsComparable(body, fact));
+    return { section: step.section, matched, unmatched };
+  });
+
+  const warnings = [
+    ...requirementGaps
+      .filter((item) => item.missing.length)
+      .map((item) => `段落「${item.section}」仍缺少：${item.missing.join("；")}`),
+    ...factCoverage
+      .filter((item) => item.unmatched.length && item.matched.length === 0)
+      .map((item) => `段落「${item.section}」还没有明显使用分配事实：${item.unmatched.slice(0, 2).join("；")}`),
+  ].slice(0, 6);
+
+  return {
+    ...draft,
+    self_review: {
+      ...draft.self_review,
+      missing_points: [...new Set([...(draft.self_review.missing_points || []), ...warnings])].slice(0, 6),
+      rule_violations: [...new Set([
+        ...(draft.self_review.rule_violations || []),
+        ...(sectionOrderMissing.length ? [`提纲/正文未完整覆盖这些模板段落：${sectionOrderMissing.join("、")}`] : []),
+      ])].slice(0, 6),
+    },
+    constraint_checks: {
+      section_order_ok: sectionOrderMissing.length === 0,
+      section_order_missing: sectionOrderMissing,
+      requirement_gaps: requirementGaps.filter((item) => item.missing.length),
+      fact_coverage: factCoverage,
+      warnings,
+    },
+  };
+}
+
 const TASK_ANALYSIS_SCHEMA_HINT = `{
   "task_type": "string",
   "audience": "string",
@@ -224,8 +297,11 @@ export function diagnoseTask(input: {
   evidenceCards?: EvidenceCard[];
   profiles: Profile[];
 }): DiagnosisResult {
+  const weakTaskAnalysis =
+    input.analysis.confidence < 0.2 ||
+    (!input.analysis.raw_facts.length && !input.analysis.must_include.length);
   return {
-    readiness: "partial",
+    readiness: weakTaskAnalysis ? "blocked" : "partial",
     diagnosis_summary: `任务《${input.task.title}》已完成基础匹配，待接入 LLM 生成正式诊断。`,
     recommended_structure: [
       {
@@ -239,11 +315,15 @@ export function diagnoseTask(input: {
         must_cover: ["核心事实", "重点分析"],
       },
     ],
-    missing_info: input.analysis.missing_info,
+    missing_info: weakTaskAnalysis
+      ? [...input.analysis.missing_info, "任务解析结果过弱，后续阶段会缺少足够事实支撑。"]
+      : input.analysis.missing_info,
     applied_rules: input.matchedRules.map((rule) => rule.title),
     reference_materials: input.matchedMaterials.map((material) => material.title),
-    writing_risks: ["待接入诊断 prompt，当前结果仅为骨架"],
-    next_action: "补充 LLM 实现后生成正式写前诊断",
+    writing_risks: weakTaskAnalysis
+      ? ["任务解析结果过弱：raw_facts / must_include 基本为空，建议先补背景材料或重试任务解析。"]
+      : ["待接入诊断 prompt，当前结果仅为骨架"],
+    next_action: weakTaskAnalysis ? "先补充背景事实并重新解析任务，再继续写作。" : "补充 LLM 实现后生成正式写前诊断",
   };
 }
 
@@ -366,7 +446,7 @@ export function generateDraft(input: {
     },
   );
 
-  return alignDraftToOutline({
+  const draft = alignDraftToOutline({
     draft_markdown: paragraphs.join("\n\n"),
     self_review: {
       strengths: ["已经按照提纲生成占位草稿"],
@@ -376,6 +456,7 @@ export function generateDraft(input: {
     },
     revision_suggestions: ["接入 LLM 后替换占位正文", "补充事实输入来源"],
   }, input.outline);
+  return validateDraftAgainstRewritePlan(draft, input.outline, []);
 }
 
 export async function generateDraftWithLlm(
@@ -409,7 +490,11 @@ export async function generateDraftWithLlm(
     maxTokens: 1600,
     timeoutMs: 60_000,
   });
-  return alignDraftToOutline(draft, input.outline);
+  return validateDraftAgainstRewritePlan(
+    alignDraftToOutline(draft, input.outline),
+    input.outline,
+    input.templateRewritePlan ?? [],
+  );
 }
 
 export function learnFeedback(feedback: Feedback): FeedbackAnalysis {

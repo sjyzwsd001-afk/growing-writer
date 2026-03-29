@@ -117,6 +117,10 @@ export function compactTemplateRewritePlan(
     intent: clip(step.intent, 90),
     assigned_facts: clipList(step.assigned_facts, 5, 140),
     assigned_requirements: clipList(step.assigned_requirements, 5, 100),
+    assignment_confidence:
+      typeof step.assignment_confidence === "number"
+        ? Number(step.assignment_confidence.toFixed(2))
+        : undefined,
     history_section_hints: (step.history_section_hints ?? []).slice(0, 3).map((item) => ({
       material_title: clip(item.material_title, 70),
       section: clip(item.section, 120),

@@ -3315,6 +3315,13 @@ function renderTaskContextSummary() {
   const rewriteSteps = Array.isArray(context.templateRewriteHint?.rewrite_steps)
     ? context.templateRewriteHint.rewrite_steps.slice(0, 4)
     : [];
+  const rewriteWarnings = Array.isArray(context.templateRewriteHint?.warnings)
+    ? context.templateRewriteHint.warnings.slice(0, 4)
+    : [];
+  const rewriteFallbackMode =
+    typeof context.templateRewriteHint?.fallback_mode === "string"
+      ? context.templateRewriteHint.fallback_mode
+      : "";
   const rewriteSummary = rewriteSteps.length
     ? rewriteSteps.map(
         (step) =>
@@ -3326,6 +3333,10 @@ function renderTaskContextSummary() {
   const missingPoints = Array.isArray(context.draftReview?.missing_points)
     ? context.draftReview.missing_points.slice(0, 5)
     : [];
+  const constraintChecks =
+    context.draft && typeof context.draft === "object" && context.draft.constraint_checks
+      ? context.draft.constraint_checks
+      : null;
   const sectionChecklist = rewriteSteps.slice(0, 4).map((step) => {
     const reqs = Array.isArray(step.assigned_requirements) ? step.assigned_requirements : [];
     const missing = missingPoints.filter((item) =>
@@ -3336,6 +3347,8 @@ function renderTaskContextSummary() {
       requirements: reqs,
       facts: Array.isArray(step.assigned_facts) ? step.assigned_facts.slice(0, 2) : [],
       missing,
+      confidence:
+        typeof step.assignment_confidence === "number" ? step.assignment_confidence : null,
     };
   });
 
@@ -3402,6 +3415,22 @@ function renderTaskContextSummary() {
             ? `<ul>${rewriteSummary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
             : `<div class="mini">本次还没有形成清晰的模板改写清单，说明当前更像普通参考生成。</div>`
         }
+        ${
+          rewriteFallbackMode
+            ? `<div class="mini">当前模板模式：${escapeHtml(
+                rewriteFallbackMode === "structured"
+                  ? "结构化槽位"
+                  : rewriteFallbackMode === "derived-sections"
+                    ? "派生章节降级"
+                    : "通用骨架降级",
+              )}</div>`
+            : ""
+        }
+        ${
+          rewriteWarnings.length
+            ? `<div class="mini">改写提醒：${escapeHtml(rewriteWarnings.join(" / "))}</div>`
+            : ""
+        }
       </div>
       <div class="context-card">
         <strong>段落检查</strong>
@@ -3413,6 +3442,7 @@ function renderTaskContextSummary() {
                     <div><strong>${escapeHtml(item.section)}</strong></div>
                     <div class="mini">应覆盖：${escapeHtml(item.requirements.join(" / ") || "待模型继续判断")}</div>
                     <div class="mini">优先事实：${escapeHtml(item.facts.join(" / ") || "待从背景中补充")}</div>
+                    <div class="mini">事实匹配置信度：${escapeHtml(typeof item.confidence === "number" ? item.confidence.toFixed(2) : "-")}</div>
                     <div class="mini ${item.missing.length ? "text-danger" : ""}">${
                       item.missing.length
                         ? `当前缺口：${escapeHtml(item.missing.join(" / "))}`
@@ -3422,6 +3452,11 @@ function renderTaskContextSummary() {
                 )
                 .join("")}</div>`
             : `<div class="mini">生成后会按模板段落显示每段应覆盖的要点和当前缺口。</div>`
+        }
+        ${
+          constraintChecks && Array.isArray(constraintChecks.warnings) && constraintChecks.warnings.length
+            ? `<div class="mini">程序化校验：${escapeHtml(constraintChecks.warnings.slice(0, 4).join(" / "))}</div>`
+            : ""
         }
       </div>
     </div>

@@ -100,6 +100,7 @@ export type TemplateRewriteStep = {
   intent: string;
   assigned_facts: string[];
   assigned_requirements: string[];
+  assignment_confidence?: number;
   history_section_hints?: Array<{
     material_title: string;
     section: string;
@@ -113,6 +114,8 @@ export type TemplateRewriteStep = {
 
 export type TemplateRewriteHint = {
   template_title: string;
+  fallback_mode?: "structured" | "derived-sections" | "generic-outline";
+  warnings?: string[];
   rewrite_steps: TemplateRewriteStep[];
   rewrite_plan: string[];
 };

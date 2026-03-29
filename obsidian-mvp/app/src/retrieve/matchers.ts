@@ -228,10 +228,10 @@ type FeedbackIntent = "structure" | "logic" | "missing_info" | "tone" | "none";
 
 function classifyFeedbackIntent(text: string): FeedbackIntent {
   const normalized = text.toLowerCase();
-  if (/结构|顺序|层次|先.+后|段落|提纲|structure|outline|section|order|sequence/.test(normalized)) {
+  if (/结构|顺序|层次|先.+后|段落|提纲|结尾衔接|收束|structure|outline|section|order|sequence|flow|transition|paragraph|intro|conclusion/.test(normalized)) {
     return "structure";
   }
-  if (/逻辑|因果|论证|推导|依据|结论|logic|reasoning|evidence|conclusion|because/.test(normalized)) {
+  if (/逻辑|因果|论证|推导|依据|结论|衔接|不连贯|断裂|logic|reasoning|evidence|conclusion|because|disconnect|coherent|cohesive/.test(normalized)) {
     return "logic";
   }
   if (/缺失|遗漏|补充|空泛|具体|数据|事实|动作|量化|影响范围|missing|omit|add|detail|data|fact|action|specific/.test(normalized)) {
