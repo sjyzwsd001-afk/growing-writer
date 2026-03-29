@@ -463,25 +463,36 @@ export function diagnoseTask(input: {
   matchedMaterials: Material[];
   evidenceCards?: EvidenceCard[];
   profiles: Profile[];
+  templateRewritePlan?: TemplateRewriteStep[];
 }): DiagnosisResult {
   const weakTaskAnalysis =
     input.analysis.confidence < 0.2 ||
     (!input.analysis.raw_facts.length && !input.analysis.must_include.length);
+  const recommendedStructure =
+    input.templateRewritePlan?.length
+      ? input.templateRewritePlan.slice(0, 6).map((step) => ({
+          section: step.section,
+          purpose: step.intent,
+          must_cover: step.assigned_requirements.length
+            ? step.assigned_requirements.slice(0, 4)
+            : [step.fill_strategy].filter(Boolean),
+        }))
+      : [
+          {
+            section: "背景与目标",
+            purpose: "交代写作背景和本次目标",
+            must_cover: ["任务背景", "写作目的"],
+          },
+          {
+            section: "主体内容",
+            purpose: "展开关键事实、问题或方案",
+            must_cover: ["核心事实", "重点分析"],
+          },
+        ];
   return {
     readiness: weakTaskAnalysis ? "blocked" : "partial",
     diagnosis_summary: `任务《${input.task.title}》已完成基础匹配，待接入 LLM 生成正式诊断。`,
-    recommended_structure: [
-      {
-        section: "背景与目标",
-        purpose: "交代写作背景和本次目标",
-        must_cover: ["任务背景", "写作目的"],
-      },
-      {
-        section: "主体内容",
-        purpose: "展开关键事实、问题或方案",
-        must_cover: ["核心事实", "重点分析"],
-      },
-    ],
+    recommended_structure: recommendedStructure,
     missing_info: weakTaskAnalysis
       ? [...input.analysis.missing_info, "任务解析结果过弱，后续阶段会缺少足够事实支撑。"]
       : input.analysis.missing_info,
@@ -489,7 +500,11 @@ export function diagnoseTask(input: {
     reference_materials: input.matchedMaterials.map((material) => material.title),
     writing_risks: weakTaskAnalysis
       ? ["任务解析结果过弱：raw_facts / must_include 基本为空，建议先补背景材料或重试任务解析。"]
-      : ["待接入诊断 prompt，当前结果仅为骨架"],
+      : [
+          input.templateRewritePlan?.length
+            ? "已按模板改写计划生成诊断骨架；若要更细的段落裁决，仍建议走 LLM 诊断。"
+            : "待接入诊断 prompt，当前结果仅为骨架",
+        ],
     next_action: weakTaskAnalysis ? "先补充背景事实并重新解析任务，再继续写作。" : "补充 LLM 实现后生成正式写前诊断",
   };
 }
@@ -628,7 +643,7 @@ export async function buildOutlineWithLlm(
     validated = {
       ...validated,
       repair_trace: [
-        ...((validated.repair_trace ?? []).slice(0, 2)),
+        ...((validated.repair_trace ?? []).slice(0, 4)),
         {
           stage: "outline",
           applied: true,
@@ -732,7 +747,7 @@ export async function generateDraftWithLlm(
     validated = {
       ...validated,
       repair_trace: [
-        ...((validated.repair_trace ?? []).slice(0, 2)),
+        ...((validated.repair_trace ?? []).slice(0, 4)),
         {
           stage: "draft",
           applied: true,

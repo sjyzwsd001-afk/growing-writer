@@ -503,7 +503,7 @@ export function matchMaterials(task: Task, materials: Material[]): Material[] {
         const structureSignals = [
           ...summary.template_slots.map((item) => `${item.section} ${item.slot_name}`.toLowerCase()),
           ...summary.section_intents.map((item) => `${item.section} ${item.intent}`.toLowerCase()),
-          ...summary.logic_chain.map((item) => `${item.from} ${item.to} ${item.reason}`.toLowerCase()),
+          ...summary.logic_chain.map((item) => `${item.from} ${item.to}`.toLowerCase()),
         ];
 
         const overlapCount = structureSignals.reduce((hits, item) => {
