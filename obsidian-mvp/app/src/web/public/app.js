@@ -1,41 +1,11 @@
-const state = {
-  dashboard: null,
-  currentView: "create",
-  settingsPage: "models",
-  wizardStep: 1,
-  wizardCheckPassed: false,
-  wizardCheckReport: null,
-  currentTask: null,
-  currentWorkflowRun: null,
-  feedbackSelection: null,
-  feedbackHistory: [],
-  latestFeedbackByLocation: {},
-  pendingAnnotations: [],
-  activeAnnotationIndex: -1,
-  generatedDraftBaseline: "",
-  latestFeedbackLearnResult: null,
-  currentGenerationContext: null,
-  workflowDefinition: null,
-  workflowEditorDefinition: null,
-  oauthStartAttempt: 0,
-  editingLlmProfileId: "",
-  detailLlmProfileId: "",
-  finalizeMeta: null,
-  selectedMaterialPaths: [],
-  confirmResolver: null,
-  isRunningWizardCheck: false,
-};
+import { api, DEFAULT_API_TIMEOUT_MS, MATERIAL_IMPORT_API_TIMEOUT_MS, MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS, WORKFLOW_START_TIMEOUT_MS, trustedOrigins } from "./api.js";
+import { state, setState, subscribeState } from "./state.js";
+import { bindWizard as bindWizardModule } from "./wizard.js";
+import { bindEditorActions as bindEditorActionsModule } from "./editor.js";
+import { bindMaterialImport as bindMaterialImportModule } from "./materials.js";
+import { bindSettingsActions as bindSettingsActionsModule } from "./settings.js";
 
 const MAX_WIZARD_STEP = 7;
-const DEFAULT_API_TIMEOUT_MS = 30000;
-const MATERIAL_IMPORT_API_TIMEOUT_MS = 180000;
-const MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS = 120000;
-const WORKFLOW_START_TIMEOUT_MS = 90000;
-const trustedOrigins = new Set([
-  window.location.origin,
-  window.location.origin.replace("127.0.0.1", "localhost"),
-  window.location.origin.replace("localhost", "127.0.0.1"),
-]);
 
 const DEFAULT_FLOW_STAGES = [
   { id: "INTAKE_BACKGROUND", label: "问背景", description: "收集背景、目标、约束" },
@@ -584,32 +554,6 @@ function loadFeedbackHistoryFromStorage(taskId) {
   }
 }
 
-async function api(path, options = {}, timeoutMs = DEFAULT_API_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const response = await fetch(path, {
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin",
-      ...options,
-      signal: controller.signal,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || `Request failed: ${response.status}`);
-    }
-    return data;
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new Error(`请求超时（>${Math.round(timeoutMs / 1000)} 秒）。这通常表示文件解析或材料分析仍在进行；如果长时间反复出现，再重启 \`npm run web\` 后重试。`);
-    }
-    throw error;
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
-
 async function fileToBase64(file) {
   const buffer = await file.arrayBuffer();
   let binary = "";
@@ -797,7 +741,7 @@ async function getTaskDraftFromFile(path) {
 }
 
 function toggleView(viewName) {
-  state.currentView = viewName;
+  setState({ currentView: viewName });
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === viewName);
   });
@@ -807,7 +751,7 @@ function toggleView(viewName) {
 }
 
 function toggleSettingsPage(pageName) {
-  state.settingsPage = pageName || "models";
+  setState({ settingsPage: pageName || "models" });
   document.querySelectorAll(".settings-subtab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.settingsPage === state.settingsPage);
   });
@@ -4849,747 +4793,6 @@ function bindTabs() {
   });
 }
 
-function bindWizard() {
-  document.getElementById("wizard-prev").addEventListener("click", () => {
-    if (state.wizardStep > 1) {
-      state.wizardStep -= 1;
-      updateWizardStep();
-    }
-  });
-
-  document.getElementById("wizard-next").addEventListener("click", () => {
-    if (state.wizardStep < MAX_WIZARD_STEP) {
-      const blocker = validateStepBeforeNext(state.wizardStep);
-      if (blocker) {
-        setInfo(blocker, true);
-        return;
-      }
-      const guidance = validateWizardSoftGuidance(state.wizardStep);
-      state.wizardStep += 1;
-      updateWizardStep();
-      if (guidance) {
-        setInfo(guidance);
-      }
-    }
-  });
-
-  document.getElementById("wizard-run-check").addEventListener("click", () => {
-    triggerWizardCheck({ autoAdvance: true, silent: false });
-  });
-
-  document.getElementById("wizard-go-check").addEventListener("click", () => {
-    const blocker = validateStepBeforeNextHard(4);
-    if (blocker) {
-      setInfo(blocker, true);
-      return;
-    }
-    state.wizardStep = 5;
-    updateWizardStep();
-    setInfo("已进入检查步骤。");
-  });
-
-  document.getElementById("wizard-go-confirm").addEventListener("click", () => {
-    if (!state.wizardCheckPassed) {
-      document.getElementById("wizard-run-check")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      setInfo("请先执行检查并通过，再进入最后确认。", true);
-      return;
-    }
-    state.wizardStep = 6;
-    updateWizardStep();
-    setInfo("已进入最后确认。");
-  });
-
-  document.getElementById("wizard-confirm-check").addEventListener("change", () => {
-    if (state.wizardStep >= 6) {
-      updateWizardSummary();
-    }
-    updateWizardActionButtons();
-  });
-
-  document.getElementById("goto-editor-panel").addEventListener("click", () => {
-    const panel = document.getElementById("editor-panel");
-    if (!panel || panel.classList.contains("hidden")) {
-      setInfo("当前还没有可编辑正文，请先完成生成。", true);
-      return;
-    }
-    focusEditorWorkbench({ focusDraft: true });
-  });
-
-  document.getElementById("wizard-form").addEventListener("input", (event) => {
-    const target = event.target;
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) {
-      if ((target.name || target.id) === "docType") {
-        updateDocTypeGuidance();
-      }
-      if (state.wizardCheckPassed && ["title", "docType", "background", "facts", "mustInclude", "specialRequirements", "sourceMaterialIds", "templateId", "templateMode", "templateOverrides", "backgroundUpload"].includes(target.name || target.id)) {
-        state.wizardCheckPassed = false;
-        state.wizardCheckReport = null;
-        if (state.wizardStep === 5) {
-          renderWizardCheckResult(null);
-        }
-      }
-      if (["templateId", "templateMode", "docType", "background", "mustInclude", "specialRequirements"].includes(target.name || target.id)) {
-        if ((target.name || target.id) === "templateId" || (target.name || target.id) === "templateMode") {
-          renderTemplateChoiceCards(
-            Array.isArray(state.dashboard?.templateCandidates)
-              ? state.dashboard.templateCandidates
-              : Array.isArray(state.dashboard?.templates)
-                ? state.dashboard.templates
-                : [],
-            String(document.getElementById("template-selector")?.value || "").trim(),
-          );
-          renderTemplatePreview();
-        } else {
-          renderTemplateSelector(
-            Array.isArray(state.dashboard?.templateCandidates)
-              ? state.dashboard.templateCandidates
-              : Array.isArray(state.dashboard?.templates)
-                ? state.dashboard.templates
-                : [],
-          );
-        }
-      }
-      if ((target.name || target.id) === "sourceMaterialIds") {
-        updateWizardMaterialSelectionSummary();
-      }
-      if (["background", "facts", "mustInclude", "specialRequirements", "backgroundUpload"].includes(target.name || target.id)) {
-        renderWizardBackgroundStatus();
-      }
-    }
-    if (state.wizardStep >= 6) {
-      updateWizardSummary();
-    }
-  });
-
-  document.getElementById("wizard-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (state.wizardStep !== 6) {
-      setInfo("请先进入 Step 6（确认）后再生成。", true);
-      return;
-    }
-    if (!state.wizardCheckPassed) {
-      setInfo("请先完成 Step 5 检查并通过。", true);
-      return;
-    }
-    if (!document.getElementById("wizard-confirm-check").checked) {
-      setInfo("请先勾选“我已确认输入内容”。", true);
-      return;
-    }
-    try {
-      await createAndRunTask();
-    } catch (error) {
-      setInfo(`生成失败：${error.message}`, true);
-      setTaskBadge("生成失败", true);
-    }
-  });
-
-  document.getElementById("wizard-form").addEventListener("click", (event) => {
-    const quickChip = event.target.closest(".wizard-quick-chip");
-    if (quickChip instanceof HTMLElement) {
-      const fieldName = String(quickChip.dataset.targetField || "").trim();
-      const line = String(quickChip.dataset.addLine || "").trim();
-      if (fieldName && line && appendLineToWizardTextarea(fieldName, line)) {
-        setInfo(`已加入“${line}”。`);
-      }
-      return;
-    }
-
-    const skipButton = event.target.closest("#skip-template-selection");
-    if (skipButton) {
-      const select = document.getElementById("template-selector");
-      if (select instanceof HTMLSelectElement) {
-        select.value = "";
-      }
-      renderTemplateChoiceCards(getWizardTemplatePool(), "");
-      renderTemplatePreview();
-      updateTemplateAdvancedPanel();
-      setInfo("这次已改为不使用模板，系统会按历史材料和规则综合生成。");
-      return;
-    }
-
-    const skipAndNextButton = event.target.closest("#skip-template-and-next");
-    if (skipAndNextButton) {
-      const select = document.getElementById("template-selector");
-      if (select instanceof HTMLSelectElement) {
-        select.value = "";
-      }
-      renderTemplateChoiceCards(getWizardTemplatePool(), "");
-      renderTemplatePreview();
-      updateTemplateAdvancedPanel();
-      if (state.wizardStep < 4) {
-        state.wizardStep = 4;
-        updateWizardStep();
-      }
-      setInfo("已跳过模板，直接进入背景填写。");
-      return;
-    }
-
-    const button = event.target.closest("button[data-action='pick-template-card']");
-    const nextButton = event.target.closest("button[data-action='pick-template-card-next']");
-    const actionButton = button || nextButton;
-    if (!actionButton) {
-      return;
-    }
-    const templateId = actionButton.dataset.templateId || "";
-    const select = document.getElementById("template-selector");
-    if (!(select instanceof HTMLSelectElement)) {
-      return;
-    }
-    select.value = templateId;
-    renderTemplateChoiceCards(getWizardTemplatePool(), templateId);
-    renderTemplatePreview();
-    updateTemplateAdvancedPanel();
-    if (nextButton && state.wizardStep < 4) {
-      state.wizardStep = 4;
-      updateWizardStep();
-      setInfo("已采用首推模板，直接进入背景填写。");
-      return;
-    }
-    setInfo(templateId ? "已选中模板卡片。" : "已取消模板。");
-  });
-}
-
-function bindEditorActions() {
-  document.getElementById("capture-selection").addEventListener("click", () => {
-    try {
-      captureDraftSelection({ strict: true });
-      setInfo("已从正文选区自动定位。");
-    } catch (error) {
-      setInfo(error.message, true);
-    }
-  });
-
-  document.getElementById("draft-editor").addEventListener("mouseup", () => {
-    captureDraftSelection({ strict: false });
-  });
-
-  document.getElementById("draft-editor").addEventListener("keyup", () => {
-    captureDraftSelection({ strict: false });
-  });
-
-  document.getElementById("draft-editor").addEventListener("input", () => {
-    captureDraftSelection({ strict: false });
-    summarizeDraftChanges();
-    renderRepurposeOutputs();
-    updateEditorActionStates();
-  });
-
-  document.getElementById("add-annotation").addEventListener("click", () => {
-    try {
-      collectCurrentAnnotation({ strictSelection: true, persist: true });
-      setInfo("已加入本轮批注清单。");
-    } catch (error) {
-      setInfo(error.message, true);
-    }
-  });
-
-  document.getElementById("clear-annotations").addEventListener("click", async () => {
-    if (!state.pendingAnnotations.length) {
-      return;
-    }
-    if (!(await confirmDestructiveAction("确认清空本轮批注清单吗？这会移除当前未提交的所有批注。"))) {
-      return;
-    }
-    state.pendingAnnotations = [];
-    state.activeAnnotationIndex = -1;
-    renderPendingAnnotations();
-    setInfo("已清空本轮批注清单。");
-  });
-
-  document.getElementById("annotation-list").addEventListener("click", async (event) => {
-    const actionButton = event.target.closest("button[data-action]");
-    const annotationCard = !actionButton ? event.target.closest("[data-action='select-annotation']") : null;
-    if (!actionButton && !annotationCard) {
-      return;
-    }
-    const action = actionButton?.dataset.action || annotationCard?.dataset.action || "";
-    const index = Number(actionButton?.dataset.index ?? annotationCard?.dataset.index);
-    if (!Number.isInteger(index) || index < 0 || !state.pendingAnnotations[index]) {
-      return;
-    }
-    const annotation = state.pendingAnnotations[index];
-
-    if (action === "select-annotation") {
-      state.activeAnnotationIndex = index;
-      refillAnnotationForm(annotation);
-      try {
-        focusAnnotationInDraft(annotation);
-      } catch {
-        // Ignore missing selection data; refill still helps.
-      }
-      renderPendingAnnotations();
-      setInfo("已切换到这条批注。");
-      return;
-    }
-
-    if (action === "remove-annotation") {
-      if (!(await confirmDestructiveAction("确认删除这条批注吗？"))) {
-        return;
-      }
-      state.pendingAnnotations.splice(index, 1);
-      if (state.activeAnnotationIndex >= state.pendingAnnotations.length) {
-        state.activeAnnotationIndex = state.pendingAnnotations.length - 1;
-      }
-      renderPendingAnnotations();
-      setInfo("已从本轮批注清单移除。");
-      return;
-    }
-
-    if (action === "edit-annotation") {
-      state.activeAnnotationIndex = index;
-      refillAnnotationForm(annotation);
-      renderPendingAnnotations();
-      setInfo("已把这条批注回填到输入区。");
-      return;
-    }
-
-    if (action === "annotation-up" || action === "annotation-down") {
-      const targetIndex = action === "annotation-up" ? index - 1 : index + 1;
-      if (targetIndex < 0 || targetIndex >= state.pendingAnnotations.length) {
-        return;
-      }
-      const [moved] = state.pendingAnnotations.splice(index, 1);
-      state.pendingAnnotations.splice(targetIndex, 0, moved);
-      state.activeAnnotationIndex = targetIndex;
-      renderPendingAnnotations();
-      setInfo(action === "annotation-up" ? "已把这条批注前移。" : "已把这条批注后移。");
-      return;
-    }
-
-    if (action === "focus-annotation") {
-      try {
-        state.activeAnnotationIndex = index;
-        focusAnnotationInDraft(annotation);
-        renderPendingAnnotations();
-        setInfo("已定位到这条批注对应的正文位置。");
-      } catch (error) {
-        setInfo(error.message, true);
-      }
-    }
-  });
-
-  document.getElementById("annotation-list").addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-    const action = target.dataset.action || "";
-    const index = Number(target.dataset.index);
-    if (!Number.isInteger(index) || index < 0 || !state.pendingAnnotations[index]) {
-      return;
-    }
-
-    if (action === "annotation-toggle-reusable" && target instanceof HTMLInputElement) {
-      state.pendingAnnotations[index].isReusable = target.checked;
-      renderPendingAnnotations();
-      return;
-    }
-
-    if (action === "annotation-priority" && target instanceof HTMLSelectElement) {
-      state.pendingAnnotations[index].priority = target.value;
-      summarizeDraftChanges();
-      updateEditorActionStates();
-    }
-  });
-
-  ["feedback-location", "feedback-reason", "feedback-comment"].forEach((id) => {
-    document.getElementById(id)?.addEventListener("input", () => {
-      updateEditorActionStates();
-    });
-  });
-
-  document.getElementById("feedback-learn-result").addEventListener("click", async (event) => {
-    const button = event.target.closest("button[data-action]");
-    if (!button) {
-      return;
-    }
-    const action = button.dataset.action || "";
-    const path = button.dataset.path || "";
-    if (!path) {
-      return;
-    }
-
-    try {
-      if (action === "confirm-generated-rule" || action === "reject-generated-rule") {
-        const result = await api("/api/rules/action", {
-          method: "POST",
-          body: JSON.stringify({
-            path,
-            action: action === "confirm-generated-rule" ? "confirm" : "reject",
-            reason: action === "confirm-generated-rule" ? "通过编辑区学习结论确认入库" : "通过编辑区学习结论暂不入库",
-          }),
-        });
-        setInfo(
-          action === "confirm-generated-rule" ? "已确认候选规则并入库。" : "已将候选规则标记为暂不入库。",
-        );
-        setSettingsResult(
-          action === "confirm-generated-rule" ? "规则确认完成" : "规则暂不入库",
-          result,
-        );
-        if (state.latestFeedbackLearnResult) {
-          state.latestFeedbackLearnResult.candidateRulePath = null;
-        }
-        renderFeedbackLearnResult();
-        renderFinalizeReview();
-        await loadDashboard();
-      }
-    } catch (error) {
-      setInfo(`规则处理失败：${error.message}`, true);
-    }
-  });
-
-  document.getElementById("save-draft").addEventListener("click", async () => {
-    try {
-      await saveCurrentDraft(false);
-      setTaskBadge("正文已保存");
-      setInfo("已保存当前正文。");
-    } catch (error) {
-      setTaskBadge("保存失败", true);
-      setInfo(error.message, true);
-    }
-  });
-
-  document.getElementById("generate-brief-summary").addEventListener("click", () => {
-    const container = document.getElementById("repurpose-summary");
-    if (!container) {
-      return;
-    }
-    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    setRepurposeBox(container, generateRepurposeSummary(draft));
-    updateRepurposeGenerationStatus();
-    setRepurposeCopyStatus("");
-    setInfo("已生成一版摘要。");
-  });
-
-  document.getElementById("generate-leader-brief").addEventListener("click", () => {
-    const container = document.getElementById("repurpose-leader-brief");
-    if (!container) {
-      return;
-    }
-    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    setRepurposeBox(container, generateLeaderBrief(draft));
-    updateRepurposeGenerationStatus();
-    setRepurposeCopyStatus("");
-    setInfo("已生成一版领导摘要。");
-  });
-
-  document.getElementById("generate-brief-outline").addEventListener("click", () => {
-    const container = document.getElementById("repurpose-outline");
-    if (!container) {
-      return;
-    }
-    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    setRepurposeBox(container, generateRepurposeOutline(draft));
-    updateRepurposeGenerationStatus();
-    setRepurposeCopyStatus("");
-    setInfo("已生成一版提纲。");
-  });
-
-  document.getElementById("generate-all-briefs").addEventListener("click", () => {
-    const draft = String(document.getElementById("draft-editor")?.value || "").trim();
-    if (!draft) {
-      setInfo("请先生成或填写正文。", true);
-      return;
-    }
-    setRepurposeBox(document.getElementById("repurpose-summary"), generateRepurposeSummary(draft));
-    setRepurposeBox(document.getElementById("repurpose-leader-brief"), generateLeaderBrief(draft));
-    setRepurposeBox(document.getElementById("repurpose-outline"), generateRepurposeOutline(draft));
-    updateRepurposeGenerationStatus();
-    setRepurposeCopyStatus("");
-    setInfo("已一键生成摘要、领导摘要和提纲。");
-  });
-
-  document.getElementById("copy-brief-summary").addEventListener("click", async () => {
-    try {
-      await copyText(document.getElementById("repurpose-summary")?.textContent || "", "摘要已复制。");
-      setInfo("摘要已复制。");
-      setRepurposeCopyStatus("摘要已复制。");
-    } catch (error) {
-      setRepurposeCopyStatus(error.message || "摘要复制失败。");
-      setInfo(error.message, true);
-    }
-  });
-
-  document.getElementById("copy-brief-outline").addEventListener("click", async () => {
-    try {
-      await copyText(document.getElementById("repurpose-outline")?.textContent || "", "提纲已复制。");
-      setInfo("提纲已复制。");
-      setRepurposeCopyStatus("提纲已复制。");
-    } catch (error) {
-      setRepurposeCopyStatus(error.message || "提纲复制失败。");
-      setInfo(error.message, true);
-    }
-  });
-
-  document.getElementById("copy-leader-brief").addEventListener("click", async () => {
-    try {
-      await copyText(document.getElementById("repurpose-leader-brief")?.textContent || "", "领导摘要已复制。");
-      setInfo("领导摘要已复制。");
-      setRepurposeCopyStatus("领导摘要已复制。");
-    } catch (error) {
-      setRepurposeCopyStatus(error.message || "领导摘要复制失败。");
-      setInfo(error.message, true);
-    }
-  });
-
-  document.getElementById("submit-feedback").addEventListener("click", async () => {
-    const button = document.getElementById("submit-feedback");
-    button.disabled = true;
-    button.textContent = "生成中...";
-    try {
-      const evaluation = await submitFeedbackAndRegenerate();
-      setTaskBadge("已按反馈再生成");
-      const scoreText =
-        evaluation && typeof evaluation.score === "number"
-          ? `本轮吸收评分 ${evaluation.score}（${evaluation.level}）。`
-          : "已完成本轮反馈学习。";
-      setInfo(`反馈已学习并生成新稿。${scoreText}你可以继续改，也可以直接定稿。`);
-      renderFinalizeReview();
-    } catch (error) {
-      setTaskBadge("再生成失败", true);
-      setInfo(error.message, true);
-    } finally {
-      button.disabled = false;
-      button.textContent = "提交反馈并再次生成";
-    }
-  });
-
-  document.getElementById("finalize-draft").addEventListener("click", async () => {
-    if (!(await confirmDestructiveAction("确认直接定稿吗？当前正文会写回任务文件，并作为本轮最终版本。"))) {
-      return;
-    }
-    try {
-      await saveCurrentDraft(true);
-      if (state.currentTask?.runId) {
-        const finalized = await api("/api/workflow/advance", {
-          method: "POST",
-          body: JSON.stringify({
-            runId: state.currentTask.runId,
-            action: "finalize",
-            taskPath: state.currentTask.path,
-          }),
-        });
-        if (finalized?.run) {
-          state.currentWorkflowRun = finalized.run;
-        }
-      }
-      state.finalizeMeta = { finalizedAt: new Date().toISOString() };
-      setTaskBadge("已定稿");
-      renderWorkflowStageTracker();
-      updateEditorNextGuide("finalized");
-      setInfo("已定稿并写入任务文件。");
-      renderFinalizeReview();
-      await loadDashboard();
-    } catch (error) {
-      setTaskBadge("定稿失败", true);
-      setInfo(error.message, true);
-    }
-  });
-}
-
-function bindMaterialImport() {
-  const form = document.getElementById("material-form");
-  const modeSelect = form?.querySelector("[name='mode']");
-  const hintContainer = document.getElementById("material-mode-hint");
-  const materialUploadInput = document.getElementById("material-upload-input");
-  const materialUploadSummary = document.getElementById("material-upload-summary");
-  const materialUploadTrigger = document.getElementById("material-upload-trigger");
-  const submitButton = form?.querySelector("button[type='submit']");
-
-  function openFilePicker(input) {
-    if (!(input instanceof HTMLInputElement)) {
-      return;
-    }
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker();
-        return;
-      } catch {
-        // Fall through to click() for browsers that expose showPicker but reject it.
-      }
-    }
-    input.click();
-  }
-
-  function updateMaterialUploadSummary() {
-    if (!(materialUploadInput instanceof HTMLInputElement) || !materialUploadSummary) {
-      return;
-    }
-    const files = Array.from(materialUploadInput.files || []);
-    if (!files.length) {
-      materialUploadSummary.textContent = "还没有选择导入文件。";
-      return;
-    }
-    if (files.length === 1) {
-      materialUploadSummary.textContent = `已选择 1 个文件：${files[0].name}`;
-      return;
-    }
-    materialUploadSummary.textContent = `已选择 ${files.length} 个文件：${files
-      .slice(0, 3)
-      .map((file) => file.name)
-      .join("、")}${files.length > 3 ? " 等" : ""}`;
-  }
-
-  function analyzeMaterialImportMode() {
-    if (!form || !modeSelect || !hintContainer) {
-      return;
-    }
-    const formData = new FormData(form);
-    const title = String(formData.get("title") || "").trim();
-    const docType = String(formData.get("docType") || "").trim();
-    const source = String(formData.get("source") || "").trim();
-    const tags = String(formData.get("tags") || "").trim();
-    const combined = `${title} ${docType} ${source} ${tags}`.toLowerCase();
-
-    let suggestedMode = "normal";
-    let reason = "这份内容更适合先作为历史材料保存。";
-    let usage = "系统后续会主要从中提炼表达习惯、结构参考和常用写法。";
-
-    if (/模板|范式|框架|标准|固定结构|固定格式|套话|通用版|v\d+/i.test(combined)) {
-      suggestedMode = "template";
-      reason = "标题、标签或命名方式显示它更像一份可反复套用的固定模板。";
-      usage = "导入后会进入模板库，并在新建写作时优先影响结构和语气。";
-    } else if (/最佳稿|优秀稿|成熟稿|历史最佳|定稿/i.test(combined)) {
-      suggestedMode = "normal";
-      reason = "这更像一份成熟定稿，适合学习写法，但不一定需要当成硬模板。";
-      usage = "导入后会优先用于沉淀你的结构习惯、表达偏好和可复用规则。";
-    }
-
-    const currentMode = String(modeSelect.value || "normal");
-    hintContainer.innerHTML = `
-      <div><strong>建议导入为：${escapeHtml(suggestedMode === "template" ? "正式模板" : "历史材料")}</strong></div>
-      <div class="mini">${escapeHtml(reason)}</div>
-      <div class="mini">${escapeHtml(usage)}</div>
-      ${
-        currentMode !== suggestedMode
-          ? `<div class="editor-actions"><button type="button" id="apply-material-mode-hint" class="mini-btn">按建议切换</button></div>`
-          : `<div class="mini">你当前的选择已经和建议一致。</div>`
-      }
-    `;
-
-    const applyButton = document.getElementById("apply-material-mode-hint");
-    if (applyButton) {
-      applyButton.addEventListener("click", () => {
-        modeSelect.value = suggestedMode;
-        analyzeMaterialImportMode();
-        setInfo(`已切换为${suggestedMode === "template" ? "正式模板" : "历史材料"}模式。`);
-      });
-    }
-  }
-
-  form?.addEventListener("input", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) {
-      return;
-    }
-    if (["title", "docType", "source", "tags", "mode"].includes(target.name || target.id)) {
-      analyzeMaterialImportMode();
-    }
-  });
-
-  materialUploadInput?.addEventListener("change", () => {
-    updateMaterialUploadSummary();
-  });
-  materialUploadTrigger?.addEventListener("click", () => openFilePicker(materialUploadInput));
-
-  analyzeMaterialImportMode();
-  updateMaterialUploadSummary();
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const mode = String(formData.get("mode") || "normal");
-    const uploadFiles = formData.getAll("uploadFile").filter((item) => item instanceof File && item.size > 0);
-    const sourceFile = String(formData.get("sourceFile") || "").trim();
-    const title = String(formData.get("title") || "").trim();
-
-    const payload = {
-      mode,
-      isTemplate: mode === "template" ? "true" : "false",
-      title,
-      docType: String(formData.get("docType") || "").trim(),
-      audience: String(formData.get("audience") || "").trim(),
-      scenario: String(formData.get("scenario") || "").trim(),
-      source: String(formData.get("source") || "").trim(),
-      tags: String(formData.get("tags") || "").trim(),
-      sourceFile,
-      body: String(formData.get("body") || "").trim(),
-      quality: mode === "template" ? "high" : "medium",
-    };
-
-    if (!payload.docType) {
-      setInlineStatus("material-form-status", "请先填写文档类型。", true);
-      setInfo("请先填写文档类型。", true);
-      return;
-    }
-
-    if (!title && !uploadFiles.length) {
-      setInlineStatus("material-form-status", "单文件手工导入时，请填写标题；批量上传时可以留空。", true);
-      setInfo("单文件手工导入时，请填写标题；批量上传时可以留空。", true);
-      return;
-    }
-
-    if (sourceFile && uploadFiles.length > 0) {
-      setInlineStatus("material-form-status", "批量上传时，请不要同时填写本地文件路径。", true);
-      setInfo("批量上传时，请不要同时填写本地文件路径。", true);
-      return;
-    }
-
-    if (uploadFiles.length > 1) {
-      payload.uploadFiles = await Promise.all(
-        uploadFiles.map(async (file) => JSON.stringify({ name: file.name, base64: await fileToBase64(file) })),
-      );
-    } else if (uploadFiles[0] instanceof File) {
-      payload.uploadName = uploadFiles[0].name;
-      payload.uploadBase64 = await fileToBase64(uploadFiles[0]);
-    }
-
-    try {
-      if (submitButton instanceof HTMLButtonElement) {
-        submitButton.disabled = true;
-        submitButton.textContent = "导入中...";
-      }
-      setInlineStatus("material-form-status", "正在导入并分析材料，请稍等...");
-      const result = await api(
-        "/api/materials/import",
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
-        MATERIAL_IMPORT_API_TIMEOUT_MS,
-      );
-      form.reset();
-      updateMaterialUploadSummary();
-      await loadDashboard();
-      const count = Number(result?.count || 0);
-      if (count > 1) {
-        setInlineStatus(
-          "material-form-status",
-          mode === "template" ? `已批量导入 ${count} 份正式模板。` : `已批量导入 ${count} 份历史材料。`,
-        );
-        setInfo(mode === "template" ? `已批量导入 ${count} 份正式模板。` : `已批量导入 ${count} 份历史材料。`);
-      } else {
-        setInlineStatus("material-form-status", mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
-        setInfo(mode === "template" ? "正式模板已导入。" : "历史材料导入完成。");
-      }
-      setSettingsResult(mode === "template" ? "正式模板导入完成" : "历史材料导入完成", result, { reveal: false });
-      toggleView("settings");
-    } catch (error) {
-      setInlineStatus(
-        "material-form-status",
-        `材料导入失败：${error.message}`,
-        true,
-      );
-      setInfo(`材料导入失败：${error.message}`, true);
-    } finally {
-      if (submitButton instanceof HTMLButtonElement) {
-        submitButton.disabled = false;
-        submitButton.textContent = "导入材料";
-      }
-    }
-  });
-}
 
 function bindBackgroundUploadSummary() {
   const input = document.getElementById("background-upload-input");
@@ -6253,145 +5456,6 @@ async function runSettingsAction(action, button) {
   }
 }
 
-function bindSettingsActions() {
-  const containers = [
-    "obsidian-quick-actions",
-    "settings-materials",
-    "settings-templates",
-    "settings-rules",
-    "settings-profiles",
-    "settings-feedback",
-    "settings-workflows",
-    "settings-observability",
-  ];
-
-  for (const id of containers) {
-    const container = document.getElementById(id);
-    container.addEventListener("change", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement)) {
-        return;
-      }
-      if ((target.dataset.action || "") !== "toggle-material-selection") {
-        return;
-      }
-      toggleMaterialSelection(target.dataset.path || "", target.checked);
-    });
-    container.addEventListener("click", async (event) => {
-      const button = event.target.closest("button[data-action]");
-      if (!button) {
-        return;
-      }
-
-      const action = button.dataset.action;
-      const original = button.textContent;
-      button.disabled = true;
-      button.textContent = "处理中...";
-      try {
-        await runSettingsAction(action, button);
-      } catch (error) {
-        setSettingsResult("操作失败", { error: error.message });
-      } finally {
-        button.disabled = false;
-        button.textContent = original;
-      }
-    });
-  }
-
-  document.getElementById("refresh-profile").addEventListener("click", async () => {
-    const button = document.getElementById("refresh-profile");
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = "刷新中...";
-    try {
-      const result = await api("/api/refresh/profile", { method: "POST" });
-      setSettingsResult("写作画像刷新完成", result);
-      await loadDashboard();
-    } catch (error) {
-      setSettingsResult("刷新画像失败", { error: error.message });
-    } finally {
-      button.disabled = false;
-      button.textContent = original;
-    }
-  });
-
-  document.getElementById("bulk-clear-material-selection").addEventListener("click", () => {
-    clearMaterialSelection();
-    loadDashboard();
-  });
-
-  document.getElementById("bulk-select-materials").addEventListener("click", () => {
-    selectMaterialsByBucket("materials");
-    setInfo(`已选中当前历史材料 ${Array.isArray(state.dashboard?.materials) ? state.dashboard.materials.length : 0} 份。`);
-  });
-
-  document.getElementById("bulk-select-templates").addEventListener("click", () => {
-    selectMaterialsByBucket("templates");
-    setInfo(`已选中当前模板 ${Array.isArray(state.dashboard?.templates) ? state.dashboard.templates.length : 0} 份。`);
-  });
-
-  document.getElementById("bulk-analyze-materials").addEventListener("click", async () => {
-    const button = document.getElementById("bulk-analyze-materials");
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = "处理中...";
-    try {
-      setInfo(`正在批量重分析 ${state.selectedMaterialPaths.filter(Boolean).length} 份材料，请稍等...`);
-      await bulkAnalyzeMaterials();
-    } catch (error) {
-      setSettingsResult("批量重分析失败", { error: error.message });
-    } finally {
-      button.disabled = false;
-      button.textContent = original;
-    }
-  });
-
-  document.getElementById("bulk-mark-template").addEventListener("click", async () => {
-    const button = document.getElementById("bulk-mark-template");
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = "处理中...";
-    try {
-      await bulkUpdateMaterialRole("template");
-    } catch (error) {
-      setSettingsResult("批量转模板失败", { error: error.message });
-    } finally {
-      button.disabled = false;
-      button.textContent = original;
-    }
-  });
-
-  document.getElementById("bulk-mark-history").addEventListener("click", async () => {
-    const button = document.getElementById("bulk-mark-history");
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = "处理中...";
-    try {
-      await bulkUpdateMaterialRole("history");
-    } catch (error) {
-      setSettingsResult("批量转历史材料失败", { error: error.message });
-    } finally {
-      button.disabled = false;
-      button.textContent = original;
-    }
-  });
-
-  document.getElementById("bulk-delete-materials").addEventListener("click", async () => {
-    const button = document.getElementById("bulk-delete-materials");
-    const original = button.textContent;
-    button.disabled = true;
-    button.textContent = "处理中...";
-    try {
-      await bulkDeleteMaterials();
-    } catch (error) {
-      setSettingsResult("批量删除失败", { error: error.message });
-    } finally {
-      button.disabled = false;
-      button.textContent = original;
-    }
-  });
-}
-
 function bindWorkbenchActions() {
   document.querySelectorAll(".workbench-rail-button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -6440,13 +5504,87 @@ window.addEventListener("message", async (event) => {
 });
 
 bindTabs();
-bindWizard();
-bindEditorActions();
-bindMaterialImport();
+bindWizardModule({
+  state,
+  MAX_WIZARD_STEP,
+  updateWizardStep,
+  validateStepBeforeNext,
+  validateWizardSoftGuidance,
+  setInfo,
+  triggerWizardCheck,
+  validateStepBeforeNextHard,
+  updateWizardSummary,
+  updateWizardActionButtons,
+  focusEditorWorkbench,
+  updateDocTypeGuidance,
+  renderWizardCheckResult,
+  renderTemplateChoiceCards,
+  renderTemplatePreview,
+  updateTemplateAdvancedPanel,
+  getWizardTemplatePool,
+  renderTemplateSelector,
+  updateWizardMaterialSelectionSummary,
+  renderWizardBackgroundStatus,
+  setTaskBadge,
+  createAndRunTask,
+  appendLineToWizardTextarea,
+});
+bindEditorActionsModule({
+  state,
+  captureDraftSelection,
+  setInfo,
+  summarizeDraftChanges,
+  renderRepurposeOutputs,
+  updateEditorActionStates,
+  collectCurrentAnnotation,
+  confirmDestructiveAction,
+  renderPendingAnnotations,
+  refillAnnotationForm,
+  focusAnnotationInDraft,
+  api,
+  setSettingsResult,
+  renderFeedbackLearnResult,
+  renderFinalizeReview,
+  loadDashboard,
+  saveCurrentDraft,
+  setTaskBadge,
+  generateRepurposeSummary,
+  generateLeaderBrief,
+  generateRepurposeOutline,
+  setRepurposeBox,
+  updateRepurposeGenerationStatus,
+  setRepurposeCopyStatus,
+  copyText,
+  submitFeedbackAndRegenerate,
+  renderWorkflowStageTracker,
+  updateEditorNextGuide,
+});
+bindMaterialImportModule({
+  api,
+  MATERIAL_IMPORT_API_TIMEOUT_MS,
+  fileToBase64,
+  loadDashboard,
+  setInlineStatus,
+  setInfo,
+  setSettingsResult,
+});
 bindBackgroundUploadSummary();
 bindLlmSettings();
 bindWorkflowDefinitionEditor();
-bindSettingsActions();
+bindSettingsActionsModule({
+  state,
+  api,
+  toggleMaterialSelection,
+  runSettingsAction,
+  setSettingsResult,
+  clearMaterialSelection,
+  loadDashboard,
+  selectMaterialsByBucket,
+  setInfo,
+  bulkAnalyzeMaterials,
+  bulkUpdateMaterialRole,
+  bulkDeleteMaterials,
+});
 bindWorkbenchActions();
 bindTopStatusDetails();
 startButtonTooltipObserver();
@@ -6454,6 +5592,10 @@ updateWizardStep();
 setEditorVisible(false);
 renderWorkbenchRail();
 renderWorkbenchStatusBar();
+subscribeState(() => {
+  renderWorkbenchRail();
+  renderWorkbenchStatusBar();
+});
 
 loadDashboard().catch((error) => {
   setInfo(`初始化失败：${error.message}`, true);
