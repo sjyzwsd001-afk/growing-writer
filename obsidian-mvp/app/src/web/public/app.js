@@ -3357,6 +3357,11 @@ function renderTaskContextSummary() {
       section: step.section || "未命名段落",
       requirements: reqs,
       facts: Array.isArray(step.assigned_facts) ? step.assigned_facts.slice(0, 2) : [],
+      templateExcerpt:
+        typeof step.template_section_excerpt === "string" ? step.template_section_excerpt : "",
+      templatePattern:
+        typeof step.template_writing_pattern === "string" ? step.template_writing_pattern : "",
+      historyHints: Array.isArray(step.history_section_hints) ? step.history_section_hints.slice(0, 2) : [],
       missing,
       confidence:
         typeof step.assignment_confidence === "number" ? step.assignment_confidence : null,
@@ -3455,6 +3460,27 @@ function renderTaskContextSummary() {
                     <div><strong>${escapeHtml(item.section)}</strong></div>
                     <div class="mini">应覆盖：${escapeHtml(item.requirements.join(" / ") || "待模型继续判断")}</div>
                     <div class="mini">优先事实：${escapeHtml(item.facts.join(" / ") || "待从背景中补充")}</div>
+                    ${
+                      item.templateExcerpt
+                        ? `<div class="mini">模板原段参考：${escapeHtml(item.templateExcerpt)}</div>`
+                        : ""
+                    }
+                    ${
+                      item.templatePattern
+                        ? `<div class="mini">模板写法模式：${escapeHtml(item.templatePattern)}</div>`
+                        : ""
+                    }
+                    ${
+                      item.historyHints.length
+                        ? `<div class="mini">历史段落参考：${escapeHtml(
+                            item.historyHints
+                              .map((hint) =>
+                                `${hint.material_title || "-"}:${hint.section || "-"}${hint.writing_pattern ? `【${hint.writing_pattern}】` : ""}`,
+                              )
+                              .join(" / "),
+                          )}</div>`
+                        : ""
+                    }
                     <div class="mini">事实匹配置信度：${escapeHtml(typeof item.confidence === "number" ? item.confidence.toFixed(2) : "-")}</div>
                     ${
                       item.conservative
