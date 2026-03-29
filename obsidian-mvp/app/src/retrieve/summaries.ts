@@ -295,16 +295,40 @@ function inferWritingPattern(excerpt: string): string {
     return "";
   }
   const hints: string[] = [];
+  const sentences = text
+    .split(/[。！？!?]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const firstSentence = sentences[0] || text;
+  const lastSentence = sentences[sentences.length - 1] || text;
   if (/^(首先|一是|一方面|为进一步|为贯彻|根据|围绕)/.test(text)) {
     hints.push("开头直接交代依据或切入点");
   } else if (/^(项目|本次|当前|针对|关于)/.test(text)) {
     hints.push("开头先点明对象或当前事项");
+  }
+  if (/^(经|根据|按照|围绕|结合|为|针对)/.test(firstSentence)) {
+    hints.push("常先交代依据或判断前提，再展开正文");
+  }
+  if (/^(目前|当前|现阶段|从现有情况看|经梳理)/.test(firstSentence)) {
+    hints.push("常先交代现状或事实背景，再进入分析");
   }
   if (/\d|%|万元|亿元|家|项|天|月|年/.test(text)) {
     hints.push("正文里常夹带数据或量化事实");
   }
   if (/因此|同时|另一方面|下一步|此外|其中|在此基础上/.test(text)) {
     hints.push("段内会用承接词推进逻辑");
+  }
+  if (/问题|风险|不足|短板/.test(text) && /建议|措施|改进|完善|推进|落实/.test(text)) {
+    hints.push("常按问题或风险在前、措施和动作在后展开");
+  }
+  if (/情况|进展|成效|结果/.test(firstSentence) && /建议|判断|下一步|安排/.test(lastSentence)) {
+    hints.push("常先铺事实或进展，再收束到判断和安排");
+  }
+  if (/认为|总体看|综合研判|建议/.test(lastSentence)) {
+    hints.push("结尾会收束成判断、结论或明确建议");
+  }
+  if (/一是|二是|三是|首先|其次|再次/.test(text)) {
+    hints.push("常按分点并列方式展开论证");
   }
   if (/建议|应当|需|将|推进|落实|完善/.test(text)) {
     hints.push("结尾常落到建议、安排或动作");
@@ -924,7 +948,7 @@ export function buildTemplateRewriteHint(input: {
       }))
       .filter((entry) => entry.score >= 2)
       .sort((left, right) => right.score - left.score)
-      .slice(0, 2);
+      .slice(0, 3);
     const logicAfter =
       (index > 0 ? logicChain[index - 1] || logicChain[0] || null : null) ||
       matchedHistoryLogic;
@@ -941,9 +965,26 @@ export function buildTemplateRewriteHint(input: {
       mustInclude: mustIncludeItems,
     });
     const assignedFacts = factSelection.facts;
+    const templateExcerpt = pickSectionExcerpt(templateSections, section);
+    const templatePattern = inferWritingPattern(templateExcerpt);
+    const matchedHistoryHints = matchedHistorySections.map((item) => ({
+      material_title: item.title,
+      section: item.section,
+      normalized_section: item.normalized_section,
+      excerpt: item.excerpt,
+      writing_pattern: item.writing_pattern,
+    }));
+    const contentHintWarnings: string[] = [];
+    if (!templateExcerpt) {
+      contentHintWarnings.push(`模板段落「${section}」未提取到正文参考，只能按结构和事实保守改写。`);
+    }
+    if (matchedHistoryHints.length > 0 && matchedHistoryHints.every((item) => !item.excerpt)) {
+      contentHintWarnings.push(`历史材料对「${section}」只匹配到标题，未提取到正文参考。`);
+    }
     if (factSelection.confidence < LOW_ASSIGNMENT_CONFIDENCE_THRESHOLD) {
       warnings.push(`段落「${section}」当前事实匹配置信度偏低，建议补充更直接的背景事实或模板说明。`);
     }
+    warnings.push(...contentHintWarnings);
     return {
       section,
       slot_name: slot.slot_name || `${section}对应内容`,
@@ -951,15 +992,10 @@ export function buildTemplateRewriteHint(input: {
       assigned_facts: assignedFacts,
       assigned_requirements: assignedRequirements,
       assignment_confidence: factSelection.confidence,
-      template_section_excerpt: pickSectionExcerpt(templateSections, section),
-      template_writing_pattern: inferWritingPattern(pickSectionExcerpt(templateSections, section)),
-      history_section_hints: matchedHistorySections.map((item) => ({
-        material_title: item.title,
-        section: item.section,
-        normalized_section: item.normalized_section,
-        excerpt: item.excerpt,
-        writing_pattern: item.writing_pattern,
-      })),
+      template_section_excerpt: templateExcerpt,
+      template_writing_pattern: templatePattern,
+      content_hint_warning: contentHintWarnings[0] || "",
+      history_section_hints: matchedHistoryHints,
       fill_strategy: `优先填入「${assignedFacts.join("；") || facts}」${
         assignedRequirements.length
           ? `；本段重点覆盖「${assignedRequirements.join("；")}」`

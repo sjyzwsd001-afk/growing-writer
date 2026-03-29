@@ -56,12 +56,20 @@ function buildDraftRepairPrompt(input: {
   outline: OutlineResult;
   rewritePlan: TemplateRewriteStep[];
 }) {
+  const highConfidenceFactViolations = (input.draft.constraint_checks?.fact_coverage ?? [])
+    .filter((item, index) => {
+      const confidence = input.rewritePlan[index]?.assignment_confidence ?? 0;
+      return confidence >= 0.45 && item.unmatched.length > 0 && item.matched.length === 0;
+    })
+    .map((item) => `${item.section}：${item.unmatched.slice(0, 3).join("；")}`)
+    .slice(0, 6);
   return `请修补这份正文，使其更严格符合提纲和模板改写计划。
 
 修补要求：
 1. 保留已有可用内容
 2. 优先补齐 missing_points 和 rule_violations 里指出的缺口
 3. 每段优先覆盖 assigned_requirements，并尽量落到 assigned_facts
+4. 对“高置信但未明显使用已分配事实”的段落，优先修补事实落点，不要只调整语气或格式
 4. 如果 rewritePlan 中给出了 logic_after，正文段落顺序必须体现 from -> to
 5. assignment_confidence 偏低的段落要用保守表达，不要把猜测写成确定事实
 6. 不要编造事实
@@ -75,6 +83,9 @@ ${JSON.stringify(input.outline, null, 2)}
 
 模板改写计划:
 ${JSON.stringify(input.rewritePlan, null, 2)}
+
+高置信事实缺口:
+${JSON.stringify(highConfidenceFactViolations, null, 2)}
 `;
 }
 

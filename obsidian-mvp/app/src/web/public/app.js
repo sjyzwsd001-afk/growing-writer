@@ -3361,7 +3361,9 @@ function renderTaskContextSummary() {
         typeof step.template_section_excerpt === "string" ? step.template_section_excerpt : "",
       templatePattern:
         typeof step.template_writing_pattern === "string" ? step.template_writing_pattern : "",
-      historyHints: Array.isArray(step.history_section_hints) ? step.history_section_hints.slice(0, 2) : [],
+      contentHintWarning:
+        typeof step.content_hint_warning === "string" ? step.content_hint_warning : "",
+      historyHints: Array.isArray(step.history_section_hints) ? step.history_section_hints.slice(0, 3) : [],
       missing,
       confidence:
         typeof step.assignment_confidence === "number" ? step.assignment_confidence : null,
@@ -3468,6 +3470,11 @@ function renderTaskContextSummary() {
                     ${
                       item.templatePattern
                         ? `<div class="mini">模板写法模式：${escapeHtml(item.templatePattern)}</div>`
+                        : ""
+                    }
+                    ${
+                      item.contentHintWarning
+                        ? `<div class="mini text-warning">内容参考告警：${escapeHtml(item.contentHintWarning)}</div>`
                         : ""
                     }
                     ${

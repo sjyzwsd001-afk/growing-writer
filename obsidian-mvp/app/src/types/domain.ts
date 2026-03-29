@@ -103,6 +103,7 @@ export type TemplateRewriteStep = {
   assignment_confidence?: number;
   template_section_excerpt?: string;
   template_writing_pattern?: string;
+  content_hint_warning?: string;
   history_section_hints?: Array<{
     material_title: string;
     section: string;

@@ -73,6 +73,7 @@ function renderReferences(input: {
               `- 段落意图：${step.intent}\n` +
               `- 模板原段参考：${step.template_section_excerpt || "无"}\n` +
               `- 模板写法模式：${step.template_writing_pattern || "无"}\n` +
+              `- 内容参考告警：${step.content_hint_warning || "无"}\n` +
               `- 填充策略：${step.fill_strategy}\n` +
               `- 证据来源：${step.source_hint}\n` +
               `- 历史段落参考：${

@@ -123,6 +123,7 @@ export function compactTemplateRewritePlan(
         : undefined,
     template_section_excerpt: clip(step.template_section_excerpt ?? "", 220),
     template_writing_pattern: clip(step.template_writing_pattern ?? "", 100),
+    content_hint_warning: clip(step.content_hint_warning ?? "", 120),
     history_section_hints: (step.history_section_hints ?? []).slice(0, 3).map((item) => ({
       material_title: clip(item.material_title, 70),
       section: clip(item.section, 120),
