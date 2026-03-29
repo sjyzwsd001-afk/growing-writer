@@ -3241,6 +3241,10 @@ function buildGenerationContextFromPayload(payload) {
     payload.draft && typeof payload.draft === "object" && payload.draft.self_review
       ? payload.draft.self_review
       : null;
+  const outlineReview =
+    payload.outline && typeof payload.outline === "object" && payload.outline.constraint_checks
+      ? payload.outline.constraint_checks
+      : null;
   const templateRewriteHint =
     payload.templateRewriteHint && typeof payload.templateRewriteHint === "object"
       ? payload.templateRewriteHint
@@ -3261,6 +3265,8 @@ function buildGenerationContextFromPayload(payload) {
     templateRule,
     templateMaterial,
     templateRewriteHint,
+    outlineReview,
+    draft: payload.draft && typeof payload.draft === "object" ? payload.draft : null,
     draftReview,
   };
 }
@@ -3337,6 +3343,7 @@ function renderTaskContextSummary() {
     context.draft && typeof context.draft === "object" && context.draft.constraint_checks
       ? context.draft.constraint_checks
       : null;
+  const outlineChecks = context.outlineReview;
   const sectionChecklist = rewriteSteps.slice(0, 4).map((step) => {
     const reqs = Array.isArray(step.assigned_requirements) ? step.assigned_requirements : [];
     const missing = missingPoints.filter((item) =>
@@ -3456,6 +3463,11 @@ function renderTaskContextSummary() {
         ${
           constraintChecks && Array.isArray(constraintChecks.warnings) && constraintChecks.warnings.length
             ? `<div class="mini">程序化校验：${escapeHtml(constraintChecks.warnings.slice(0, 4).join(" / "))}</div>`
+            : ""
+        }
+        ${
+          outlineChecks && Array.isArray(outlineChecks.warnings) && outlineChecks.warnings.length
+            ? `<div class="mini">提纲校验：${escapeHtml(outlineChecks.warnings.slice(0, 4).join(" / "))}</div>`
             : ""
         }
       </div>

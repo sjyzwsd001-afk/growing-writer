@@ -42,6 +42,19 @@ export const outlineResultSchema = z.object({
   ),
   tone_notes: z.array(z.string()),
   coverage_check: z.array(z.string()),
+  constraint_checks: z
+    .object({
+      section_order_ok: z.boolean(),
+      section_order_missing: z.array(z.string()),
+      requirement_gaps: z.array(
+        z.object({
+          section: z.string(),
+          missing: z.array(z.string()),
+        }),
+      ),
+      warnings: z.array(z.string()),
+    })
+    .optional(),
 });
 
 export const draftResultSchema = z.object({

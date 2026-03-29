@@ -72,6 +72,51 @@ function applyTemplateRewritePlanToOutline(
   };
 }
 
+function validateOutlineAgainstRewritePlan(
+  outline: OutlineResult,
+  rewritePlan: TemplateRewriteStep[],
+): OutlineResult {
+  if (!rewritePlan.length) {
+    return outline;
+  }
+
+  const sectionOrderMissing = rewritePlan
+    .filter((step) => !outline.sections.some((section) => section.heading === step.section))
+    .map((step) => step.section);
+
+  const requirementGaps = rewritePlan.map((step) => {
+    const matchedSection = outline.sections.find((section) => section.heading === step.section);
+    const keyPointsText = matchedSection ? matchedSection.key_points.join(" ") : "";
+    const missing = (step.assigned_requirements || []).filter(
+      (requirement) => !textContainsComparable(keyPointsText, requirement),
+    );
+    return {
+      section: step.section,
+      missing,
+    };
+  });
+
+  const warnings = [
+    ...(sectionOrderMissing.length
+      ? [`提纲还未覆盖这些模板段落：${sectionOrderMissing.join("、")}`]
+      : []),
+    ...requirementGaps
+      .filter((item) => item.missing.length)
+      .map((item) => `提纲段落「${item.section}」仍缺少：${item.missing.join("；")}`),
+  ].slice(0, 6);
+
+  return {
+    ...outline,
+    coverage_check: [...new Set([...(outline.coverage_check || []), ...warnings])].slice(0, 8),
+    constraint_checks: {
+      section_order_ok: sectionOrderMissing.length === 0,
+      section_order_missing: sectionOrderMissing,
+      requirement_gaps: requirementGaps.filter((item) => item.missing.length),
+      warnings,
+    },
+  };
+}
+
 function splitMarkdownSections(markdown: string): Array<{ heading: string; body: string }> {
   const normalized = String(markdown || "").trim();
   if (!normalized) {
@@ -397,7 +442,10 @@ export function buildOutline(input: {
     tone_notes: ["正式", "克制", "先结论后展开"],
     coverage_check: ["待接入 LLM 细化覆盖检查"],
   };
-  return applyTemplateRewritePlanToOutline(baseOutline, input.templateRewritePlan ?? []);
+  return validateOutlineAgainstRewritePlan(
+    applyTemplateRewritePlanToOutline(baseOutline, input.templateRewritePlan ?? []),
+    input.templateRewritePlan ?? [],
+  );
 }
 
 export async function buildOutlineWithLlm(
@@ -429,7 +477,10 @@ export async function buildOutlineWithLlm(
     maxTokens: 1400,
     timeoutMs: 75_000,
   });
-  return applyTemplateRewritePlanToOutline(outline, input.templateRewritePlan ?? []);
+  return validateOutlineAgainstRewritePlan(
+    applyTemplateRewritePlanToOutline(outline, input.templateRewritePlan ?? []),
+    input.templateRewritePlan ?? [],
+  );
 }
 
 export function generateDraft(input: {
