@@ -37,17 +37,43 @@ type ChatJsonOptions<T> = {
   repairOnParseError?: boolean;
 };
 
+type RequestTextOptions = {
+  system: string;
+  user: string;
+  schemaHint?: string;
+  maxTokens?: number;
+  timeoutMs?: number;
+  responseFormat?: "json_object" | "text";
+};
+
 function extractJsonPayload(raw: string): string {
   const trimmed = raw.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
   if (fenced) {
     return fenced[1].trim();
   }
-  const fencedAnywhere = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fencedAnywhere) {
-    return fencedAnywhere[1].trim();
+  const fencedAnywhere = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)]
+    .map((match) => match[1]?.trim())
+    .filter((item): item is string => Boolean(item));
+  if (fencedAnywhere.length > 0) {
+    return fencedAnywhere[0];
   }
   return trimmed;
+}
+
+function normalizeJsonLikeText(raw: string): string {
+  return raw
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/^[\s`]*```(?:json)?\s*/i, "")
+    .replace(/\s*```[\s`]*$/i, "")
+    .replace(/^\s*json\s*\n/i, "")
+    .replace(/[“”]/g, "\"")
+    .replace(/[‘’]/g, "'")
+    .replace(/[：]/g, ":")
+    .replace(/[，]/g, ",")
+    .replace(/[（]/g, "(")
+    .replace(/[）]/g, ")");
 }
 
 function findBalancedJson(raw: string): string | null {
@@ -98,13 +124,27 @@ function findBalancedJson(raw: string): string | null {
 }
 
 function tryParseJsonCandidates(raw: string): unknown {
-  const base = extractJsonPayload(raw);
+  const trimmed = raw.trim();
+  const normalizedRaw = normalizeJsonLikeText(trimmed);
+  const base = normalizeJsonLikeText(extractJsonPayload(raw));
+  const fencedBlocks = [...trimmed.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)]
+    .map((match) => normalizeJsonLikeText(match[1] ?? ""))
+    .filter(Boolean);
   const balanced = findBalancedJson(base);
-  const balancedFromRaw = findBalancedJson(raw);
-  const candidates = [raw.trim(), base, balanced]
+  const balancedFromRaw = findBalancedJson(normalizedRaw);
+  const candidates = [trimmed, normalizedRaw, base, balanced]
+    .concat(fencedBlocks)
     .concat(balancedFromRaw ? [balancedFromRaw] : [])
     .filter((item): item is string => Boolean(item && item.trim()))
-    .flatMap((item) => [item, item.replace(/,\s*([}\]])/g, "$1")]);
+    .flatMap((item) => {
+      const normalized = normalizeJsonLikeText(item);
+      return [
+        item,
+        normalized,
+        item.replace(/,\s*([}\]])/g, "$1"),
+        normalized.replace(/,\s*([}\]])/g, "$1"),
+      ];
+    });
 
   const seen = new Set<string>();
   let lastError: Error | null = null;
@@ -170,6 +210,7 @@ export class OpenAiCompatibleClient {
     schemaHint?: string;
     maxTokens?: number;
     timeoutMs?: number;
+    responseFormat?: "json_object" | "text";
   }): Promise<string> {
     if (!this.config.bearerToken) {
       throw new Error("OPENAI_BEARER_TOKEN or OPENAI_API_KEY is not configured.");
@@ -178,7 +219,7 @@ export class OpenAiCompatibleClient {
     const timeoutMs = options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS;
     const maxAttempts = this.config.apiType === "anthropic-messages" ? 3 : 2;
     let lastError: Error | null = null;
-    let openAiResponseFormat: "json_object" | "text" = "json_object";
+    let openAiResponseFormat: "json_object" | "text" = options.responseFormat ?? "json_object";
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const controller = new AbortController();
@@ -303,11 +344,12 @@ export class OpenAiCompatibleClient {
         try {
           const repaired = await this.requestText({
             system:
-              "You repair almost-valid JSON into strict JSON. Preserve the original meaning and output JSON only.",
-            user: `请把下面内容修复为严格合法的 JSON。字段名必须严格匹配目标结构，不要添加解释：\n\n目标结构：\n${options.schemaHint ?? "(未提供)"}\n\n原始内容：\n${content}`,
+              "You repair almost-valid JSON into strict JSON. Preserve the original meaning and output JSON only. Do not wrap the result in markdown or code fences.",
+            user: `请把下面内容修复为严格合法的 JSON。字段名必须严格匹配目标结构，不要添加解释，不要输出 markdown，不要加代码块围栏：\n\n目标结构：\n${options.schemaHint ?? "(未提供)"}\n\n原始内容：\n${content}`,
             schemaHint: options.schemaHint,
             maxTokens: Math.min(options.maxTokens ?? 1800, 1800),
             timeoutMs: Math.min(options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS, 60_000),
+            responseFormat: "text",
           });
           parsed = tryParseJsonCandidates(repaired);
         } catch (repairError) {
@@ -327,11 +369,12 @@ export class OpenAiCompatibleClient {
 
       const repaired = await this.requestText({
         system:
-          "You repair JSON so it matches the requested schema exactly. Preserve the original meaning and output JSON only.",
-        user: `请把下面 JSON 调整到目标结构要求。字段名必须严格匹配目标结构，不要解释：\n\n目标结构：\n${options.schemaHint ?? "(未提供)"}\n\n原始 JSON：\n${JSON.stringify(parsed, null, 2)}`,
+          "You repair JSON so it matches the requested schema exactly. Preserve the original meaning and output JSON only. Do not wrap the result in markdown or code fences.",
+        user: `请把下面 JSON 调整到目标结构要求。字段名必须严格匹配目标结构，不要解释，不要输出 markdown，不要加代码块围栏：\n\n目标结构：\n${options.schemaHint ?? "(未提供)"}\n\n原始 JSON：\n${JSON.stringify(parsed, null, 2)}`,
         schemaHint: options.schemaHint,
         maxTokens: Math.min(options.maxTokens ?? 1800, 1800),
         timeoutMs: Math.min(options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS, 60_000),
+        responseFormat: "text",
       });
       return options.schema.parse(tryParseJsonCandidates(repaired));
     }
