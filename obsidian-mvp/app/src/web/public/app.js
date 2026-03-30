@@ -767,6 +767,8 @@ function getWorkflowFailureMessage(run) {
 async function waitForWorkflowRunReady(runId, taskPath, timeoutMs = WORKFLOW_RUN_POLL_TIMEOUT_MS) {
   const startedAt = Date.now();
   let lastTransientError = "";
+  let lastEventId = "";
+  let lastStatusMessage = "";
   while (Date.now() - startedAt < timeoutMs) {
     let payload;
     try {
@@ -785,6 +787,24 @@ async function waitForWorkflowRunReady(runId, taskPath, timeoutMs = WORKFLOW_RUN
       throw error;
     }
     const run = payload?.run;
+    const latestEvent = Array.isArray(run?.events) && run.events.length ? run.events[run.events.length - 1] : null;
+    const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+    const elapsedLabel =
+      elapsedSeconds >= 60
+        ? `${Math.floor(elapsedSeconds / 60)}分${String(elapsedSeconds % 60).padStart(2, "0")}秒`
+        : `${elapsedSeconds}秒`;
+    const currentSummary =
+      latestEvent?.summary ||
+      (run?.currentStage === "GENERATE_DRAFT" ? "正在后台生成初稿。" : "正在后台处理。");
+    const nextMessage = `初稿生成中：${currentSummary}（已等待 ${elapsedLabel}）`;
+    if (latestEvent?.id && latestEvent.id !== lastEventId && latestEvent.summary) {
+      lastEventId = latestEvent.id;
+      lastStatusMessage = nextMessage;
+      setInfo(nextMessage);
+    } else if (nextMessage !== lastStatusMessage) {
+      lastStatusMessage = nextMessage;
+      setInfo(nextMessage);
+    }
     if (run?.status === "failed") {
       throw new Error(getWorkflowFailureMessage(run));
     }

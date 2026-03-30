@@ -508,6 +508,11 @@ export async function runTaskAction(input: {
   vaultRoot: string;
   taskPath: string;
   action: "diagnose" | "outline" | "draft";
+  onStageProgress?: (input: {
+    stage: "diagnose" | "outline" | "draft";
+    summary: string;
+    details?: Record<string, unknown>;
+  }) => Promise<void> | void;
 }) {
   const { task, profiles, analysis, matchedRules, matchedRuleRecords, matchedMaterials, templateRewriteHint, evidenceCards, ruleDecisionLog } =
     await buildTaskSnapshot(input.vaultRoot, input.taskPath);
@@ -527,6 +532,10 @@ export async function runTaskAction(input: {
   };
 
   const routeMetas: RouteMeta[] = [];
+  await input.onStageProgress?.({
+    stage: "diagnose",
+    summary: "正在执行写前诊断，分析任务事实、材料和结构约束。",
+  });
   const diagnosisResult = await executeWithModelRouting({
     vaultRoot: input.vaultRoot,
     route: "fast",
@@ -589,6 +598,14 @@ export async function runTaskAction(input: {
     matchedMaterialCount: matchedMaterials.length,
     evidenceCardCount: evidenceCards.length,
   }).catch(() => undefined);
+  await input.onStageProgress?.({
+    stage: "diagnose",
+    summary: "写前诊断完成，正在继续生成提纲。",
+    details: {
+      readiness: diagnosis.readiness,
+      missingInfo: diagnosis.missing_info ?? [],
+    },
+  });
 
   if (input.action === "diagnose") {
     await writeTaskSections({
@@ -628,6 +645,10 @@ export async function runTaskAction(input: {
     factSectionHints: diagnosis.fact_section_mapping ?? [],
   };
 
+  await input.onStageProgress?.({
+    stage: "outline",
+    summary: "写前诊断完成，正在生成提纲结构。",
+  });
   const outlineResult = await executeWithModelRouting({
     vaultRoot: input.vaultRoot,
     route: "fast",
@@ -657,6 +678,14 @@ export async function runTaskAction(input: {
     matchedMaterialCount: matchedMaterials.length,
     evidenceCardCount: evidenceCards.length,
   }).catch(() => undefined);
+  await input.onStageProgress?.({
+    stage: "outline",
+    summary: "提纲生成完成，正在继续生成正文。",
+    details: {
+      sectionCount: outline.sections?.length ?? 0,
+      coverageCheck: outline.coverage_check ?? [],
+    },
+  });
 
   if (input.action === "outline") {
     await writeTaskSections({
@@ -682,6 +711,10 @@ export async function runTaskAction(input: {
     };
   }
 
+  await input.onStageProgress?.({
+    stage: "draft",
+    summary: "提纲已完成，正在生成正文初稿。",
+  });
   const draftResult = await executeWithModelRouting({
     vaultRoot: input.vaultRoot,
     route: "strong",
@@ -733,6 +766,14 @@ export async function runTaskAction(input: {
     matchedMaterialCount: matchedMaterials.length,
     evidenceCardCount: evidenceCards.length,
   }).catch(() => undefined);
+  await input.onStageProgress?.({
+    stage: "draft",
+    summary: "正文生成完成，正在写回任务与工作流结果。",
+    details: {
+      missingPoints: draft.self_review?.missing_points ?? [],
+      ruleViolations: draft.self_review?.rule_violations ?? [],
+    },
+  });
 
   await writeTaskSections({
     task,
@@ -869,7 +910,7 @@ export async function startWorkflowRunForTask(input: {
   run = await transitionWorkflowRun(input.vaultRoot, {
     runId: run.runId,
     toStage: "GENERATE_DRAFT",
-    summary: "Entered draft generation stage.",
+    summary: "已进入初稿生成阶段。",
     definition: workflowDefinition.definition,
   });
 
@@ -895,10 +936,26 @@ async function continueWorkflowStartInBackground(input: {
   workflowDefinition: Awaited<ReturnType<typeof loadWorkflowDefinition>>["definition"];
 }) {
   try {
+    await appendWorkflowEvent(input.vaultRoot, {
+      runId: input.runId,
+      stage: "GENERATE_DRAFT",
+      type: "action",
+      summary: "正在解析任务和背景材料。",
+    }).catch(() => undefined);
+
     const generated = await runTaskAction({
       vaultRoot: input.vaultRoot,
       taskPath: input.taskPath,
       action: "draft",
+      onStageProgress: async (progress) => {
+        await appendWorkflowEvent(input.vaultRoot, {
+          runId: input.runId,
+          stage: "GENERATE_DRAFT",
+          type: "action",
+          summary: progress.summary,
+          details: progress.details,
+        }).catch(() => undefined);
+      },
     });
 
     await updateWorkflowRun(input.vaultRoot, {

@@ -40,7 +40,14 @@ type ChatJsonOptions<T> = {
 function extractJsonPayload(raw: string): string {
   const trimmed = raw.trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return fenced ? fenced[1].trim() : trimmed;
+  if (fenced) {
+    return fenced[1].trim();
+  }
+  const fencedAnywhere = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fencedAnywhere) {
+    return fencedAnywhere[1].trim();
+  }
+  return trimmed;
 }
 
 function findBalancedJson(raw: string): string | null {
@@ -93,7 +100,9 @@ function findBalancedJson(raw: string): string | null {
 function tryParseJsonCandidates(raw: string): unknown {
   const base = extractJsonPayload(raw);
   const balanced = findBalancedJson(base);
+  const balancedFromRaw = findBalancedJson(raw);
   const candidates = [raw.trim(), base, balanced]
+    .concat(balancedFromRaw ? [balancedFromRaw] : [])
     .filter((item): item is string => Boolean(item && item.trim()))
     .flatMap((item) => [item, item.replace(/,\s*([}\]])/g, "$1")]);
 
@@ -298,7 +307,7 @@ export class OpenAiCompatibleClient {
             user: `请把下面内容修复为严格合法的 JSON。字段名必须严格匹配目标结构，不要添加解释：\n\n目标结构：\n${options.schemaHint ?? "(未提供)"}\n\n原始内容：\n${content}`,
             schemaHint: options.schemaHint,
             maxTokens: Math.min(options.maxTokens ?? 1800, 1800),
-            timeoutMs: Math.min(options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS, 30_000),
+            timeoutMs: Math.min(options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS, 60_000),
           });
           parsed = tryParseJsonCandidates(repaired);
         } catch (repairError) {
@@ -322,7 +331,7 @@ export class OpenAiCompatibleClient {
         user: `请把下面 JSON 调整到目标结构要求。字段名必须严格匹配目标结构，不要解释：\n\n目标结构：\n${options.schemaHint ?? "(未提供)"}\n\n原始 JSON：\n${JSON.stringify(parsed, null, 2)}`,
         schemaHint: options.schemaHint,
         maxTokens: Math.min(options.maxTokens ?? 1800, 1800),
-        timeoutMs: Math.min(options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS, 30_000),
+        timeoutMs: Math.min(options.timeoutMs ?? LLM_REQUEST_TIMEOUT_MS, 60_000),
       });
       return options.schema.parse(tryParseJsonCandidates(repaired));
     }
