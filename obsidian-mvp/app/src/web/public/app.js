@@ -1,4 +1,4 @@
-import { api, DEFAULT_API_TIMEOUT_MS, MATERIAL_IMPORT_API_TIMEOUT_MS, MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS, WORKFLOW_START_TIMEOUT_MS, WORKFLOW_RUN_POLL_TIMEOUT_MS, trustedOrigins } from "./api.js";
+import { api, DEFAULT_API_TIMEOUT_MS, MATERIAL_IMPORT_API_TIMEOUT_MS, MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS, WORKFLOW_START_TIMEOUT_MS, WORKFLOW_RUN_POLL_TIMEOUT_MS, WORKFLOW_RUN_REQUEST_TIMEOUT_MS, trustedOrigins } from "./api.js";
 import { state, setState, subscribeState } from "./state.js";
 import { bindWizard as bindWizardModule } from "./wizard.js";
 import { bindEditorActions as bindEditorActionsModule } from "./editor.js";
@@ -764,8 +764,24 @@ function getWorkflowFailureMessage(run) {
 
 async function waitForWorkflowRunReady(runId, taskPath, timeoutMs = WORKFLOW_RUN_POLL_TIMEOUT_MS) {
   const startedAt = Date.now();
+  let lastTransientError = "";
   while (Date.now() - startedAt < timeoutMs) {
-    const payload = await api(`/api/workflow/run?runId=${encodeURIComponent(runId)}`);
+    let payload;
+    try {
+      payload = await api(
+        `/api/workflow/run?runId=${encodeURIComponent(runId)}`,
+        {},
+        WORKFLOW_RUN_REQUEST_TIMEOUT_MS,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "状态查询失败。";
+      if (/状态查询暂时超时|请求超时/.test(message)) {
+        lastTransientError = message;
+        await sleep(WORKFLOW_RUN_POLL_INTERVAL_MS);
+        continue;
+      }
+      throw error;
+    }
     const run = payload?.run;
     if (run?.status === "failed") {
       throw new Error(getWorkflowFailureMessage(run));
@@ -781,7 +797,11 @@ async function waitForWorkflowRunReady(runId, taskPath, timeoutMs = WORKFLOW_RUN
     }
     await sleep(WORKFLOW_RUN_POLL_INTERVAL_MS);
   }
-  throw new Error("初稿仍在后台生成，等待时间过长。请稍后刷新页面查看是否已生成完成。");
+  throw new Error(
+    lastTransientError
+      ? `初稿仍在后台生成，状态查询多次超时。请稍后刷新页面查看是否已生成完成。`
+      : "初稿仍在后台生成，等待时间过长。请稍后刷新页面查看是否已生成完成。",
+  );
 }
 
 function toggleView(viewName) {
