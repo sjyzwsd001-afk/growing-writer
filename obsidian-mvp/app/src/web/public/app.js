@@ -4643,18 +4643,37 @@ async function createAndRunTask() {
     const created = workflow.created;
     const run = workflow.run;
     submitButton.textContent = "正在生成初稿...";
-    setInfo("初稿生成中，通常需要 1 到 3 分钟。你可以停留在当前页等待完成。");
+    setInfo("初稿生成中，通常需要 3 到 10 分钟。你可以停留在当前页等待完成。");
 
-    const completed = run?.runId
-      ? await waitForWorkflowRunReady(run.runId, created.path)
-      : {
-          run: workflow.run || null,
-          generated: workflow.generated || null,
-          draftText:
-            workflow.generated?.draft?.draft_markdown ||
-            (await getTaskDraftFromFile(created.path)) ||
-            "生成完成，但未找到正文。",
+    let completed;
+    try {
+      completed = run?.runId
+        ? await waitForWorkflowRunReady(run.runId, created.path)
+        : {
+            run: workflow.run || null,
+            generated: workflow.generated || null,
+            draftText:
+              workflow.generated?.draft?.draft_markdown ||
+              (await getTaskDraftFromFile(created.path)) ||
+              "生成完成，但未找到正文。",
+          };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/^初稿仍在后台生成/.test(message)) {
+        state.currentTask = {
+          id: created.taskId,
+          path: created.path,
+          title: taskPayload.title,
+          runId: run?.runId || "",
         };
+        state.currentWorkflowRun = run || null;
+        setTaskBadge(`当前任务：${taskPayload.title}`);
+        renderWorkflowStageTracker();
+        setInfo(`${message} 你可以留在当前页继续等待，也可以稍后刷新页面继续查看。`);
+        return;
+      }
+      throw error;
+    }
     const generated = completed.generated;
     const draftText = completed.draftText;
 
