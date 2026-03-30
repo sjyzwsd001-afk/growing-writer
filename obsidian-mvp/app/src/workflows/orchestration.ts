@@ -32,6 +32,8 @@ export type WorkflowRun = {
   createdAt: string;
   updatedAt: string;
   events: WorkflowEvent[];
+  generated?: Record<string, unknown> | null;
+  failureMessage?: string | null;
 };
 
 function safeTimestampId(input: string): string {
@@ -114,6 +116,8 @@ export async function createWorkflowRun(
     currentStage: initialStage,
     createdAt: now,
     updatedAt: now,
+    generated: null,
+    failureMessage: null,
     events: [
       {
         id: eventId(runId, 1),
@@ -127,6 +131,19 @@ export async function createWorkflowRun(
 
   await saveWorkflowRun(vaultRoot, run);
   return run;
+}
+
+export async function updateWorkflowRun(vaultRoot: string, input: {
+  runId: string;
+  mutate: (run: WorkflowRun) => WorkflowRun;
+}): Promise<WorkflowRun> {
+  const run = await loadWorkflowRun(vaultRoot, input.runId);
+  const next = input.mutate(run);
+  await saveWorkflowRun(vaultRoot, {
+    ...next,
+    updatedAt: new Date().toISOString(),
+  });
+  return next;
 }
 
 export async function loadWorkflowRun(vaultRoot: string, runId: string): Promise<WorkflowRun> {

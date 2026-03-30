@@ -27,6 +27,7 @@ import {
   createWorkflowRun,
   loadWorkflowRun,
   transitionWorkflowRun,
+  updateWorkflowRun,
   type WorkflowRun,
 } from "../workflows/orchestration.js";
 import { loadWorkflowDefinition } from "../workflows/definition.js";
@@ -872,56 +873,97 @@ export async function startWorkflowRunForTask(input: {
     definition: workflowDefinition.definition,
   });
 
-  const generated = await runTaskAction({
+  void continueWorkflowStartInBackground({
     vaultRoot: input.vaultRoot,
+    runId: run.runId,
     taskPath: created.path,
-    action: "draft",
-  });
-
-  run = await appendWorkflowEvent(input.vaultRoot, {
-    runId: run.runId,
-    stage: "GENERATE_DRAFT",
-    type: "completed",
-    summary: "Draft generated.",
-    details: {
-      diagnosisReadiness: generated.diagnosis?.readiness ?? "unknown",
-      outlineSections: generated.outline?.sections?.length ?? 0,
-      ruleDecisionLog: generated.ruleDecisionLog ?? [],
-    },
-  });
-
-  run = await transitionWorkflowRun(input.vaultRoot, {
-    runId: run.runId,
-    toStage: "REVIEW_DIAGNOSE",
-    summary: "Entered review/diagnose stage.",
-    definition: workflowDefinition.definition,
-  });
-
-  run = await appendWorkflowEvent(input.vaultRoot, {
-    runId: run.runId,
-    stage: "REVIEW_DIAGNOSE",
-    type: "completed",
-    summary: "Pre-write diagnosis reviewed.",
-    details: {
-      missingInfo: generated.diagnosis?.missing_info ?? [],
-      risks: generated.diagnosis?.writing_risks ?? [],
-      ruleDecisionLog: generated.ruleDecisionLog ?? [],
-    },
-  });
-
-  run = await transitionWorkflowRun(input.vaultRoot, {
-    runId: run.runId,
-    toStage: "USER_CONFIRM_OR_EDIT",
-    summary: "Waiting for user confirmation or feedback edits.",
-    definition: workflowDefinition.definition,
+    workflowDefinition: workflowDefinition.definition,
   });
 
   return {
     run,
     created,
-    generated,
+    generated: null,
     workflowDefinition,
   };
+}
+
+async function continueWorkflowStartInBackground(input: {
+  vaultRoot: string;
+  runId: string;
+  taskPath: string;
+  workflowDefinition: Awaited<ReturnType<typeof loadWorkflowDefinition>>["definition"];
+}) {
+  try {
+    const generated = await runTaskAction({
+      vaultRoot: input.vaultRoot,
+      taskPath: input.taskPath,
+      action: "draft",
+    });
+
+    await updateWorkflowRun(input.vaultRoot, {
+      runId: input.runId,
+      mutate: (run) => ({
+        ...run,
+        generated: generated as unknown as Record<string, unknown>,
+        failureMessage: null,
+      }),
+    });
+
+    let run = await appendWorkflowEvent(input.vaultRoot, {
+      runId: input.runId,
+      stage: "GENERATE_DRAFT",
+      type: "completed",
+      summary: "Draft generated.",
+      details: {
+        diagnosisReadiness: generated.diagnosis?.readiness ?? "unknown",
+        outlineSections: generated.outline?.sections?.length ?? 0,
+        ruleDecisionLog: generated.ruleDecisionLog ?? [],
+      },
+    });
+
+    run = await transitionWorkflowRun(input.vaultRoot, {
+      runId: run.runId,
+      toStage: "REVIEW_DIAGNOSE",
+      summary: "Entered review/diagnose stage.",
+      definition: input.workflowDefinition,
+    });
+
+    run = await appendWorkflowEvent(input.vaultRoot, {
+      runId: run.runId,
+      stage: "REVIEW_DIAGNOSE",
+      type: "completed",
+      summary: "Pre-write diagnosis reviewed.",
+      details: {
+        missingInfo: generated.diagnosis?.missing_info ?? [],
+        risks: generated.diagnosis?.writing_risks ?? [],
+        ruleDecisionLog: generated.ruleDecisionLog ?? [],
+      },
+    });
+
+    await transitionWorkflowRun(input.vaultRoot, {
+      runId: run.runId,
+      toStage: "USER_CONFIRM_OR_EDIT",
+      summary: "Waiting for user confirmation or feedback edits.",
+      definition: input.workflowDefinition,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Draft generation failed.";
+    await updateWorkflowRun(input.vaultRoot, {
+      runId: input.runId,
+      mutate: (run) => ({
+        ...run,
+        status: "failed",
+        failureMessage: message,
+      }),
+    }).catch(() => undefined);
+    await appendWorkflowEvent(input.vaultRoot, {
+      runId: input.runId,
+      stage: "GENERATE_DRAFT",
+      type: "failed",
+      summary: message,
+    }).catch(() => undefined);
+  }
 }
 
 export async function advanceWorkflowRunForAction(input: {

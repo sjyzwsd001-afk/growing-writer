@@ -1,7 +1,8 @@
 export const DEFAULT_API_TIMEOUT_MS = 30000;
 export const MATERIAL_IMPORT_API_TIMEOUT_MS = 180000;
 export const MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS = 120000;
-export const WORKFLOW_START_TIMEOUT_MS = 90000;
+export const WORKFLOW_START_TIMEOUT_MS = 45000;
+export const WORKFLOW_RUN_POLL_TIMEOUT_MS = 360000;
 
 export const trustedOrigins = new Set([
   window.location.origin,
@@ -27,6 +28,9 @@ export async function api(path, options = {}, timeoutMs = DEFAULT_API_TIMEOUT_MS
     return data;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
+      if (String(path).startsWith("/api/workflow/start")) {
+        throw new Error("生成启动超时。系统可能仍在后台创建任务，请稍等片刻后查看是否已进入编辑工作台。");
+      }
       throw new Error(
         `请求超时（>${Math.round(timeoutMs / 1000)} 秒）。这通常表示文件解析或材料分析仍在进行；如果长时间反复出现，再重启 \`npm run web\` 后重试。`,
       );

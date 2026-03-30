@@ -1,4 +1,4 @@
-import { api, DEFAULT_API_TIMEOUT_MS, MATERIAL_IMPORT_API_TIMEOUT_MS, MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS, WORKFLOW_START_TIMEOUT_MS, trustedOrigins } from "./api.js";
+import { api, DEFAULT_API_TIMEOUT_MS, MATERIAL_IMPORT_API_TIMEOUT_MS, MATERIAL_BATCH_ANALYZE_BASE_TIMEOUT_MS, WORKFLOW_START_TIMEOUT_MS, WORKFLOW_RUN_POLL_TIMEOUT_MS, trustedOrigins } from "./api.js";
 import { state, setState, subscribeState } from "./state.js";
 import { bindWizard as bindWizardModule } from "./wizard.js";
 import { bindEditorActions as bindEditorActionsModule } from "./editor.js";
@@ -33,6 +33,8 @@ const WIZARD_PHASES = [
   { id: "CONFIRM", label: "确认生成", steps: [5, 6] },
   { id: "EDIT", label: "改稿定稿", steps: [7] },
 ];
+
+const WORKFLOW_RUN_POLL_INTERVAL_MS = 2000;
 
 const BUTTON_TOOLTIP_BY_ACTION = {
   "view-material": "查看这份材料或模板的摘要与原文。",
@@ -738,6 +740,48 @@ async function getTaskDraftFromFile(path) {
   const sections = parseTopLevelSections(doc.raw);
   const draft = sections.find((item) => item.heading === "初稿");
   return draft?.body || "";
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getWorkflowFailureMessage(run) {
+  if (!run || typeof run !== "object") {
+    return "初稿生成失败。";
+  }
+  if (typeof run.failureMessage === "string" && run.failureMessage.trim()) {
+    return run.failureMessage.trim();
+  }
+  const failedEvent = Array.isArray(run.events)
+    ? [...run.events].reverse().find((item) => item && item.type === "failed" && item.summary)
+    : null;
+  if (failedEvent?.summary) {
+    return String(failedEvent.summary);
+  }
+  return "初稿生成失败。";
+}
+
+async function waitForWorkflowRunReady(runId, taskPath, timeoutMs = WORKFLOW_RUN_POLL_TIMEOUT_MS) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const payload = await api(`/api/workflow/run?runId=${encodeURIComponent(runId)}`);
+    const run = payload?.run;
+    if (run?.status === "failed") {
+      throw new Error(getWorkflowFailureMessage(run));
+    }
+    if (run?.currentStage === "USER_CONFIRM_OR_EDIT") {
+      const draftText =
+        run?.generated?.draft?.draft_markdown || (await getTaskDraftFromFile(taskPath)) || "生成完成，但未找到正文。";
+      return {
+        run,
+        generated: run?.generated || null,
+        draftText,
+      };
+    }
+    await sleep(WORKFLOW_RUN_POLL_INTERVAL_MS);
+  }
+  throw new Error("初稿仍在后台生成，等待时间过长。请稍后刷新页面查看是否已生成完成。");
 }
 
 function toggleView(viewName) {
@@ -4508,7 +4552,7 @@ async function createAndRunTask() {
   const submitButton = document.getElementById("wizard-submit");
 
   submitButton.disabled = true;
-  submitButton.textContent = "生成中...";
+  submitButton.textContent = "正在启动生成...";
 
   try {
     const sourceMaterialIds = formData.getAll("sourceMaterialIds").map(String).filter(Boolean);
@@ -4545,6 +4589,7 @@ async function createAndRunTask() {
       throw new Error("任务标题和文档类型是必填项。");
     }
 
+    setInfo("正在启动生成任务。系统会先创建任务，再在后台生成初稿。");
     const workflow = await api(
       "/api/workflow/start",
       {
@@ -4554,11 +4599,23 @@ async function createAndRunTask() {
       WORKFLOW_START_TIMEOUT_MS,
     );
     const created = workflow.created;
-    const generated = workflow.generated;
     const run = workflow.run;
+    submitButton.textContent = "正在生成初稿...";
+    setInfo("初稿生成中，通常需要 1 到 3 分钟。你可以停留在当前页等待完成。");
 
-    const draftText =
-      generated?.draft?.draft_markdown || (await getTaskDraftFromFile(created.path)) || "生成完成，但未找到正文。";
+    const completed = run?.runId
+      ? await waitForWorkflowRunReady(run.runId, created.path)
+      : {
+          run: workflow.run || null,
+          generated: workflow.generated || null,
+          draftText:
+            workflow.generated?.draft?.draft_markdown ||
+            (await getTaskDraftFromFile(created.path)) ||
+            "生成完成，但未找到正文。",
+        };
+    const generated = completed.generated;
+    const draftText = completed.draftText;
+
     document.getElementById("draft-editor").value = draftText;
     state.generatedDraftBaseline = draftText;
     state.pendingAnnotations = [];
@@ -4578,10 +4635,10 @@ async function createAndRunTask() {
       id: created.taskId,
       path: created.path,
       title: taskPayload.title,
-      runId: run?.runId || "",
+      runId: completed.run?.runId || run?.runId || "",
     };
     state.finalizeMeta = null;
-    state.currentWorkflowRun = run || null;
+    state.currentWorkflowRun = completed.run || run || null;
 
     loadFeedbackHistoryFromStorage(created.taskId);
     renderFeedbackHistory();
