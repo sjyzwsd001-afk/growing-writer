@@ -34,6 +34,10 @@ type CalibrateProfile = (vaultRoot: string, profile: StoredLlmSettings) => Promi
 
 type RunConnectivityTest = (settings: StoredLlmSettings) => Promise<unknown>;
 
+function hasBodyField(body: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(body, key);
+}
+
 export function normalizeCodexModel(model: unknown, allowedModels: readonly string[]): string {
   if (typeof model !== "string" || !model.trim()) {
     return OPENAI_CODEX_MODEL;
@@ -120,26 +124,34 @@ export async function handleSaveLlmSettings(input: {
     authUrl:
       isCodex
         ? OPENAI_CODEX_AUTH_URL
-        : typeof body.authUrl === "string" && body.authUrl.trim()
-          ? body.authUrl.trim()
+        : hasBodyField(body, "authUrl")
+          ? typeof body.authUrl === "string"
+            ? body.authUrl.trim()
+            : ""
           : existing?.authUrl || "",
     tokenUrl:
       isCodex
         ? OPENAI_CODEX_TOKEN_URL
-        : typeof body.tokenUrl === "string" && body.tokenUrl.trim()
-          ? body.tokenUrl.trim()
+        : hasBodyField(body, "tokenUrl")
+          ? typeof body.tokenUrl === "string"
+            ? body.tokenUrl.trim()
+            : ""
           : existing?.tokenUrl || "",
     clientId:
       isCodex
         ? OPENAI_CODEX_CLIENT_ID
-        : typeof body.clientId === "string" && body.clientId.trim()
-          ? body.clientId.trim()
+        : hasBodyField(body, "clientId")
+          ? typeof body.clientId === "string"
+            ? body.clientId.trim()
+            : ""
           : existing?.clientId || "",
     scope:
       isCodex
         ? OPENAI_CODEX_SCOPE
-        : typeof body.scope === "string" && body.scope.trim()
-          ? body.scope.trim()
+        : hasBodyField(body, "scope")
+          ? typeof body.scope === "string"
+            ? body.scope.trim()
+            : ""
           : existing?.scope || "",
     oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
     oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,
@@ -282,26 +294,34 @@ export async function handleTestLlmSettings(input: {
       authUrl:
         isCodex
           ? OPENAI_CODEX_AUTH_URL
-          : typeof body.authUrl === "string" && body.authUrl.trim()
-            ? body.authUrl.trim()
+          : hasBodyField(body, "authUrl")
+            ? typeof body.authUrl === "string"
+              ? body.authUrl.trim()
+              : ""
             : existing?.authUrl || "",
       tokenUrl:
         isCodex
           ? OPENAI_CODEX_TOKEN_URL
-          : typeof body.tokenUrl === "string" && body.tokenUrl.trim()
-            ? body.tokenUrl.trim()
+          : hasBodyField(body, "tokenUrl")
+            ? typeof body.tokenUrl === "string"
+              ? body.tokenUrl.trim()
+              : ""
             : existing?.tokenUrl || "",
       clientId:
         isCodex
           ? OPENAI_CODEX_CLIENT_ID
-          : typeof body.clientId === "string" && body.clientId.trim()
-            ? body.clientId.trim()
+          : hasBodyField(body, "clientId")
+            ? typeof body.clientId === "string"
+              ? body.clientId.trim()
+              : ""
             : existing?.clientId || "",
       scope:
         isCodex
           ? OPENAI_CODEX_SCOPE
-          : typeof body.scope === "string" && body.scope.trim()
-            ? body.scope.trim()
+          : hasBodyField(body, "scope")
+            ? typeof body.scope === "string"
+              ? body.scope.trim()
+              : ""
             : existing?.scope || "",
       oauthAccessToken: isCodex ? existing?.oauthAccessToken : undefined,
       oauthIdToken: isCodex ? existing?.oauthIdToken : undefined,

@@ -262,35 +262,35 @@ function normalizeStoredSettings(
     authUrl:
       isCodexProvider
         ? OPENAI_CODEX_AUTH_URL
-        : typeof input?.authUrl === "string" && input.authUrl.trim()
+        : typeof input?.authUrl === "string"
           ? input.authUrl.trim()
-          : typeof fallback?.authUrl === "string" && fallback.authUrl.trim()
+          : typeof fallback?.authUrl === "string"
             ? fallback.authUrl.trim()
-            : OPENAI_CODEX_AUTH_URL,
+            : "",
     tokenUrl:
       isCodexProvider
         ? OPENAI_CODEX_TOKEN_URL
-        : typeof input?.tokenUrl === "string" && input.tokenUrl.trim()
+        : typeof input?.tokenUrl === "string"
           ? input.tokenUrl.trim()
-          : typeof fallback?.tokenUrl === "string" && fallback.tokenUrl.trim()
+          : typeof fallback?.tokenUrl === "string"
             ? fallback.tokenUrl.trim()
-            : OPENAI_CODEX_TOKEN_URL,
+            : "",
     clientId:
       isCodexProvider
         ? OPENAI_CODEX_CLIENT_ID
-        : typeof input?.clientId === "string" && input.clientId.trim()
+        : typeof input?.clientId === "string"
           ? input.clientId.trim()
-          : typeof fallback?.clientId === "string" && fallback.clientId.trim()
+          : typeof fallback?.clientId === "string"
             ? fallback.clientId.trim()
-            : OPENAI_CODEX_CLIENT_ID,
+            : "",
     scope:
       isCodexProvider
         ? OPENAI_CODEX_SCOPE
-        : typeof input?.scope === "string" && input.scope.trim()
+        : typeof input?.scope === "string"
           ? input.scope.trim()
-          : typeof fallback?.scope === "string" && fallback.scope.trim()
+          : typeof fallback?.scope === "string"
             ? fallback.scope.trim()
-            : OPENAI_CODEX_SCOPE,
+            : "",
     oauthAccessToken:
       typeof input?.oauthAccessToken === "string"
         ? input.oauthAccessToken
