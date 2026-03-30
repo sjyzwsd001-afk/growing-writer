@@ -35,6 +35,8 @@ const WIZARD_PHASES = [
 ];
 
 const WORKFLOW_RUN_POLL_INTERVAL_MS = 2000;
+const DASHBOARD_REFRESH_TIMEOUT_MS = 90000;
+const TASK_DOCUMENT_TIMEOUT_MS = 90000;
 
 const BUTTON_TOOLTIP_BY_ACTION = {
   "view-material": "查看这份材料或模板的摘要与原文。",
@@ -736,7 +738,7 @@ function buildDocumentPreview(title, raw, kind) {
 }
 
 async function getTaskDraftFromFile(path) {
-  const doc = await api(`/api/document?path=${encodeURIComponent(path)}`);
+  const doc = await api(`/api/document?path=${encodeURIComponent(path)}`, {}, TASK_DOCUMENT_TIMEOUT_MS);
   const sections = parseTopLevelSections(doc.raw);
   const draft = sections.find((item) => item.heading === "初稿");
   return draft?.body || "";
@@ -4508,15 +4510,15 @@ function hydrateLlmSettings(data) {
   renderLlmCardDetail(detailCard);
 }
 
-async function loadWorkflowDefinitionEditor() {
-  const payload = await api("/api/workflow/definition");
+async function loadWorkflowDefinitionEditor(timeoutMs = DEFAULT_API_TIMEOUT_MS) {
+  const payload = await api("/api/workflow/definition", {}, timeoutMs);
   state.workflowDefinition = payload;
   applyWorkflowDefinitionToEditor(payload.definition || {});
   renderWorkflowStageTracker();
 }
 
-async function loadDashboard() {
-  const data = await api("/api/dashboard");
+async function loadDashboard(timeoutMs = DEFAULT_API_TIMEOUT_MS) {
+  const data = await api("/api/dashboard", {}, timeoutMs);
   state.dashboard = data;
   const validPaths = new Set([
     ...((data.materials || []).map((item) => String(item.path || ""))),
@@ -4532,7 +4534,7 @@ async function loadDashboard() {
     "sourceMaterialIds",
   );
   renderSettingsLists();
-  await loadWorkflowDefinitionEditor();
+  await loadWorkflowDefinitionEditor(timeoutMs);
   updateWizardSummary();
   renderWorkflowStageTracker();
   renderTaskContextSummary();
@@ -4562,7 +4564,7 @@ async function importBackgroundMaterialIfNeeded(formData) {
   const result = await api("/api/materials/import", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, MATERIAL_IMPORT_API_TIMEOUT_MS);
   return result.materialId || null;
 }
 
@@ -4670,7 +4672,10 @@ async function createAndRunTask() {
     setTaskBadge(`当前任务：${taskPayload.title}`);
     renderWorkflowStageTracker();
     setInfo("初稿已生成。你可以直接改正文，写修改原因，再提交反馈继续生成。");
-    await loadDashboard();
+    void loadDashboard(DASHBOARD_REFRESH_TIMEOUT_MS).catch((error) => {
+      console.error("Dashboard refresh after draft generation failed", error);
+      setInfo("初稿已生成。任务总览刷新较慢，不影响当前继续改稿。");
+    });
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "生成初稿";
