@@ -77,3 +77,78 @@ ${JSON.stringify(
     2,
   )}`;
 }
+
+export function buildDiagnoseTaskRelaxedPrompt(input: {
+  taskAnalysis: TaskAnalysis;
+  matchedRules: MatchedRule[];
+  materialSummaries: MaterialSummary[];
+  evidenceCards: EvidenceCard[];
+  profiles: Profile[];
+  templateRewritePlan?: TemplateRewriteStep[];
+  templateQualityAssessment?: {
+    mode: "structured" | "derived-sections" | "generic-outline";
+    warnings: string[];
+  };
+}): string {
+  return `请根据任务分析、已命中规则、相似材料摘要和写作画像，输出“写前诊断”，但这次不要输出 JSON。
+
+请严格按下面格式输出纯文本：
+
+成稿准备度：ready / partial / blocked
+诊断摘要：...
+建议结构：
+- 标题｜目的｜必须覆盖1；必须覆盖2
+- 标题｜目的｜必须覆盖1；必须覆盖2
+缺失信息：
+- ...
+启用规则：
+- ...
+参考材料：
+- ...
+写作风险：
+- ...
+模板质量：strong / partial / weak
+历史材料质量：strong / partial / weak
+事实充分度：strong / partial / weak
+输入质量警告：
+- ...
+事实-章节匹配：
+- 事实｜章节｜要求1；要求2｜原因｜0.75
+- 事实｜章节｜｜原因｜0.40
+下一步：...
+
+要求：
+1. 不要输出 markdown 代码块
+2. 不要解释
+3. “建议结构”每行都必须用“标题｜目的｜必须覆盖项”格式
+4. “事实-章节匹配”每行都必须用“事实｜章节｜要求列表｜原因｜置信度”格式
+5. 如果某一项为空，也保留字段位置
+
+任务分析:
+${JSON.stringify(compactTaskAnalysis(input.taskAnalysis), null, 2)}
+
+命中规则:
+${JSON.stringify(compactMatchedRules(input.matchedRules), null, 2)}
+
+相似材料摘要:
+${JSON.stringify(compactMaterialSummaries(input.materialSummaries), null, 2)}
+
+证据卡片:
+${JSON.stringify(compactEvidenceCards(input.evidenceCards), null, 2)}
+
+写作画像:
+${JSON.stringify(compactProfiles(input.profiles), null, 2)}
+
+模板改写计划:
+${JSON.stringify(compactTemplateRewritePlan(input.templateRewritePlan ?? []), null, 2)}
+
+template_quality_assessment:
+${JSON.stringify(
+    {
+      mode: input.templateQualityAssessment?.mode ?? "structured",
+      warnings: (input.templateQualityAssessment?.warnings ?? []).slice(0, 6),
+    },
+    null,
+    2,
+  )}`;
+}

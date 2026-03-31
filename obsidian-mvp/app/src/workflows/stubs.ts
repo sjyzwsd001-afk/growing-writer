@@ -17,7 +17,7 @@ import type {
 import { OpenAiCompatibleClient } from "../llm/openai-compatible.js";
 import { buildOutlinePrompt } from "../prompts/build-outline.js";
 import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
-import { buildDiagnoseTaskPrompt } from "../prompts/diagnose-task.js";
+import { buildDiagnoseTaskPrompt, buildDiagnoseTaskRelaxedPrompt } from "../prompts/diagnose-task.js";
 import { buildGenerateDraftPrompt } from "../prompts/generate-draft.js";
 import { buildLearnFeedbackPrompt } from "../prompts/learn-feedback.js";
 import { buildParseTaskPrompt, buildParseTaskRelaxedPrompt } from "../prompts/parse-task.js";
@@ -519,6 +519,88 @@ function parseTaskFromRelaxedText(task: Task, raw: string): TaskAnalysis {
   };
 }
 
+function normalizeQuality(value: string): "strong" | "partial" | "weak" {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "strong" || normalized === "partial" || normalized === "weak") {
+    return normalized;
+  }
+  return "partial";
+}
+
+function normalizeReadiness(value: string): "ready" | "partial" | "blocked" {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "ready" || normalized === "partial" || normalized === "blocked") {
+    return normalized;
+  }
+  return "partial";
+}
+
+function parseDiagnoseStructure(block: string): DiagnosisResult["recommended_structure"] {
+  return parseListSection(block, "建议结构")
+    .map((line) => {
+      const [section = "", purpose = "", mustCoverRaw = ""] = line.split("|").map((item) => item.trim());
+      return {
+        section,
+        purpose,
+        must_cover: mustCoverRaw
+          .split(/[；;、]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 6),
+      };
+    })
+    .filter((item) => item.section || item.purpose);
+}
+
+function parseFactSectionMapping(block: string): DiagnosisResult["fact_section_mapping"] {
+  return parseListSection(block, "事实-章节匹配")
+    .map((line) => {
+      const [fact = "", recommendedSection = "", requirementsRaw = "", reason = "", confidenceRaw = ""] = line
+        .split("|")
+        .map((item) => item.trim());
+      return {
+        fact,
+        recommended_section: recommendedSection,
+        recommended_requirements: requirementsRaw
+          .split(/[；;、]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 5),
+        reason,
+        confidence: clampConfidence(confidenceRaw, 0.45),
+      };
+    })
+    .filter((item) => item.fact && item.recommended_section)
+    .slice(0, 10);
+}
+
+function parseDiagnosisFromRelaxedText(
+  input: Parameters<typeof diagnoseTask>[0],
+  raw: string,
+): DiagnosisResult {
+  const fallback = diagnoseTask(input);
+  const text = String(raw || "").replace(/\r\n/g, "\n").trim();
+  const recommendedStructure = parseDiagnoseStructure(text);
+  const factSectionMapping = parseFactSectionMapping(text);
+  return {
+    readiness: normalizeReadiness(parseScalarField(text, "成稿准备度")) || fallback.readiness,
+    diagnosis_summary: parseScalarField(text, "诊断摘要") || fallback.diagnosis_summary,
+    recommended_structure: recommendedStructure.length ? recommendedStructure : fallback.recommended_structure,
+    missing_info: parseListSection(text, "缺失信息"),
+    applied_rules: parseListSection(text, "启用规则"),
+    reference_materials: parseListSection(text, "参考材料"),
+    writing_risks: parseListSection(text, "写作风险"),
+    input_quality_assessment: {
+      template_quality: normalizeQuality(parseScalarField(text, "模板质量")),
+      history_material_quality: normalizeQuality(parseScalarField(text, "历史材料质量")),
+      fact_coverage_quality: normalizeQuality(parseScalarField(text, "事实充分度")),
+      warnings: parseListSection(text, "输入质量警告"),
+    },
+    fact_section_mapping: factSectionMapping,
+    next_action: parseScalarField(text, "下一步") || fallback.next_action,
+  };
+}
+
 export async function parseTaskWithLlm(
   client: OpenAiCompatibleClient,
   task: Task,
@@ -641,22 +723,46 @@ export async function diagnoseTaskWithLlm(
     };
   },
 ): Promise<DiagnosisResult> {
-  return client.generateJson({
-    system: BASE_SYSTEM_PROMPT,
-    user: buildDiagnoseTaskPrompt({
-      taskAnalysis: input.analysis,
-      matchedRules: input.matchedRules,
-      materialSummaries: input.matchedMaterials.map(summarizeMaterial),
-      evidenceCards: input.evidenceCards ?? [],
-      profiles: input.profiles,
-      templateRewritePlan: input.templateRewritePlan ?? [],
-      templateQualityAssessment: input.templateQualityAssessment,
-    }),
-    schema: diagnosisResultSchema,
-    schemaHint: DIAGNOSIS_SCHEMA_HINT,
-    maxTokens: 1200,
-    timeoutMs: 75_000,
-  });
+  try {
+    return await client.generateJson({
+      system: BASE_SYSTEM_PROMPT,
+      user: buildDiagnoseTaskPrompt({
+        taskAnalysis: input.analysis,
+        matchedRules: input.matchedRules,
+        materialSummaries: input.matchedMaterials.map(summarizeMaterial),
+        evidenceCards: input.evidenceCards ?? [],
+        profiles: input.profiles,
+        templateRewritePlan: input.templateRewritePlan ?? [],
+        templateQualityAssessment: input.templateQualityAssessment,
+      }),
+      schema: diagnosisResultSchema,
+      schemaHint: DIAGNOSIS_SCHEMA_HINT,
+      maxTokens: 1200,
+      timeoutMs: 75_000,
+    });
+  } catch (error) {
+    const relaxed = await client.generateText({
+      system:
+        "你是一名写前诊断助手。输出规整纯文本字段，不要输出 JSON，不要输出 markdown 代码块。",
+      user: buildDiagnoseTaskRelaxedPrompt({
+        taskAnalysis: input.analysis,
+        matchedRules: input.matchedRules,
+        materialSummaries: input.matchedMaterials.map(summarizeMaterial),
+        evidenceCards: input.evidenceCards ?? [],
+        profiles: input.profiles,
+        templateRewritePlan: input.templateRewritePlan ?? [],
+        templateQualityAssessment: input.templateQualityAssessment,
+      }),
+      maxTokens: 1400,
+      timeoutMs: 75_000,
+      responseFormat: "text",
+    });
+    const parsed = parseDiagnosisFromRelaxedText(input, relaxed);
+    if (!parsed.diagnosis_summary.trim() && !parsed.recommended_structure.length) {
+      throw error;
+    }
+    return parsed;
+  }
 }
 
 export function buildOutline(input: {
