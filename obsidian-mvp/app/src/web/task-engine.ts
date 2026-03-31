@@ -281,12 +281,31 @@ async function executeWithModelRouting<T>(input: {
   const profileStore = listStoredLlmProfiles(input.vaultRoot);
   const profileById = new Map(profileStore.profiles.map((profile) => [profile.id, profile]));
   const activeProfile = getStoredLlmSettings(input.vaultRoot);
+  const allAvailableProfileIds = profileStore.profiles
+    .filter((profile) => Boolean(profile.bearerToken?.trim()))
+    .sort((left, right) => {
+      const activeDelta = Number(right.id === activeProfile?.id) - Number(left.id === activeProfile?.id);
+      if (activeDelta !== 0) {
+        return activeDelta;
+      }
+      const usableDelta =
+        Number(Boolean(right.calibration?.usable)) - Number(Boolean(left.calibration?.usable));
+      if (usableDelta !== 0) {
+        return usableDelta;
+      }
+      return String(left.name || "").localeCompare(String(right.name || ""), "zh-CN");
+    })
+    .map((profile) => profile.id);
   const preferredProfileId = routing.enabled
     ? input.route === "fast"
       ? routing.fastProfileId || activeProfile?.id || ""
       : routing.strongProfileId || activeProfile?.id || ""
     : activeProfile?.id || "";
-  const triedProfileIds = [preferredProfileId, ...(routing.enabled ? routing.fallbackProfileIds : [])]
+  const triedProfileIds = [
+    preferredProfileId,
+    ...(routing.enabled ? routing.fallbackProfileIds : []),
+    ...(input.requireLlm ? allAvailableProfileIds : []),
+  ]
     .map((item) => item.trim())
     .filter(Boolean);
   const uniqueProfileIds = [...new Set(triedProfileIds)];
@@ -359,7 +378,7 @@ async function executeWithModelRouting<T>(input: {
 
   if (input.requireLlm) {
     throw new Error(
-      `LLM_REQUIRED:${input.stageLabel}: 所有模型卡均调用失败。tried=${resolvedTriedModels.join(" | ") || "-"} errors=${errors.join(" | ") || "-"}`,
+      `LLM_REQUIRED:${input.stageLabel}: 所有已尝试模型卡均调用失败。tried=${resolvedTriedModels.join(" | ") || "-"} errors=${errors.join(" | ") || "-"}`,
     );
   }
 
