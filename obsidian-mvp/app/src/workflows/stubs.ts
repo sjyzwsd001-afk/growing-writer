@@ -20,7 +20,7 @@ import { BASE_SYSTEM_PROMPT } from "../prompts/common.js";
 import { buildDiagnoseTaskPrompt } from "../prompts/diagnose-task.js";
 import { buildGenerateDraftPrompt } from "../prompts/generate-draft.js";
 import { buildLearnFeedbackPrompt } from "../prompts/learn-feedback.js";
-import { buildParseTaskPrompt } from "../prompts/parse-task.js";
+import { buildParseTaskPrompt, buildParseTaskRelaxedPrompt } from "../prompts/parse-task.js";
 import { normalizeStructureLabel, summarizeMaterial } from "../retrieve/summaries.js";
 import {
   diagnosisResultSchema,
@@ -475,18 +475,78 @@ export function parseTask(task: Task): TaskAnalysis {
   };
 }
 
+function parseListSection(block: string, label: string): string[] {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`${escaped}：?\\s*([\\s\\S]*?)(?=\\n(?:任务类型|受众|场景|目标|必须写入|限制条件|事实|缺失信息|风险|置信度)[:：]|$)`);
+  const match = block.match(regex);
+  if (!match) {
+    return [];
+  }
+  return String(match[1] || "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^[\-\*\d\.\)\s]+/, "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function parseScalarField(block: string, label: string): string {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = block.match(new RegExp(`${escaped}：?\\s*(.+)`));
+  return match?.[1]?.trim() || "";
+}
+
+function clampConfidence(value: unknown, fallback = 0.55): number {
+  const numeric = typeof value === "number" ? value : Number.parseFloat(String(value || ""));
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  return Math.max(0, Math.min(1, numeric));
+}
+
+function parseTaskFromRelaxedText(task: Task, raw: string): TaskAnalysis {
+  const text = String(raw || "").replace(/\r\n/g, "\n").trim();
+  return {
+    task_type: parseScalarField(text, "任务类型") || task.docType || "未识别文体",
+    audience: parseScalarField(text, "受众") || task.audience || "未识别受众",
+    scenario: parseScalarField(text, "场景") || task.scenario || "未识别场景",
+    goal: parseScalarField(text, "目标") || task.title || "待补充写作目标",
+    must_include: parseListSection(text, "必须写入"),
+    constraints: parseListSection(text, "限制条件"),
+    raw_facts: parseListSection(text, "事实"),
+    missing_info: parseListSection(text, "缺失信息"),
+    risk_flags: parseListSection(text, "风险"),
+    confidence: clampConfidence(parseScalarField(text, "置信度")),
+  };
+}
+
 export async function parseTaskWithLlm(
   client: OpenAiCompatibleClient,
   task: Task,
 ): Promise<TaskAnalysis> {
-  return client.generateJson({
-    system: BASE_SYSTEM_PROMPT,
-    user: buildParseTaskPrompt(task),
-    schema: taskAnalysisSchema,
-    schemaHint: TASK_ANALYSIS_SCHEMA_HINT,
-    maxTokens: 900,
-    timeoutMs: 45_000,
-  });
+  try {
+    return await client.generateJson({
+      system: BASE_SYSTEM_PROMPT,
+      user: buildParseTaskPrompt(task),
+      schema: taskAnalysisSchema,
+      schemaHint: TASK_ANALYSIS_SCHEMA_HINT,
+      maxTokens: 900,
+      timeoutMs: 45_000,
+    });
+  } catch (error) {
+    const relaxed = await client.generateText({
+      system:
+        "你是一名任务解析助手。输出纯文本字段，不要输出 JSON，不要输出 markdown 代码块。",
+      user: buildParseTaskRelaxedPrompt(task),
+      maxTokens: 1000,
+      timeoutMs: 45_000,
+      responseFormat: "text",
+    });
+    const parsed = parseTaskFromRelaxedText(task, relaxed);
+    if (!parsed.raw_facts.length && !parsed.must_include.length && !parsed.goal.trim()) {
+      throw error;
+    }
+    return parsed;
+  }
 }
 
 export function diagnoseTask(input: {

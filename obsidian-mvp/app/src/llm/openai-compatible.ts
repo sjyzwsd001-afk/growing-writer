@@ -386,6 +386,7 @@ export class OpenAiCompatibleClient {
     schemaHint?: string;
     maxTokens?: number;
     timeoutMs?: number;
+    responseFormat?: "json_object" | "text";
   }): Promise<string> {
     return this.requestText(options);
   }
